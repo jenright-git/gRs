@@ -1,0 +1,17 @@
+Package: gRs
+Title: Tools to process and analyse surfacewater and groundwater data from esdat
+Version: 0.0.0.9000
+Authors@R: 
+    person("James", "Enright", , "first.last@example.com", role = c("aut", "cre"),
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: Convenience functions to process and analyse environmental data
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Imports: 
+    dplyr,
+    ggplot2,
+    ggtext,
+    openair,
+    tidyr
