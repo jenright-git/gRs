@@ -1,7 +1,7 @@
 
 #' Half concentrations that are < LOR
 #'
-#' @param tibble with columns "prefix" and "concentration". Prefix must be either "<" or "="
+#' @param data with columns "prefix" and "concentration". Prefix must be either "<" or "="
 #'
 #' @return tibble
 #' @export

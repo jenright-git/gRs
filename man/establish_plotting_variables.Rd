@@ -7,7 +7,7 @@
 establish_plotting_variables(data)
 }
 \arguments{
-\item{=esdat}{data frame imported from the data_processor function}
+\item{data}{tibble imported from the data_processor function}
 }
 \value{
 lists and vectors for plots
@@ -16,5 +16,5 @@ lists and vectors for plots
 Establish parameters for automated plots
 }
 \examples{
-anlaytes, date_range, zones, locations and colours. All lists and vectors used for plotting in plot functions
+anlaytes date_range zones locations and colours
 }

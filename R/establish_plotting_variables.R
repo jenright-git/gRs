@@ -1,32 +1,34 @@
 #' Establish parameters for automated plots
 #'
-#' @param =esdat data frame imported from the data_processor function
+#' @param data tibble imported from the data_processor function
 #'
 #' @return lists and vectors for plots
 #' @export
 #'
-#' @examples anlaytes, date_range, zones, locations and colours. All lists and vectors used for plotting in plot functions
+#' @examples anlaytes date_range zones locations and colours
 
-establish_plotting_variables <- function(data) {
-  # What analytes to look for in future plots
-  chemgroup <<- dplyr::unique(data$group)
+establish_plotting_variables <- function(data){
+  chemgroup <- base::unique(data$group)
 
-  analytes <<- dplyr::filter(data, group %in% chemgroup) %>%
+  analytes <- dplyr::filter(data, group %in% chemgroup) %>%
     dplyr::select(analyte) %>%
     dplyr::distinct() %>%
     tidyr::drop_na() %>%
     base::as.vector() %>%
     base::unlist()
 
-  date_range <<- c(base::min(data$date), base::max(data$date))
+  date_range <- c(base::min(data$date), base::max(data$date))
 
-  zones <<- dplyr::unique(data$zone)
+  zones <- base::unique(data$zone)
 
-  locations_vec <<- dplyr::unique(data$location)
+  locations_vec <- base::unique(data$location)
 
-  colours_vec <<- Polychrome::alphabet.colors(n = length(locations_vec))
+  colours_vec <- Polychrome::alphabet.colors(n = base::length(locations_vec))
 
   # assign locations to colours
-  location_colours <<- base::setNames(colours_vec, locations_vec)
+  location_colours <- stats::setNames(colours_vec, locations_vec)
+
+
+  return(analytes, date_range, zones, locations_vec, colours_vec, location_colours)
 }
 

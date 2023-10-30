@@ -7,7 +7,7 @@
 half_lor(data)
 }
 \arguments{
-\item{tibble}{with columns "prefix" and "concentration". Prefix must be either "<" or "="}
+\item{data}{with columns "prefix" and "concentration". Prefix must be either "<" or "="}
 }
 \value{
 tibble
