@@ -6,6 +6,9 @@
 #' @export
 #'
 #' @examples data_processor("sw_data.xlsx")
+#' @importFrom readxl read_excel
+#' @importFrom dplyr select mutate left_join arrange
+#' @importFrom readr read_csv
 data_processor <- function(myfile_path){
 
 

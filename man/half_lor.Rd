@@ -7,10 +7,10 @@
 half_lor(data)
 }
 \arguments{
-\item{data}{with columns "prefix" and "concentration". Prefix must be either "<" or "="}
+\item{data}{A tibble with columns "prefix" and "concentration". Prefix must be either "<" or "="}
 }
 \value{
-tibble
+A tibble with modified concentrations
 }
 \description{
 Half concentrations that are < LOR

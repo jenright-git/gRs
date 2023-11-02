@@ -1,23 +1,24 @@
-
 #' Half concentrations that are < LOR
 #'
-#' @param data with columns "prefix" and "concentration". Prefix must be either "<" or "="
+#' @param data A tibble with columns "prefix" and "concentration". Prefix must be either "<" or "="
 #'
-#' @return tibble
+#' @return A tibble with modified concentrations
 #' @export
 #'
 #' @examples <4 becomes =2
+#' @importFrom dplyr mutate
+#' @importFrom tidyr replace_na
 half_lor <- function(data){
 
-  data <- data %>%
-    dplyr::mutate(prefix = tidyr::replace_na(prefix, "="),
-                  concentration = base::ifelse(prefix == "<",
-                                               yes = concentration*0.5,
-                                               no = concentration),
-                  prefix = "=")
+  modified_data <- data %>%
+    mutate(
+      prefix = tidyr::replace_na(prefix, "="),
+      concentration = ifelse(prefix == "<", concentration * 0.5, concentration),
+      prefix = "="
+    )
 
-  return(data)
-
+  return(modified_data)
 
 }
+
 

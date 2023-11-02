@@ -6,6 +6,9 @@
 #' @export
 #'
 #' @examples anlaytes date_range zones locations and colours
+#' @importFrom dplyr filter select distinct
+#' @importFrom tidyr drop_na
+#' @importFrom Polychrome alphabet.colors
 
 establish_plotting_variables <- function(data){
   chemgroup <- base::unique(data$group)
@@ -29,6 +32,10 @@ establish_plotting_variables <- function(data){
   location_colours <- stats::setNames(colours_vec, locations_vec)
 
 
-  return(analytes, date_range, zones, locations_vec, colours_vec, location_colours)
+  return(analytes)
+  return(zones)
+  return(locations_vec)
+  return(colours_vec)
+
 }
 
