@@ -20,7 +20,7 @@ data_processor <- function(myfile_path){
                                                                               "text", "text", "text", "text", "text",
                                                                               "numeric", "numeric", "numeric",
                                                                               "numeric", "numeric", "text", "text",
-                                                                              "text", "text", "numeric", "numeric",
+                                                                              "text", "text", "numeric", "text",
                                                                               "numeric", "numeric", "numeric",
                                                                               "numeric", "numeric", "numeric",
                                                                               "numeric", "numeric", "numeric",
@@ -42,7 +42,8 @@ data_processor <- function(myfile_path){
                            concentration = Concentration,
                            group = Chem_Group,
                            units = `Output Unit`,
-                           location_type = Location_Type
+                           location_type = Location_Type,
+                           SampleComments
   ) %>%
     dplyr::mutate(date = lubridate::floor_date(sample_date, "day"))
 
