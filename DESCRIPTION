@@ -20,4 +20,6 @@ Imports:
     Polychrome,
     readr,
     readxl,
-    tidyr
+    rlang,
+    tidyr,
+    trend
