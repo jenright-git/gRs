@@ -13,9 +13,9 @@ mann_kendall_heatmap(
 \arguments{
 \item{data}{tibble from the mann_kendall_test function}
 
-\item{plot_title}{Title Text}
+\item{label_text_size}{size of the label text}
 
-\item{text_size}{size of the label text}
+\item{plot_title}{Title Text}
 }
 \value{
 ggplot heatmap

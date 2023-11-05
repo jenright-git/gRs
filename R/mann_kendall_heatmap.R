@@ -1,7 +1,7 @@
 #' Function to plot mann-kendall trends on a heatmap
 #'
 #' @param data tibble from the mann_kendall_test function
-#' @param text_size size of the label text
+#' @param label_text_size size of the label text
 #' @param plot_title Title Text
 #'
 #' @return ggplot heatmap
@@ -9,7 +9,7 @@
 #'
 #' @examples mann_kendall_heatmap(mk_export)
 #' @importFrom dplyr mutate
-#' @importFrom ggplot2 ggplot geom_tile scale_fill_manual geom_text theme_bw ggtitle theme labs scale_x_discrete scale_y_discrete element_blank element_text
+#' @import ggplot2
 #' @importFrom stringr str_wrap
 mann_kendall_heatmap <- function(data, label_text_size=2.8, plot_title="Mann-Kendall Trend Analysis"){
 
