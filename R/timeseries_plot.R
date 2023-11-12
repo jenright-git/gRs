@@ -14,8 +14,8 @@
 #' @importFrom ggplot2 ggplot aes geom_point geom_path scale_colour_manual geom_line geom_hline theme_bw ylim labs scale_x_datetime theme element_text element_blank
 #' @importFrom openair quickText
 #' @importFrom glue glue
-timeseries_plot <-  function(data, date_size=6, date_break="year", date_label="%b-%y",
-                             x_angle=90, legend_text_size=6, y_unit="mg/L"){
+timeseries_plot <-  function(data, date_size=10, date_break="year", date_label="%b-%y",
+                             x_angle=90, legend_text_size=10, y_title_size=10, y_unit="mg/L"){
 
   y_unit <- y_unit
   set.seed(123)
@@ -50,7 +50,7 @@ timeseries_plot <-  function(data, date_size=6, date_break="year", date_label="%
      legend.text = ggplot2::element_text(size = legend_text_size),
      plot.title = ggplot2::element_text(hjust = 0.5, size = 10, face = "bold"),
      plot.subtitle = ggplot2::element_text(size = 6, face = "italic"),
-     axis.title.y = ggplot2::element_text(size = 8),
+     axis.title.y = ggplot2::element_text(size = y_title_size),
      axis.text.x = ggplot2::element_text(angle = x_angle, size = date_size)
    )
  # ggplot2::ggtitle(label = i, subtitle = x)
