@@ -6,11 +6,12 @@
 \usage{
 timeseries_plot(
   data,
-  date_size = 6,
+  date_size = 10,
   date_break = "year",
   date_label = "\%b-\%y",
   x_angle = 90,
-  legend_text_size = 6,
+  legend_text_size = 10,
+  y_title_size = 11,
   y_unit = "mg/L"
 )
 }

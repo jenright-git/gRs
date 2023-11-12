@@ -11,7 +11,8 @@
 mann_kendall_reduced_test <- function(data){
 
   establish_plotting_variables(data)
-  # Create list to store results for each combination of location and analyte
+
+   # Create list to store results for each combination of location and analyte
   results_list <- list()
 
   # Loop through each combination of location and analyte, perform Mann-Kendall analysis, and store results in list   Changed from 1 to 3 becasue I think is the number of data points needed. mk.test needs at least 3
@@ -34,8 +35,8 @@ mann_kendall_reduced_test <- function(data){
                   COV = results_list[[x]][5])
   }))
 
-  mk.export <- results_df %>%
-    mutate(trend = case_when(p_value < 0.05 & tau_statistic > 0 ~ "Increasing",
+  mk.export <- results_data %>%
+    dplyr::mutate(trend = dplyr::case_when(p_value < 0.05 & tau_statistic > 0 ~ "Increasing",
                              p_value < 0.05 & tau_statistic < 0 ~ "Decreasing",
                              p_value > 0.05 ~ "No Significant Trend",
                              TRUE ~ "No Significant Trend"))

@@ -18,9 +18,11 @@ Imports:
     magrittr,
     openair,
     Polychrome,
+    purrr,
     readr,
     readxl,
     rlang,
     stringr,
     tidyr,
-    trend
+    trend,
+    xfun
