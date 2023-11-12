@@ -11,7 +11,7 @@ timeseries_plot(
   date_label = "\%b-\%y",
   x_angle = 90,
   legend_text_size = 10,
-  y_title_size = 11,
+  y_title_size = 10,
   y_unit = "mg/L"
 )
 }

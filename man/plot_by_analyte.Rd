@@ -4,7 +4,7 @@
 \alias{plot_by_analyte}
 \title{Plots a timeseries_plot for each analyte and saves to designated location}
 \usage{
-plot_by_analyte(data, save_path = NULL, ...)
+plot_by_analyte(data, save_path = NULL)
 }
 \arguments{
 \item{data}{tibble of concentration data}

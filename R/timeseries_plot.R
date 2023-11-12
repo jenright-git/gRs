@@ -31,7 +31,7 @@ timeseries_plot <-  function(data, date_size=10, date_break="year", date_label="
 
  plot <-  data %>%
    ggplot2::ggplot(aes(x = date, y = concentration, colour = location)) +
-   ggplot2::geom_point(size = 0.5, alpha = 0.3) +
+   ggplot2::geom_point(size = 0.6, alpha = 0.5) +
    ggplot2::geom_path() +
    ggplot2::scale_color_manual(values = location_colours) +  # Specify color scheme for locations
    #ggplot2::geom_line(aes(x = date, y = criteria), linetype = "dashed", colour = "black") +
