@@ -17,7 +17,6 @@
 ### Must figure out how to add timeseies_plot arguments
 plot_by_analyte <- function(data, save_path=NULL){
 
-
   chemgroup <- base::unique(data$group)
 
   analytes <- dplyr::filter(data, group %in% chemgroup) %>%
