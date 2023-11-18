@@ -22,7 +22,14 @@ establish_plotting_variables <- function(data){
 
   date_range <<- c(base::min(data$date), base::max(data$date))
 
-  zones <<- base::unique(data$zone)
+  if (all(is.na(data$zone))) {
+    data <- data %>%
+      dplyr::mutate(zone = site)
+
+    zones <<- base::unique(data$zone)
+  } else {
+    zones <<- base::unique(data$zone)
+  }
 
   locations_vec <<- base::unique(data$location)
 

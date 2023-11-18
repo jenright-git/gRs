@@ -15,7 +15,7 @@
 #' @importFrom tidyr crossing
 
 ### Must figure out how to add timeseies_plot arguments
-### check if zone is null and assign a value otherwise
+
 plot_by_analyte <- function(data, save_path=NULL){
 
   chemgroup <- base::unique(data$group)
@@ -33,7 +33,7 @@ plot_by_analyte <- function(data, save_path=NULL){
     data <- data %>%
       dplyr::mutate(zone = site)
 
-    zones <- base::unique(data$site)
+    zones <- base::unique(data$zone)
   } else {
     zones <- base::unique(data$zone)
   }
