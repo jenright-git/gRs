@@ -29,7 +29,16 @@ plot_by_analyte <- function(data, save_path=NULL){
 
   date_range <- c(base::min(data$date), base::max(data$date))
 
-  zones <- base::unique(data$zone)
+  if (all(is.na(data$zone))) {
+    data <- data %>%
+      dplyr::mutate(zone = site)
+
+    zones <- base::unique(data$site)
+  } else {
+    zones <- base::unique(data$zone)
+  }
+
+
 
   locations_vec <- base::unique(data$location)
 
