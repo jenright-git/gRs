@@ -36,13 +36,14 @@ mann_kendall_test <- function(data){
 
     mk.export <- results_data %>%
       #mutate(p_value = ifelse(NaN, yes = "No", no = p_value)) %>%
-      dplyr::mutate(trend = dplyr::case_when(p_value < 0.05 & tau_statistic > 0 ~ "Increasing",
-                               p_value > 0.05 & p_value <= 0.1 & tau_statistic > 0 ~"Probably Increasing",
-                               p_value > 0.1 & tau_statistic > 0 ~ "No Trend",
-                               p_value > 0.1 & tau_statistic <= 0 & COV >=1 ~ "No Trend",
-                               p_value > 0.1 & tau_statistic <= 0 & COV < 1 ~ "Stable",
-                               p_value >= 0.05 & p_value <= 0.1 & tau_statistic < 0 ~ "Probably Decreasing",
-                               p_value < 0.05 & tau_statistic < 0 ~ "Decreasing"
+      dplyr::mutate(trend = dplyr::case_when(
+                                              p_value < 0.05 & tau_statistic > 0 ~ "Increasing",
+                                              p_value >= 0.05 & p_value <= 0.1 & tau_statistic > 0 ~"Probably Increasing",
+                                              p_value > 0.1 & tau_statistic > 0 ~ "No Significant Trend",
+                                              p_value > 0.1 & tau_statistic <= 0 & COV >=1 ~ "No Significant Trend",
+                                              p_value > 0.1 & tau_statistic <= 0 & COV < 1 ~ "Stable",
+                                              p_value >= 0.05 & p_value <= 0.1 & tau_statistic < 0 ~ "Probably Decreasing",
+                                              p_value < 0.05 & tau_statistic < 0 ~ "Decreasing"
       ))
 
 
