@@ -25,4 +25,5 @@ Imports:
     stringr,
     tidyr,
     trend,
+    writexl,
     xfun

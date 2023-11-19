@@ -4,12 +4,16 @@
 \alias{plot_by_analyte}
 \title{Plots a timeseries_plot for each analyte and saves to designated location}
 \usage{
-plot_by_analyte(data, save_path = NULL)
+plot_by_analyte(data, save_path = NULL, smooth = FALSE, linear_smooth = FALSE)
 }
 \arguments{
 \item{data}{tibble of concentration data}
 
 \item{save_path}{path to directory where plots will be saved}
+
+\item{smooth}{Apply a geom_smooth to the plot}
+
+\item{linear_smooth}{Apply a linear trendline to the plot}
 
 \item{...}{
   Arguments passed on to \code{\link[=timeseries_plot]{timeseries_plot}}

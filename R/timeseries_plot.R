@@ -6,6 +6,8 @@
 #' @param date_label format of date label (%b-%y)
 #' @param x_angle angle of x axis text
 #' @param legend_text_size size of the text in the legend
+#' @param y_title_size size of y_axis label
+#' @param y_unit unit to display on y_axis heading
 #'
 #' @return a timeseries plot based on the scale and date range of the dataset
 #' @export
