@@ -27,6 +27,10 @@ timeseries_plot(
 \item{x_angle}{angle of x axis text}
 
 \item{legend_text_size}{size of the text in the legend}
+
+\item{y_title_size}{size of y_axis label}
+
+\item{y_unit}{unit to display on y_axis heading}
 }
 \value{
 a timeseries plot based on the scale and date range of the dataset

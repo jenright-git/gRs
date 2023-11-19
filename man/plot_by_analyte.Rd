@@ -23,6 +23,8 @@ plot_by_analyte(data, save_path = NULL, smooth = FALSE, linear_smooth = FALSE)
     \item{\code{date_label}}{format of date label (\%b-\%y)}
     \item{\code{x_angle}}{angle of x axis text}
     \item{\code{legend_text_size}}{size of the text in the legend}
+    \item{\code{y_title_size}}{size of y_axis label}
+    \item{\code{y_unit}}{unit to display on y_axis heading}
   }}
 }
 \value{
