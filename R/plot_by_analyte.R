@@ -2,6 +2,8 @@
 #'
 #' @param data tibble of concentration data
 #' @param save_path path to directory where plots will be saved
+#' @param smooth Apply a geom_smooth to the plot
+#' @param linear_smooth Apply a linear trendline to the plot
 #' @inheritDotParams timeseries_plot
 #'
 #' @return jpeg of timeseries plots
@@ -9,14 +11,14 @@
 #'
 #' @examples plot_by_analyte("my_project/figures")
 #' @importFrom dplyr filter select
-#' @importFrom ggplot2 ggsave
+#' @importFrom ggplot2 ggsave geom_smooth
 #' @importFrom glue glue
 #' @importFrom purrr pwalk
 #' @importFrom tidyr crossing
 
 ### Must figure out how to add timeseies_plot arguments
 
-plot_by_analyte <- function(data, save_path=NULL){
+plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FALSE){
 
   chemgroup <- base::unique(data$group)
 
@@ -63,9 +65,20 @@ plot_by_analyte <- function(data, save_path=NULL){
      # limit <- base::unique(dplyr::filter(data, analyte == i)$criteria)  # Example of a base function
 
 
-      data %>%
+     plot <-  data %>%
         dplyr::filter(zone == x, analyte == i) %>%
-        timeseries_plot(.)
+        timeseries_plot(.)+
+
+
+       if(smooth==TRUE){
+          plot + geom_smooth(method = 'loess', formula = 'y ~ x', se = FALSE, size=0.5)
+       }
+
+        if(linear_smooth==TRUE){
+          plot + geom_smooth(method="lm", formula = 'y ~ x', se=FALSE, size=0.5)
+        }
+
+     plot
 
       number <- dplyr::filter(data, zone == x, analyte == i)
 
