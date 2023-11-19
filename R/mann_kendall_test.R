@@ -43,7 +43,8 @@ mann_kendall_test <- function(data){
                                               p_value > 0.1 & tau_statistic <= 0 & COV >=1 ~ "No Significant Trend",
                                               p_value > 0.1 & tau_statistic <= 0 & COV < 1 ~ "Stable",
                                               p_value >= 0.05 & p_value <= 0.1 & tau_statistic < 0 ~ "Probably Decreasing",
-                                              p_value < 0.05 & tau_statistic < 0 ~ "Decreasing"
+                                              p_value < 0.05 & tau_statistic < 0 ~ "Decreasing",
+                                              is.nan(p_value) & SD==0 & COV==0 ~ "Stable" #if all <LOR results then p_value comes back as NA..
       ))
 
 
