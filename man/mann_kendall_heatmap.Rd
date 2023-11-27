@@ -7,7 +7,8 @@
 mann_kendall_heatmap(
   data,
   label_text_size = 2.8,
-  plot_title = "Mann-Kendall Trend Analysis"
+  plot_title = "Mann-Kendall Trend Analysis",
+  heatmap_colours = NULL
 )
 }
 \arguments{
@@ -16,6 +17,8 @@ mann_kendall_heatmap(
 \item{label_text_size}{size of the label text}
 
 \item{plot_title}{Title Text}
+
+\item{heatmap_colours}{vector of colours to use for each category/tile}
 }
 \value{
 ggplot heatmap
