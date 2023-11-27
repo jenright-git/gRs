@@ -44,11 +44,22 @@ plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FA
 
   locations_vec <- base::unique(data$location)
 
-  colours_vec <- Polychrome::alphabet.colors(n = base::length(locations_vec))
+  #colours_vec <- Polychrome::alphabet.colors(n = base::length(locations_vec))
+
+  set.seed(221294)
+
+  colour = grDevices::colors()[base::grep('gr(a|e)y', grDevices::colors(), invert = T)]
+
+  colours_vec <- base::sample(colour,
+                         size = base::length(locations_vec),
+                         replace=FALSE)
+
 
   # assign locations to colours
   location_colours <- stats::setNames(colours_vec, locations_vec)
 
+
+ # establish_plotting_variables(data)
 
 
 
@@ -60,12 +71,12 @@ plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FA
       x <- ..2
 
       y_unit <- dplyr::filter(data, analyte == i) %>%
-        dplyr::select(units) %>% base::unique()  # Example of a base function
+        dplyr::select(units) %>% base::unique()
 
      # limit <- base::unique(dplyr::filter(data, analyte == i)$criteria)  # Example of a base function
 
 
-     plot <-  data %>%
+     plot1 <-  data %>%
         dplyr::filter(zone == x, analyte == i) %>%
         timeseries_plot(.)+
 
@@ -78,7 +89,7 @@ plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FA
           plot + geom_smooth(method="lm", formula = 'y ~ x', se=FALSE, size=0.5)
         }
 
-     plot
+     plot1
 
       number <- dplyr::filter(data, zone == x, analyte == i)
 
@@ -86,7 +97,7 @@ plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FA
         ggplot2::ggsave(glue::glue("{save_path}/{x}/{i}-plot.png"), height = 10, width = 14, units = "cm")
         #message(x, " ", i, " Saved")
       } else {
-        base::message(x, " ", i, " No Data")  # Example of a base function
+        base::message(x, " ", i, " No Data")
       }
 
 

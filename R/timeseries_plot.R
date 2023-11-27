@@ -20,9 +20,8 @@ timeseries_plot <-  function(data, date_size=10, date_break="year", date_label="
                              x_angle=90, legend_text_size=10, y_title_size=10, y_unit="mg/L"){
 
   y_unit <- y_unit
-  set.seed(123)
 
-  establish_plotting_variables(data)
+  #establish_plotting_variables(data)
 
   # y_unit <- df %>%
   #   filter(analyte == i) %>%
