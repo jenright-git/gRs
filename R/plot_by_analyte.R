@@ -78,7 +78,7 @@ plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FA
 
      plot1 <-  data %>%
         dplyr::filter(zone == x, analyte == i) %>%
-        timeseries_plot(.)+
+        timeseries_plot(., y_unit = unique(.$units))+
 
 
        if(smooth==TRUE){
