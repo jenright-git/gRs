@@ -46,7 +46,8 @@ data_processor <- function(myfile_path){
                            group = Chem_Group,
                            units = `Output Unit`,
                            location_type = Location_Type,
-                           SampleComments
+                           SampleComments,
+                           sample_type = Sample_Type
   ) %>%
     dplyr::mutate(date = lubridate::floor_date(sample_date, "day"))
 
