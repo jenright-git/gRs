@@ -31,8 +31,8 @@ data_processor <- function(myfile_path){
   )
 
   sw_data <- dplyr::select(raw_sw_data,
-                           lat = x_coord,
-                           lon = y_coord,
+                           lat = Latitude,
+                           lon = Longitude,
                            site = Site_ID,
                            location = Location_Code,
                            field = Field_ID,
