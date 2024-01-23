@@ -26,7 +26,7 @@ data_processor <- function(myfile_path){
                                                                               "text", "text", "numeric", "text",
                                                                               "numeric", "numeric", "numeric",
                                                                               "numeric", "numeric", "numeric",
-                                                                              "numeric", "numeric", "numeric",
+                                                                              "numeric", "numeric", "text",
                                                                               "text", "numeric", "numeric")
   )
 
@@ -47,7 +47,8 @@ data_processor <- function(myfile_path){
                            units = `Output Unit`,
                            location_type = Location_Type,
                            SampleComments,
-                           sample_type = Sample_Type
+                           sample_type = Sample_Type,
+                           purpose = Purpose
   ) %>%
     dplyr::mutate(date = lubridate::floor_date(sample_date, "day"))
 
