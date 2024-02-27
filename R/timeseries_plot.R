@@ -4,10 +4,13 @@
 #' @param date_size size of x-axis date labels
 #' @param date_break date breaks to be used ("2 weeks")
 #' @param date_label format of date label (%b-%y)
+#' @param date_range Range of dates to appear on x-axis
 #' @param x_angle angle of x axis text
 #' @param legend_text_size size of the text in the legend
 #' @param y_title_size size of y_axis label
 #' @param y_unit unit to display on y_axis heading
+#' @param ymin Minimum value on y-axis
+#' @param ymax Maximum value on y-axis
 #'
 #' @return a timeseries plot based on the scale and date range of the dataset
 #' @export
@@ -16,8 +19,9 @@
 #' @importFrom ggplot2 ggplot aes geom_point geom_path scale_colour_manual geom_line geom_hline theme_bw ylim labs scale_x_datetime theme element_text element_blank
 #' @importFrom openair quickText
 #' @importFrom glue glue
-timeseries_plot <-  function(data, date_size=10, date_break="year", date_label="%b-%y",
-                             x_angle=90, legend_text_size=10, y_title_size=10, y_unit="mg/L"){
+timeseries_plot <-  function(data, date_size=12, date_break="month", date_label="%b-%y",
+                             x_angle=90, legend_text_size=10, y_title_size=10,
+                             y_unit="mg/L", dates_range=date_range, ymin=0, ymax=NA){
 
   y_unit <- y_unit
 
@@ -31,15 +35,16 @@ timeseries_plot <-  function(data, date_size=10, date_break="year", date_label="
   #   unique()
 
  plot <-  data %>%
-   ggplot2::ggplot(aes(x = date, y = concentration, colour = location)) +
+   ggplot2::ggplot(aes(x = date, y = concentration, colour = location_code)) +
    ggplot2::geom_point(size = 0.6, alpha = 0.5) +
    ggplot2::geom_path() +
    ggplot2::scale_color_manual(values = location_colours) +  # Specify color scheme for locations
    #ggplot2::geom_line(aes(x = date, y = criteria), linetype = "dashed", colour = "black") +
    #ggplot2::geom_hline(yintercept = limit, linetype = "dashed", colour = "black") +
-   ggplot2::theme_bw() +
-   ggplot2::ylim(c(0, NA)) +
-   ggplot2::labs(x = NULL, y = openair::quickText(glue::glue("Concentration ({y_unit})"))) +
+   ggplot2::theme_light() +
+   ggplot2::ylim(c(ymin, ymax)) +
+   ggplot2::labs(x = NULL,
+                 y = openair::quickText(glue::glue("Concentration ({y_unit})"))) +
    ggplot2::scale_x_datetime(
      date_breaks = date_break,
      date_labels = date_label,

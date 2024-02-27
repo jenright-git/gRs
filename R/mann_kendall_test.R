@@ -15,9 +15,9 @@ mann_kendall_test <- function(data){
     results_list <- list()
 
     # Loop through each combination of location and analyte, perform Mann-Kendall analysis, and store results in list   Changed from 1 to 3 becasue I think is the number of data points needed. mk.test needs at least 3
-    for (i in base::unique(data$location)) {
-      for (j in base::unique(data$analyte)) {
-        subset_data <- data %>% dplyr::filter(location == i, analyte == j)
+    for (i in base::unique(data$location_code)) {
+      for (j in base::unique(data$chem_name)) {
+        subset_data <- data %>% dplyr::filter(location_code == i, analyte == j)
         if (base::nrow(subset_data) > 3) {
           results_list[[paste0(i, "-", j)]] <- mk_analysis(subset_data)
         }
@@ -50,7 +50,7 @@ mann_kendall_test <- function(data){
 
 
     mk.export <- mk.export %>%
-      tidyr::separate(col = location_analyte, into = c("location", "analyte"), sep = "-")
+      tidyr::separate(col = location_analyte, into = c("location_code", "analyte"), sep = "-")
 
 
     return(mk.export)

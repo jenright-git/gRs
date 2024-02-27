@@ -6,13 +6,16 @@
 \usage{
 timeseries_plot(
   data,
-  date_size = 10,
-  date_break = "year",
+  date_size = 12,
+  date_break = "month",
   date_label = "\%b-\%y",
   x_angle = 90,
   legend_text_size = 10,
   y_title_size = 10,
-  y_unit = "mg/L"
+  y_unit = "mg/L",
+  dates_range = date_range,
+  ymin = 0,
+  ymax = NA
 )
 }
 \arguments{
@@ -31,6 +34,12 @@ timeseries_plot(
 \item{y_title_size}{size of y_axis label}
 
 \item{y_unit}{unit to display on y_axis heading}
+
+\item{ymin}{Minimum value on y-axis}
+
+\item{ymax}{Maximum value on y-axis}
+
+\item{date_range}{Range of dates to appear on x-axis}
 }
 \value{
 a timeseries plot based on the scale and date range of the dataset

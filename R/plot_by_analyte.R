@@ -4,7 +4,8 @@
 #' @param save_path path to directory where plots will be saved
 #' @param smooth Apply a geom_smooth to the plot
 #' @param linear_smooth Apply a linear trendline to the plot
-#' @inheritDotParams timeseries_plot
+#' @inheritDotParams timeseries_plot date_size date_break date_label x_angle legend_text_size y_title_size y_unit dates_range ymin ymax
+#' @inheritParams timeseries_plot
 #'
 #' @return jpeg of timeseries plots
 #' @export
@@ -18,11 +19,11 @@
 
 ### Must figure out how to add timeseies_plot arguments
 
-plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FALSE){
+plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FALSE, ...){
 
-  chemgroup <- base::unique(data$group)
+  chemgroup <- base::unique(data$chem_group)
 
-  analytes <- dplyr::filter(data, group %in% chemgroup) %>%
+  analytes <- dplyr::filter(data, chem_group %in% chemgroup) %>%
     dplyr::select(analyte) %>%
     dplyr::distinct() %>%
     tidyr::drop_na() %>%
@@ -31,25 +32,25 @@ plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FA
 
   date_range <- c(base::min(data$date), base::max(data$date))
 
-  if (all(is.na(data$zone))) {
+  if (all(is.na(data$monitoring_zone))) {
     data <- data %>%
-      dplyr::mutate(zone = site)
+      dplyr::mutate(monitoring_zone = site_id)
 
-    zones <- base::unique(data$zone)
+    zones <- base::unique(data$monitoring_zone)
   } else {
-    zones <- base::unique(data$zone)
+    zones <- base::unique(data$monitoring_zone)
   }
 
 
 
-  locations_vec <- base::unique(data$location)
+  locations_vec <- base::unique(data$location_code)
 
   #colours_vec <- Polychrome::alphabet.colors(n = base::length(locations_vec))
 
-  set.seed(221294)
 
   colour = grDevices::colors()[base::grep('gr(a|e)y', grDevices::colors(), invert = T)]
 
+  set.seed(24168)
   colours_vec <- base::sample(colour,
                          size = base::length(locations_vec),
                          replace=FALSE)
@@ -63,35 +64,35 @@ plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FA
 
 
 
-  analyte_zone_combinations <- tidyr::crossing(analyte = analytes, zone = zones) #create tibble of vectors to map over
+  analyte_zone_combinations <- tidyr::crossing(chem_name = analytes, monitoring_zone = zones) #create tibble of vectors to map over
 
   plots <- analyte_zone_combinations %>%
     purrr::pwalk(~ {
       i <- ..1
       x <- ..2
 
-      y_unit <- dplyr::filter(data, analyte == i) %>%
-        dplyr::select(units) %>% base::unique()
+      y_unit <- dplyr::filter(data, chem_name == i) %>%
+        dplyr::select(output_unit) %>% base::unique()
 
      # limit <- base::unique(dplyr::filter(data, analyte == i)$criteria)  # Example of a base function
 
 
-     plot1 <-  data %>%
-        dplyr::filter(zone == x, analyte == i) %>%
-        timeseries_plot(., y_unit = unique(.$units))+
+      plot1 <-  data %>%
+        dplyr::filter(monitoring_zone == x, chem_name == i) %>%
+        timeseries_plot(., y_unit = unique(.$output_unit))
 
 
        if(smooth==TRUE){
-          plot + geom_smooth(method = 'loess', formula = 'y ~ x', se = FALSE, size=0.5)
+        plot1 <-  plot1 + geom_smooth(method = 'loess', formula = 'y ~ x', se = FALSE, size=0.5)
        }
 
         if(linear_smooth==TRUE){
-          plot + geom_smooth(method="lm", formula = 'y ~ x', se=FALSE, size=0.5)
+          plot1 + geom_smooth(method="lm", formula = 'y ~ x', se=FALSE, size=0.5)
         }
 
      plot1
 
-      number <- dplyr::filter(data, zone == x, analyte == i)
+      number <- dplyr::filter(data, monitoring_zone == x, chem_name == i)
 
       if (nrow(number) > 1) {
         ggplot2::ggsave(glue::glue("{save_path}/{x}/{i}-plot.png"), height = 10, width = 14, units = "cm")

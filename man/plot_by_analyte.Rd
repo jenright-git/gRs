@@ -4,7 +4,13 @@
 \alias{plot_by_analyte}
 \title{Plots a timeseries_plot for each analyte and saves to designated location}
 \usage{
-plot_by_analyte(data, save_path = NULL, smooth = FALSE, linear_smooth = FALSE)
+plot_by_analyte(
+  data,
+  save_path = NULL,
+  smooth = FALSE,
+  linear_smooth = FALSE,
+  ...
+)
 }
 \arguments{
 \item{data}{tibble of concentration data}
@@ -25,6 +31,8 @@ plot_by_analyte(data, save_path = NULL, smooth = FALSE, linear_smooth = FALSE)
     \item{\code{legend_text_size}}{size of the text in the legend}
     \item{\code{y_title_size}}{size of y_axis label}
     \item{\code{y_unit}}{unit to display on y_axis heading}
+    \item{\code{ymin}}{Minimum value on y-axis}
+    \item{\code{ymax}}{Maximum value on y-axis}
   }}
 }
 \value{

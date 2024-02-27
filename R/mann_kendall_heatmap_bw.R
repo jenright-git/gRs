@@ -17,7 +17,7 @@ mann_kendall_heatmap_bw <- function(data, label_text_size=3.5, plot_title="Mann-
 
   data %>%
     dplyr::mutate(trend = factor(trend, levels = c("Increasing", "No Significant Trend", "Decreasing"))) %>%
-    ggplot2::ggplot(aes(x = location, y = analyte)) +
+    ggplot2::ggplot(aes(x = location_code, y = analyte)) +
     ggplot2::geom_tile(colour = "black", fill = "white") +
     ggtext::geom_richtext(ggplot2::aes(label = base::ifelse(base::grepl("Increasing|Decreasing", trend),
                                                             glue::glue("<b>{str_wrap(trend, width = 20)}</b>"),

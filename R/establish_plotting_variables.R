@@ -12,10 +12,10 @@
 
 establish_plotting_variables <- function(data){
 
-  chemgroup <<- base::unique(data$group)
+  chem_group <<- base::unique(data$chem_group)
 
-  analytes <<- dplyr::filter(data, group %in% chemgroup) %>%
-    dplyr::select(analyte) %>%
+  analytes <<- dplyr::filter(data, chem_group %in% chem_group) %>%
+    dplyr::select(chem_name) %>%
     dplyr::distinct() %>%
     tidyr::drop_na() %>%
     base::as.vector() %>%
@@ -23,17 +23,17 @@ establish_plotting_variables <- function(data){
 
   date_range <<- c(base::min(data$date), base::max(data$date))
 
-  if (all(is.na(data$zone))) {
+  if (all(is.na(data$monitoring_zone))) {
     data <- data %>%
-      dplyr::mutate(zone = site)
+      dplyr::mutate(monitoring_zone = site_id)
 
-    zones <<- base::unique(data$zone)
+    zones <<- base::unique(data$monitoring_zone)
   } else {
-    zones <<- base::unique(data$zone)
+    zones <<- base::unique(data$monitoring_zone)
   }
 
 
-  locations_vec <<- base::unique(data$location)
+  locations_vec <<- base::unique(data$location_code)
 
 set.seed(1239755)
 

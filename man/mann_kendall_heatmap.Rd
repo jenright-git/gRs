@@ -6,9 +6,10 @@
 \usage{
 mann_kendall_heatmap(
   data,
-  label_text_size = 2.8,
+  label_text_size = 3.2,
   plot_title = "Mann-Kendall Trend Analysis",
-  heatmap_colours = NULL
+  heatmap_colours = NULL,
+  width = 20
 )
 }
 \arguments{
@@ -18,7 +19,8 @@ mann_kendall_heatmap(
 
 \item{plot_title}{Title Text}
 
-\item{heatmap_colours}{vector of colours to use for each category/tile}
+\item{heatmap_colours}{vector of colours to use for each category/tile
+http://127.0.0.1:12443/graphics/plot_zoom_png?width=1920&height=1017}
 }
 \value{
 ggplot heatmap

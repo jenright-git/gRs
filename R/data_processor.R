@@ -9,6 +9,7 @@
 #' @importFrom readxl read_excel
 #' @importFrom dplyr select mutate left_join arrange
 #' @importFrom readr read_csv
+#' @importFrom janitor clean_names
 data_processor <- function(myfile_path){
 
 
@@ -30,43 +31,36 @@ data_processor <- function(myfile_path){
                                                                               "text", "numeric", "numeric")
   )
 
-  sw_data <- dplyr::select(raw_sw_data,
-                           lat = Latitude,
-                           lon = Longitude,
-                           site = Site_ID,
-                           location = Location_Code,
-                           field = Field_ID,
-                           sample_date = Sampled_Date_Time,
-                           monitoring.round = Monitoring_Round,
-                           zone = Monitoring_Zone,
-                           analyte = ChemName,
-                           filtered = Total_or_Filtered,
-                           prefix = Prefix,
-                           concentration = Concentration,
-                           group = Chem_Group,
-                           units = `Output Unit`,
-                           location_type = Location_Type,
-                           SampleComments,
-                           sample_type = Sample_Type,
-                           purpose = Purpose
-  ) %>%
-    dplyr::mutate(date = lubridate::floor_date(sample_date, "day"))
+  sw_data <-
+    #   dplyr::select(raw_sw_data,
+    #                          lat = Latitude,
+    #                          lon = Longitude,
+    #                          site = Site_ID,
+    #                          location = Location_Code,
+    #                          field = Field_ID,
+    #                          sample_date = Sampled_Date_Time,
+    #                          monitoring_round = Monitoring_Round,
+    #                          zone = Monitoring_Zone,
+    #                          analyte = ChemName,
+    #                          filtered = Total_or_Filtered,
+  #                          prefix = Prefix,
+  #                          concentration = Concentration,
+  #                          group = Chem_Group,
+  #                          units = `Output Unit`,
+  #                          location_type = Location_Type,
+  #                          SampleComments,
+  #                          sample_type = Sample_Type,
+  #                          purpose = Purpose
+  # ) %>%
+  raw_sw_data %>%
+    janitor::clean_names() %>%
+    dplyr::mutate(date = lubridate::floor_date(sampled_date_time, "day"))
 
-  criteria_file <- file.path("raw-data", "criteria.csv")
-
-  if (file.exists(criteria_file)) {
-    criteria <- readr::read_csv(criteria_file) %>%
-      dplyr::select(source = ActionLevelSource,
-                    analyte = ChemName,
-                    criteria = Action_Level)
-
-    sw_data <- dplyr::left_join(sw_data, criteria, by = "analyte") %>%
-      dplyr::select(-source)
-  }
-
-
-  sw_data <- dplyr::mutate(sw_data,
-                           analyte = ifelse(filtered == "F", yes = glue::glue("Dissolved {analyte}"), no = analyte)) %>%
+  sw_data <-
+    dplyr::mutate(sw_data,
+                  analyte = ifelse(total_or_filtered == "F",
+                                   yes = glue::glue("Dissolved {chem_name}"),
+                                   no = chem_name)) %>%
     dplyr::arrange(date)
 
   return(sw_data)
