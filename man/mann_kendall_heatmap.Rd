@@ -19,8 +19,7 @@ mann_kendall_heatmap(
 
 \item{plot_title}{Title Text}
 
-\item{heatmap_colours}{vector of colours to use for each category/tile
-http://127.0.0.1:12443/graphics/plot_zoom_png?width=1920&height=1017}
+\item{heatmap_colours}{vector of colours to use for each category/tile}
 }
 \value{
 ggplot heatmap
