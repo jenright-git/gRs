@@ -4,7 +4,6 @@
 #' @param label_text_size size of the label text
 #' @param plot_title Title Text
 #' @param heatmap_colours vector of colours to use for each category/tile
-#'http://127.0.0.1:12443/graphics/plot_zoom_png?width=1920&height=1017
 #' @return ggplot heatmap
 #' @export
 #'
