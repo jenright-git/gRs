@@ -27,7 +27,7 @@ mann_kendall_heatmap <- function(data, label_text_size=3.2,
                                                    "Stable",
                                                    "Probably Decreasing",
                                                    "Decreasing"))) %>%
-    ggplot2::ggplot(aes(x = location_code, y = analyte, fill = trend)) +
+    ggplot2::ggplot(aes(x = location_code, y = chem_name, fill = trend)) +
     ggplot2::geom_tile(colour = "black", ) +
     ggplot2::scale_fill_manual(values = heatmap_colours,
                       breaks = c("Increasing",
