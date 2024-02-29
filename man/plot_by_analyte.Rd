@@ -27,6 +27,7 @@ plot_by_analyte(
     \item{\code{date_size}}{size of x-axis date labels}
     \item{\code{date_break}}{date breaks to be used ("2 weeks")}
     \item{\code{date_label}}{format of date label (\%b-\%y)}
+    \item{\code{dates_range}}{Range of dates to appear on x-axis}
     \item{\code{x_angle}}{angle of x axis text}
     \item{\code{legend_text_size}}{size of the text in the legend}
     \item{\code{y_title_size}}{size of y_axis label}

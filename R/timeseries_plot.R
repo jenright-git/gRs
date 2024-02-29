@@ -4,7 +4,7 @@
 #' @param date_size size of x-axis date labels
 #' @param date_break date breaks to be used ("2 weeks")
 #' @param date_label format of date label (%b-%y)
-#' @param date_range Range of dates to appear on x-axis
+#' @param dates_range Range of dates to appear on x-axis
 #' @param x_angle angle of x axis text
 #' @param legend_text_size size of the text in the legend
 #' @param y_title_size size of y_axis label
@@ -48,7 +48,7 @@ timeseries_plot <-  function(data, date_size=12, date_break="month", date_label=
    ggplot2::scale_x_datetime(
      date_breaks = date_break,
      date_labels = date_label,
-     limits = date_range
+     limits = dates_range
    ) +
    ggplot2::theme(
      legend.position = "bottom",

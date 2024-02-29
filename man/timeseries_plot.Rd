@@ -35,11 +35,11 @@ timeseries_plot(
 
 \item{y_unit}{unit to display on y_axis heading}
 
+\item{dates_range}{Range of dates to appear on x-axis}
+
 \item{ymin}{Minimum value on y-axis}
 
 \item{ymax}{Maximum value on y-axis}
-
-\item{date_range}{Range of dates to appear on x-axis}
 }
 \value{
 a timeseries plot based on the scale and date range of the dataset
