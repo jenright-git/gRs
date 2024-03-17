@@ -19,7 +19,7 @@ mann_kendall_test <- function(data){
       for (j in base::unique(data$chem_name)) {
         subset_data <- data %>% dplyr::filter(location_code == i, chem_name == j)
         if (base::nrow(subset_data) > 3) {
-          results_list[[paste0(i, "-", j)]] <- mk_analysis(subset_data)
+          results_list[[paste0(i, "XXX", j)]] <- mk_analysis(subset_data)
         }
       }
     }
@@ -50,7 +50,7 @@ mann_kendall_test <- function(data){
 
 
     mk.export <- mk.export %>%
-      tidyr::separate(col = location_analyte, into = c("location_code", "chem_name"), sep = "-")
+      tidyr::separate(col = location_analyte, into = c("location_code", "chem_name"), sep = "XXX")
 
 
     return(mk.export)
