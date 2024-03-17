@@ -24,7 +24,7 @@ plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FA
   chemgroup <- base::unique(data$chem_group)
 
   analytes <- dplyr::filter(data, chem_group %in% chemgroup) %>%
-    dplyr::select(analyte) %>%
+    dplyr::select(chem_name) %>%
     dplyr::distinct() %>%
     tidyr::drop_na() %>%
     base::as.vector() %>%

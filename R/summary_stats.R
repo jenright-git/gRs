@@ -15,7 +15,7 @@ summary_stats <- function(data, save_path=NULL){
 
   summary_table <- data %>%
     dplyr::select(date, location_code, chem_group, total_or_filtered, chem_name, prefix, concentration, output_unit, criteria) %>%
-    dplyr::group_by(location, analyte) %>%
+    dplyr::group_by(location_code, chem_name) %>%
     dplyr::summarise(observations = n(),
               criteria = criteria,
               exceedance_count = sum(concentration > criteria),
@@ -40,9 +40,9 @@ summary_stats <- function(data, save_path=NULL){
 
 
    summary_table_wide <-  summary_table %>%
-      tidyr::pivot_longer(cols = c(-location, -analyte), names_to = "stat", values_to = "result") %>%
+      tidyr::pivot_longer(cols = c(-location_code, -chem_name), names_to = "stat", values_to = "result") %>%
       dplyr::arrange(stat) %>%
-      tidyr::pivot_wider(names_from = analyte, values_from = result) %>%
+      tidyr::pivot_wider(names_from = chem_name, values_from = result) %>%
       tidyr::unnest() %>%
       base::unique()
 
