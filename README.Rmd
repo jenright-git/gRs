@@ -42,6 +42,8 @@ Import data from an excel file exported directly from esdat.
 library(gRs)
 library(tidyverse)
 
+establish_plotting_variables(gRs::gRs_data)
+
 #import data
 #gRs_data <- data_processor(("gRs_data.xlsx"))
 
@@ -50,8 +52,9 @@ library(tidyverse)
 Perform Mann-Kendall trend test
 ```{r}
 gRs::gRs_data %>% 
-  mann_kendall_test() %>% 
-  head(10) %>% 
+  gRs::mann_kendall_test() %>% 
+  select(-data) %>% 
+  head(5) %>% 
   gt::gt()
 ```
 
@@ -67,7 +70,7 @@ Plot the increasing trends.
 gRs::gRs_data %>% 
   mann_kendall_test() %>% 
   filter(trend == "Increasing") %>% 
-  left_join(gRs_data) %>% 
+  unnest(data) %>% 
   timeseries_plot(date_break = "2 month")+
   facet_wrap(~chem_name, scales="free_y")
 ```

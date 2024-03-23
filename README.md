@@ -31,6 +31,8 @@ Import data from an excel file exported directly from esdat.
 library(gRs)
 library(tidyverse)
 
+establish_plotting_variables(gRs::gRs_data)
+
 #import data
 #gRs_data <- data_processor(("gRs_data.xlsx"))
 ```
@@ -39,8 +41,9 @@ Perform Mann-Kendall trend test
 
 ``` r
 gRs::gRs_data %>% 
-  mann_kendall_test() %>% 
-  head(10) %>% 
+  gRs::mann_kendall_test() %>% 
+  select(-data) %>% 
+  head(5) %>% 
   gt::gt()
 ```
 
@@ -451,81 +454,41 @@ gRs::gRs_data %>%
 <td headers="chem_name" class="gt_row gt_left">Phosphorus</td>
 <td headers="p_value" class="gt_row gt_right">0.81328621</td>
 <td headers="tau_statistic" class="gt_row gt_right">-0.07479576</td>
-<td headers="sample_mean" class="gt_row gt_right">1.618182e-02</td>
-<td headers="SD" class="gt_row gt_right">4.556713e-03</td>
+<td headers="sample_mean" class="gt_row gt_right">0.01618182</td>
+<td headers="SD" class="gt_row gt_right">0.004556713</td>
 <td headers="COV" class="gt_row gt_right">0.2815946</td>
 <td headers="trend" class="gt_row gt_left">Stable</td></tr>
-    <tr><td headers="location_code" class="gt_row gt_left">LOC_01</td>
-<td headers="chem_name" class="gt_row gt_left">Total Nitrogen (as N)</td>
-<td headers="p_value" class="gt_row gt_right">0.15857842</td>
-<td headers="tau_statistic" class="gt_row gt_right">0.35191220</td>
-<td headers="sample_mean" class="gt_row gt_right">1.300000e-01</td>
-<td headers="SD" class="gt_row gt_right">4.774935e-02</td>
-<td headers="COV" class="gt_row gt_right">0.3673027</td>
+    <tr><td headers="location_code" class="gt_row gt_left">LOC_02</td>
+<td headers="chem_name" class="gt_row gt_left">Phosphorus</td>
+<td headers="p_value" class="gt_row gt_right">0.48219166</td>
+<td headers="tau_statistic" class="gt_row gt_right">0.18349396</td>
+<td headers="sample_mean" class="gt_row gt_right">0.01745455</td>
+<td headers="SD" class="gt_row gt_right">0.006455442</td>
+<td headers="COV" class="gt_row gt_right">0.3698430</td>
 <td headers="trend" class="gt_row gt_left">No Significant Trend</td></tr>
-    <tr><td headers="location_code" class="gt_row gt_left">LOC_01</td>
-<td headers="chem_name" class="gt_row gt_left">Total Coliforms</td>
-<td headers="p_value" class="gt_row gt_right">0.02354218</td>
-<td headers="tau_statistic" class="gt_row gt_right">0.55048188</td>
-<td headers="sample_mean" class="gt_row gt_right">8.123636e+02</td>
-<td headers="SD" class="gt_row gt_right">1.323262e+03</td>
-<td headers="COV" class="gt_row gt_right">1.6289031</td>
-<td headers="trend" class="gt_row gt_left">Increasing</td></tr>
-    <tr><td headers="location_code" class="gt_row gt_left">LOC_01</td>
-<td headers="chem_name" class="gt_row gt_left">Dissolved Total Nitrogen (as N)</td>
-<td headers="p_value" class="gt_row gt_right">0.69384100</td>
-<td headers="tau_statistic" class="gt_row gt_right">0.11219364</td>
-<td headers="sample_mean" class="gt_row gt_right">1.263636e-01</td>
-<td headers="SD" class="gt_row gt_right">4.522670e-02</td>
-<td headers="COV" class="gt_row gt_right">0.3579092</td>
-<td headers="trend" class="gt_row gt_left">No Significant Trend</td></tr>
-    <tr><td headers="location_code" class="gt_row gt_left">LOC_01</td>
-<td headers="chem_name" class="gt_row gt_left">Dissolved Dissolved Total Phosphorus (as P)</td>
-<td headers="p_value" class="gt_row gt_right">0.57919899</td>
-<td headers="tau_statistic" class="gt_row gt_right">-0.15255401</td>
-<td headers="sample_mean" class="gt_row gt_right">1.245455e-02</td>
-<td headers="SD" class="gt_row gt_right">2.805838e-03</td>
-<td headers="COV" class="gt_row gt_right">0.2252863</td>
-<td headers="trend" class="gt_row gt_left">Stable</td></tr>
-    <tr><td headers="location_code" class="gt_row gt_left">LOC_01</td>
-<td headers="chem_name" class="gt_row gt_left">Ammonia (as N)</td>
-<td headers="p_value" class="gt_row gt_right">0.27283176</td>
-<td headers="tau_statistic" class="gt_row gt_right">0.27782542</td>
-<td headers="sample_mean" class="gt_row gt_right">1.109091e-02</td>
-<td headers="SD" class="gt_row gt_right">4.908249e-03</td>
-<td headers="COV" class="gt_row gt_right">0.4425470</td>
-<td headers="trend" class="gt_row gt_left">No Significant Trend</td></tr>
-    <tr><td headers="location_code" class="gt_row gt_left">LOC_01</td>
-<td headers="chem_name" class="gt_row gt_left">Dissolved Reactive Phosphorus as P (Orthophosphate as P)</td>
-<td headers="p_value" class="gt_row gt_right">0.33407284</td>
-<td headers="tau_statistic" class="gt_row gt_right">-0.25568961</td>
-<td headers="sample_mean" class="gt_row gt_right">8.727273e-03</td>
-<td headers="SD" class="gt_row gt_right">2.572583e-03</td>
-<td headers="COV" class="gt_row gt_right">0.2947751</td>
-<td headers="trend" class="gt_row gt_left">Stable</td></tr>
-    <tr><td headers="location_code" class="gt_row gt_left">LOC_01</td>
-<td headers="chem_name" class="gt_row gt_left">Enterococcus by MF</td>
-<td headers="p_value" class="gt_row gt_right">0.53091599</td>
-<td headers="tau_statistic" class="gt_row gt_right">0.16669525</td>
-<td headers="sample_mean" class="gt_row gt_right">1.545455e+01</td>
-<td headers="SD" class="gt_row gt_right">1.504236e+01</td>
-<td headers="COV" class="gt_row gt_right">0.9733295</td>
-<td headers="trend" class="gt_row gt_left">No Significant Trend</td></tr>
-    <tr><td headers="location_code" class="gt_row gt_left">LOC_01</td>
-<td headers="chem_name" class="gt_row gt_left">Nitrite + Nitrate as N</td>
-<td headers="p_value" class="gt_row gt_right">0.18435095</td>
-<td headers="tau_statistic" class="gt_row gt_right">-0.33028913</td>
-<td headers="sample_mean" class="gt_row gt_right">1.363636e-02</td>
-<td headers="SD" class="gt_row gt_right">1.243602e-02</td>
-<td headers="COV" class="gt_row gt_right">0.9119747</td>
-<td headers="trend" class="gt_row gt_left">Stable</td></tr>
-    <tr><td headers="location_code" class="gt_row gt_left">LOC_01</td>
-<td headers="chem_name" class="gt_row gt_left">Total Suspended Solids</td>
-<td headers="p_value" class="gt_row gt_right">0.13908673</td>
-<td headers="tau_statistic" class="gt_row gt_right">-0.41170556</td>
-<td headers="sample_mean" class="gt_row gt_right">1.636364e+00</td>
-<td headers="SD" class="gt_row gt_right">1.206045e+00</td>
-<td headers="COV" class="gt_row gt_right">0.7370277</td>
+    <tr><td headers="location_code" class="gt_row gt_left">LOC_03</td>
+<td headers="chem_name" class="gt_row gt_left">Phosphorus</td>
+<td headers="p_value" class="gt_row gt_right">0.07249479</td>
+<td headers="tau_statistic" class="gt_row gt_right">0.44038551</td>
+<td headers="sample_mean" class="gt_row gt_right">0.02400000</td>
+<td headers="SD" class="gt_row gt_right">0.014401389</td>
+<td headers="COV" class="gt_row gt_right">0.6000579</td>
+<td headers="trend" class="gt_row gt_left">Probably Increasing</td></tr>
+    <tr><td headers="location_code" class="gt_row gt_left">LOC_04</td>
+<td headers="chem_name" class="gt_row gt_left">Phosphorus</td>
+<td headers="p_value" class="gt_row gt_right">0.07848738</td>
+<td headers="tau_statistic" class="gt_row gt_right">0.44304562</td>
+<td headers="sample_mean" class="gt_row gt_right">0.01090909</td>
+<td headers="SD" class="gt_row gt_right">0.007687061</td>
+<td headers="COV" class="gt_row gt_right">0.7046473</td>
+<td headers="trend" class="gt_row gt_left">Probably Increasing</td></tr>
+    <tr><td headers="location_code" class="gt_row gt_left">LOC_05</td>
+<td headers="chem_name" class="gt_row gt_left">Phosphorus</td>
+<td headers="p_value" class="gt_row gt_right">0.52228352</td>
+<td headers="tau_statistic" class="gt_row gt_right">-0.17336568</td>
+<td headers="sample_mean" class="gt_row gt_right">0.01072727</td>
+<td headers="SD" class="gt_row gt_right">0.008247314</td>
+<td headers="COV" class="gt_row gt_right">0.7688174</td>
 <td headers="trend" class="gt_row gt_left">Stable</td></tr>
   </tbody>
   &#10;  
@@ -548,7 +511,7 @@ Plot the increasing trends.
 gRs::gRs_data %>% 
   mann_kendall_test() %>% 
   filter(trend == "Increasing") %>% 
-  left_join(gRs_data) %>% 
+  unnest(data) %>% 
   timeseries_plot(date_break = "2 month")+
   facet_wrap(~chem_name, scales="free_y")
 ```
