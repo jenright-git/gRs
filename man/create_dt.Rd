@@ -7,7 +7,7 @@
 create_dt(data)
 }
 \arguments{
-\item{data}{}
+\item{data}{a tibble or dataframe}
 }
 \value{
 An interactive datatable using the DT package

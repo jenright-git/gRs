@@ -13,10 +13,6 @@
 #' @importFrom stringr str_wrap
 #' @importFrom ggtext geom_richtext
 #' @importFrom glue glue
-
-#remove R checks
-date <- sampled_date_time <- chem_name_concentration <- trend <- location_code <- prefix <- output_unit <- NULL
-
 mann_kendall_heatmap_bw <- function(data, label_text_size=3.5, plot_title="Mann-Kendall Trend Analysis", width=20){
 
   data %>%

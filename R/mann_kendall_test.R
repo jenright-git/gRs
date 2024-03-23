@@ -10,10 +10,6 @@
 #' @importFrom dplyr bind_rows filter mutate case_when
 #' @importFrom tidyr tibble nest unnest
 #' @importFrom purrr map
-
-#remove R checks
-date <- sampled_date_time <- chem_name_concentration <- trend <- location_code <- prefix <- output_unit <- NULL
-
 mann_kendall_test <- function(data, traditional=FALSE){
 
   df <- data %>%

@@ -1,6 +1,6 @@
 #' Create an interactive data table using the package DT
 #'
-#' @param data
+#' @param data a tibble or dataframe
 #'
 #' @return An interactive datatable using the DT package
 #' @export

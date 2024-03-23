@@ -19,10 +19,6 @@
 #' @importFrom ggplot2 ggplot aes geom_point geom_path scale_colour_manual geom_line geom_hline theme_bw ylim labs scale_x_datetime theme element_text element_blank
 #' @importFrom openair quickText
 #' @importFrom glue glue
-
-#remove R checks
-date <- sampled_date_time <- chem_name_concentration <- trend <- location_code <- prefix <- output_unit <- NULL
-
 timeseries_plot <-  function(data, date_size=12, date_break="month", date_label="%b-%y",
                              x_angle=90, legend_text_size=10, y_title_size=10,
                              y_unit="mg/L", dates_range=date_range, ymin=0, ymax=NA){

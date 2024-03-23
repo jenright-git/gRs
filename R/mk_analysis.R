@@ -7,10 +7,6 @@
 #'
 #' @examples mk_analysis(df)
 #' @importFrom trend mk.test
-
-#remove R checks
-date <- sampled_date_time <- chem_name_concentration <- trend <- location_code <- prefix <- output_unit <- NULL
-
 mk_analysis <- function(data) {
 
     result <- trend::mk.test(data$concentration)

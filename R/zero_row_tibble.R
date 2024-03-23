@@ -7,17 +7,19 @@
 #' @export
 #'
 #' @examples zero_row_tibble(c("A", "B", "C"))
+#' @importFrom tidyr as_tibble
+#' @importFrom purrr set_names
 zero_row_tibble <- function(names, base = FALSE) {
 
   # Create empty data frame with correct number of variables
-  df <- data.frame(
-    matrix(0, ncol = length(names), nrow = 0)
+  df <- base::data.frame(
+    base::matrix(0, ncol = length(names), nrow = 0)
   ) %>%
     purrr::set_names(names)
 
   # To tibble
   if (!base) {
-    df <- as_tibble(df)
+    df <- tidyr::as_tibble(df)
   }
 
   return(df)

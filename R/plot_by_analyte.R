@@ -14,9 +14,7 @@
 #' @importFrom glue glue
 #' @importFrom purrr pwalk
 #' @importFrom tidyr crossing
-
 ### Must figure out how to add timeseies_plot arguments
-date <- sampled_date_time <- chem_name_concentration <- trend <- location_code <- prefix <- output_unit <- NULL
 plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FALSE, ...){
 
   chemgroup <- base::unique(data$chem_group)
