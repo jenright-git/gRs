@@ -6,7 +6,7 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of gRs is to process and analyse surfacewater and groundwater
+The goal of gRs is to process and analyse surface water and groundwater
 data from esdat. Tha initial goal is to implement Mann-Kendall analysis
 on an entire dataset at once and produce data visualisation of those
 trends.
@@ -29,10 +29,10 @@ Import data from an excel file exported directly from esdat.
 
 ``` r
 library(gRs)
+library(tidyverse)
 
 #import data
 #gRs_data <- data_processor(("gRs_data.xlsx"))
-## basic example code
 ```
 
 Perform Mann-Kendall trend test
@@ -535,7 +535,18 @@ gRs::gRs_data %>%
 ``` r
 gRs::gRs_data %>% 
   mann_kendall_test() %>% 
-  mann_kendall_heatmap()
+  mann_kendall_heatmap(width=18)
 ```
 
 <img src="man/figures/README-unnamed-chunk-3-1.png" width="100%" />
+
+``` r
+gRs::gRs_data %>% 
+  mann_kendall_test() %>% 
+  filter(trend == "Increasing") %>% 
+  left_join(gRs_data) %>% 
+  timeseries_plot(date_break = "2 month")+
+  facet_wrap(~chem_name, scales="free_y")
+```
+
+<img src="man/figures/README-unnamed-chunk-4-1.png" width="100%" />
