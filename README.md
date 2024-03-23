@@ -532,6 +532,8 @@ gRs::gRs_data %>%
 </table>
 </div>
 
+Visualise trends with a heatmap
+
 ``` r
 gRs::gRs_data %>% 
   mann_kendall_test() %>% 
@@ -539,6 +541,8 @@ gRs::gRs_data %>%
 ```
 
 <img src="man/figures/README-unnamed-chunk-3-1.png" width="100%" />
+
+Plot the increasing trends.
 
 ``` r
 gRs::gRs_data %>% 

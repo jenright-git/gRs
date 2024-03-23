@@ -55,12 +55,14 @@ gRs::gRs_data %>%
   gt::gt()
 ```
 
+Visualise trends with a heatmap
 ```{r, fig.width=15, fig.height=12}
 gRs::gRs_data %>% 
   mann_kendall_test() %>% 
   mann_kendall_heatmap(width=18)
 ```
 
+Plot the increasing trends.
 ```{r}
 gRs::gRs_data %>% 
   mann_kendall_test() %>% 
