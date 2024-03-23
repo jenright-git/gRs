@@ -8,6 +8,10 @@
 #' @examples mann_kendall_reduced_test(mk_export)
 #' @importFrom dplyr bind_rows filter mutate case_when
 #' @importFrom tidyr separate tibble
+
+#remove R checks
+date <- sampled_date_time <- chem_name_concentration <- trend <- location_code <- prefix <- output_unit <- NULL
+
 mann_kendall_reduced_test <- function(data){
 
   establish_plotting_variables(data)
