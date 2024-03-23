@@ -20,21 +20,6 @@ plot_by_analyte(
 \item{smooth}{Apply a geom_smooth to the plot}
 
 \item{linear_smooth}{Apply a linear trendline to the plot}
-
-\item{...}{
-  Arguments passed on to \code{\link[=timeseries_plot]{timeseries_plot}}
-  \describe{
-    \item{\code{date_size}}{size of x-axis date labels}
-    \item{\code{date_break}}{date breaks to be used ("2 weeks")}
-    \item{\code{date_label}}{format of date label (\%b-\%y)}
-    \item{\code{dates_range}}{Range of dates to appear on x-axis}
-    \item{\code{x_angle}}{angle of x axis text}
-    \item{\code{legend_text_size}}{size of the text in the legend}
-    \item{\code{y_title_size}}{size of y_axis label}
-    \item{\code{y_unit}}{unit to display on y_axis heading}
-    \item{\code{ymin}}{Minimum value on y-axis}
-    \item{\code{ymax}}{Maximum value on y-axis}
-  }}
 }
 \value{
 jpeg of timeseries plots

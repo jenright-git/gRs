@@ -11,6 +11,9 @@
 #' @importFrom dplyr mutate
 #' @import ggplot2
 #' @importFrom stringr str_wrap
+
+#remove R checks
+date <- sampled_date_time <- chem_name_concentration <- trend <- location_code <- prefix <- output_unit <- NULL
 mann_kendall_heatmap <- function(data, label_text_size=3.2,
                                  plot_title="Mann-Kendall Trend Analysis",
                                  heatmap_colours=NULL, width=20){

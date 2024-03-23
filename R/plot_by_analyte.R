@@ -4,8 +4,6 @@
 #' @param save_path path to directory where plots will be saved
 #' @param smooth Apply a geom_smooth to the plot
 #' @param linear_smooth Apply a linear trendline to the plot
-#' @inheritDotParams timeseries_plot date_size date_break date_label x_angle legend_text_size y_title_size y_unit dates_range ymin ymax
-#' @inheritParams timeseries_plot
 #'
 #' @return jpeg of timeseries plots
 #' @export
@@ -18,7 +16,7 @@
 #' @importFrom tidyr crossing
 
 ### Must figure out how to add timeseies_plot arguments
-
+date <- sampled_date_time <- chem_name_concentration <- trend <- location_code <- prefix <- output_unit <- NULL
 plot_by_analyte <- function(data, save_path=NULL, smooth=FALSE, linear_smooth=FALSE, ...){
 
   chemgroup <- base::unique(data$chem_group)

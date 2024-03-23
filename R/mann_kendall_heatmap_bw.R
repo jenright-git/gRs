@@ -13,15 +13,19 @@
 #' @importFrom stringr str_wrap
 #' @importFrom ggtext geom_richtext
 #' @importFrom glue glue
-mann_kendall_heatmap_bw <- function(data, label_text_size=3.5, plot_title="Mann-Kendall Trend Analysis"){
+
+#remove R checks
+date <- sampled_date_time <- chem_name_concentration <- trend <- location_code <- prefix <- output_unit <- NULL
+
+mann_kendall_heatmap_bw <- function(data, label_text_size=3.5, plot_title="Mann-Kendall Trend Analysis", width=20){
 
   data %>%
     dplyr::mutate(trend = factor(trend, levels = c("Increasing", "No Significant Trend", "Decreasing"))) %>%
-    ggplot2::ggplot(aes(x = location_code, y = analyte)) +
+    ggplot2::ggplot(aes(x = location_code, y = chem_name)) +
     ggplot2::geom_tile(colour = "black", fill = "white") +
     ggtext::geom_richtext(ggplot2::aes(label = base::ifelse(base::grepl("Increasing|Decreasing", trend),
                                                             glue::glue("<b>{str_wrap(trend, width = 20)}</b>"),
-                                                            stringr::str_wrap(trend, width = 20))),
+                                                            stringr::str_wrap(trend, width = width))),
                           colour = "black", size = label_text_size, label.color="white") +
     ggplot2::theme_bw() +
     ggplot2::ggtitle(plot_title) +
