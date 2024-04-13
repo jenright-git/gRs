@@ -20,7 +20,7 @@ mann_kendall_test <- function(data, traditional=FALSE){
     dplyr::select(-n_samples)
 
   # Make sure there is at least one set of results to be analysed
-  base::stopifnot("Minimum 3 samples are required" = nrow(df)>3)
+  base::stopifnot("No data with more than 3 samples" = nrow(df)>0)
 
   df <- df %>%
     dplyr::mutate(results = purrr::map(data, mk_analysis)) %>%
