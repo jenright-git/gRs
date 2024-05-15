@@ -30,6 +30,7 @@ Import data from an excel file exported directly from esdat.
 ``` r
 library(gRs)
 library(tidyverse)
+library(gt)
 
 establish_plotting_variables(gRs::gRs_data)
 
