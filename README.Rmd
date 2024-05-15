@@ -41,7 +41,6 @@ Import data from an excel file exported directly from esdat.
 ```{r example, warning=FALSE, message=FALSE}
 library(gRs)
 library(tidyverse)
-library(gt)
 
 establish_plotting_variables(gRs::gRs_data)
 
@@ -55,8 +54,7 @@ Perform Mann-Kendall trend test
 gRs::gRs_data %>% 
   gRs::mann_kendall_test() %>% 
   select(-data) %>% 
-  head(5) %>% 
-  gt::gt()
+  head(5)
 ```
 
 Visualise trends with a heatmap
