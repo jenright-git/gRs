@@ -38,7 +38,7 @@ This is a basic example which shows you how to solve a common problem:
 
 Import data from an excel file exported directly from esdat.
 
-```{r example}
+```{r example, warning=FALSE, message=FALSE}
 library(gRs)
 library(tidyverse)
 
@@ -50,7 +50,7 @@ establish_plotting_variables(gRs::gRs_data)
 ```
 
 Perform Mann-Kendall trend test
-```{r}
+```{r, warning=FALSE, message=FALSE}
 gRs::gRs_data %>% 
   gRs::mann_kendall_test() %>% 
   select(-data) %>% 
@@ -59,7 +59,7 @@ gRs::gRs_data %>%
 ```
 
 Visualise trends with a heatmap
-```{r, fig.width=15, fig.height=12}
+```{r, fig.width=15, fig.height=12, warning=FALSE, message=FALSE}
 gRs::gRs_data %>% 
   mann_kendall_test() %>% 
   mann_kendall_heatmap(width=18)
@@ -71,7 +71,7 @@ gRs::gRs_data %>%
   mann_kendall_test() %>% 
   filter(trend == "Increasing") %>% 
   unnest(data) %>% 
-  timeseries_plot(date_break = "2 month")+
+  timeseries_plot(date_break = "2 month", date_label = "%b")+
   facet_wrap(~chem_name, scales="free_y")
 ```
 

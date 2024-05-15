@@ -438,7 +438,7 @@ gRs::gRs_data %>%
 </style>
 <table class="gt_table" data-quarto-disable-processing="false" data-quarto-bootstrap="false">
   <thead>
-    &#10;    <tr class="gt_col_headings">
+    <tr class="gt_col_headings">
       <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1" scope="col" id="location_code">location_code</th>
       <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1" scope="col" id="chem_name">chem_name</th>
       <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1" scope="col" id="p_value">p_value</th>
@@ -512,7 +512,7 @@ gRs::gRs_data %>%
   mann_kendall_test() %>% 
   filter(trend == "Increasing") %>% 
   unnest(data) %>% 
-  timeseries_plot(date_break = "2 month")+
+  timeseries_plot(date_break = "2 month", date_label = "%b")+
   facet_wrap(~chem_name, scales="free_y")
 ```
 
