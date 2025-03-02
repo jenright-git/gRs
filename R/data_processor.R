@@ -42,9 +42,7 @@ data_processor <- function(myfile_path){
                                    no = chem_name)) %>%
     dplyr::arrange(date)
 
-  establish_plotting_variables(sw_data)
 
-  return(sw_data)
 
 
 
