@@ -24,8 +24,13 @@ if(use_zero){
       TRUE ~ concentration  # Handle all other cases
     )) %>%
     arrange(date)
-}
+
   result <- trend::mk.test(data$mka_concentration)
+} else {
+
+  result <- trend::mk.test(data$concentration)
+}
+
 
   mk_result <- tibble(
 
