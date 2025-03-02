@@ -17,7 +17,8 @@ mk_analysis <- function(data) {
       prefix == "<" ~ 0,  # Check for "<" first
       is.na(prefix) ~ concentration,  # Then handle NA values
       TRUE ~ concentration  # Handle all other cases
-    ))
+    )) %>%
+    arrange(date)
 
   result <- trend::mk.test(data$mka_concentration)
 
