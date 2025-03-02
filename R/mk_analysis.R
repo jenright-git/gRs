@@ -7,9 +7,15 @@
 #'
 #' @examples mk_analysis(df)
 #' @importFrom trend mk.test
+#' @import dplyr
 mk_analysis <- function(data) {
 
-    result <- trend::mk.test(data$concentration)
+  # turn <LOR into zero - Fixes issues with changing LOR.
+
+  data <- data %>%
+    dplyr::mutate(mka_concentration = ifelse(prefix == "<", 0, concentration))
+
+  result <- trend::mk.test(data$mka_concentration)
 
   mk_result <- tibble(
 
