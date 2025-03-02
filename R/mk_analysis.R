@@ -13,7 +13,11 @@ mk_analysis <- function(data) {
   # turn <LOR into zero - Fixes issues with changing LOR.
 
   data <- data %>%
-    dplyr::mutate(mka_concentration = ifelse(prefix == "<", 0, concentration))
+    dplyr::mutate(mka_concentration = case_when(
+      prefix == "<" ~ 0,  # Check for "<" first
+      is.na(prefix) ~ concentration,  # Then handle NA values
+      TRUE ~ concentration  # Handle all other cases
+    ))
 
   result <- trend::mk.test(data$mka_concentration)
 
