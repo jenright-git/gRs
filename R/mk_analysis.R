@@ -6,12 +6,17 @@
 #' @export
 #'
 #' @examples mk_analysis(df)
+#' @param use_zero convert <LOR to zero for mann kendall test
 #' @importFrom trend mk.test
 #' @import dplyr
-mk_analysis <- function(data) {
 
-  # turn <LOR into zero - Fixes issues with changing LOR.
+mk_analysis <- function(data, use_zero=FALSE) {
 
+data <- data %>% arrange(date)
+
+    # turn <LOR into zero - Fixes issues with changing LOR.
+
+if(use_zero){
   data <- data %>%
     dplyr::mutate(mka_concentration = case_when(
       prefix == "<" ~ 0,  # Check for "<" first
@@ -19,7 +24,7 @@ mk_analysis <- function(data) {
       TRUE ~ concentration  # Handle all other cases
     )) %>%
     arrange(date)
-
+}
   result <- trend::mk.test(data$mka_concentration)
 
   mk_result <- tibble(
