@@ -13,6 +13,7 @@
 mann_kendall_test <- function(data, traditional=FALSE){
 
   df <- data %>%
+    tidyr::drop_na(concentration) %>%
     tidyr::nest(.by = c(location_code, chem_name)) %>%
     dplyr::mutate(n_samples = purrr::map(data, nrow)) %>%
     tidyr::unnest(n_samples) %>%
