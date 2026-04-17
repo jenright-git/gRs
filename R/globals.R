@@ -1,4 +1,5 @@
 utils::globalVariables(c(
+  "detect",
   "chem_group",
   "chem_name",
   "colours_vec",
