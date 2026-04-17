@@ -15,6 +15,3 @@ An interactive datatable using the DT package
 \description{
 Create an interactive data table using the package DT
 }
-\examples{
-create_dt(data)
-}

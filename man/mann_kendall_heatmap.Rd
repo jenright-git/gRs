@@ -20,6 +20,8 @@ mann_kendall_heatmap(
 \item{plot_title}{Title Text}
 
 \item{heatmap_colours}{vector of colours to use for each category/tile}
+
+\item{width}{Maximum character width for wrapping trend labels (default: 20)}
 }
 \value{
 ggplot heatmap

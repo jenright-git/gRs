@@ -8,7 +8,7 @@ Description: Convenience functions to process and analyse environmental data.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.0
+RoxygenNote: 7.3.3
 Imports: 
     dplyr,
     DT,
@@ -19,17 +19,16 @@ Imports:
     lubridate,
     magrittr,
     openair,
-    Polychrome,
     purrr,
-    readr,
     readxl,
     rlang,
     stats,
     stringr,
     tidyr,
     trend,
-    writexl,
-    xfun
-Depends: 
+    writexl
+Suggests:
+    RColorBrewer
+Depends:
     R (>= 2.10)
 LazyData: true

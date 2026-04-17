@@ -7,7 +7,8 @@
 #' @export
 #'
 #' @examples summary_stats(df, save_path = "users/project/stats")
-#' @importFrom dplyr select group_by summarise arrange
+#' @importFrom dplyr select group_by summarise arrange n
+#' @importFrom stats quantile
 #' @importFrom tidyr pivot_longer pivot_wider unnest
 #' @importFrom writexl write_xlsx
 #' @importFrom glue glue

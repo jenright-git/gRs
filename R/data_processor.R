@@ -1,14 +1,15 @@
 #' data_processor
 #'
-#' @param myfile_path
-#' @param sheet_pattern
+#' @param myfile_path file path to data
+#' @param sheet_pattern matching the excel sheet name for new or old esdat formats
 #'
 #' @returns uploaded file from esdat
 #' @export
-#'
-#' @examples data_processor('my_file_path')
+#' @examples
+#' \dontrun{
+#' data_processor('my_file_path')
+#' }
 #' @importFrom dplyr bind_rows filter mutate case_when
-#' @importFrom base grep file.exists
 #' @importFrom readxl excel_sheets read_excel
 #' @importFrom janitor clean_names
 #' @importFrom dplyr mutate rename arrange %>%
@@ -41,7 +42,10 @@ data_processor <- function(myfile_path, sheet_pattern = "Chem") {
     skip_rows <- 1
     rename_cols <- TRUE
   } else {
-    warning("Found matching sheets but none of the expected types: ", paste(matching_sheets, collapse = ", "))
+    warning(
+      "Found matching sheets but none of the expected types: ",
+      paste(matching_sheets, collapse = ", ")
+    )
     return(NULL)
   }
 
@@ -60,18 +64,28 @@ data_processor <- function(myfile_path, sheet_pattern = "Chem") {
   # Rename columns if needed
   if (rename_cols) {
     sw_data <- sw_data %>%
-      dplyr::rename(output_unit = result_unit,
-                    concentration = result,
-                    site_id = site)
+      dplyr::rename(
+        output_unit = result_unit,
+        concentration = result,
+        site_id = site
+      )
   }
 
   # Process chemical names
-if("total_or_filtered" %in% names(sw_data) & any(!is.na(sw_data$total_or_filtered))){
+  if (
+    "total_or_filtered" %in%
+      names(sw_data) &
+      any(!is.na(sw_data$total_or_filtered))
+  ) {
     sw_data <- sw_data %>%
-    dplyr::mutate(chem_name = ifelse(total_or_filtered == "F",
-                                     yes = glue::glue("Dissolved {chem_name}"),
-                                     no = chem_name)) %>%
-    dplyr::arrange(date)
-}
+      dplyr::mutate(
+        chem_name = ifelse(
+          total_or_filtered == "F",
+          yes = glue::glue("Dissolved {chem_name}"),
+          no = chem_name
+        )
+      ) %>%
+      dplyr::arrange(date)
+  }
   return(sw_data)
 }

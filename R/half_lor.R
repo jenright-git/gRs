@@ -1,24 +1,60 @@
-#' Half concentrations that are < LOR
+#' Apply multiplier to concentrations that are < LOR
 #'
-#' @param data A tibble with columns "prefix" and "concentration". Prefix must be either "<" or "="
+#' @param data A tibble with columns for prefix and concentration
+#' @param multiplier Numeric value to multiply LOR concentrations by. Default is 1 (no change).
+#'   Common values: 0 (zero substitution), 0.5 (half LOR), 1 (full LOR value)
+#' @param prefix_col Name of the column containing prefix indicators (e.g., "<", "=").
+#'   Can be provided with or without quotes. Default is prefix
+#' @param concentration_col Name of the column containing concentration values.
+#'   Can be provided with or without quotes. Default is concentration
 #'
 #' @return A tibble with modified concentrations
 #' @export
 #'
-#' @examples <4 becomes =2
+#' @examples
+#' # Using default column names (no quotes needed)
+#' # Half LOR: <4 becomes =2
+#' half_lor(data, multiplier = 0.5)
+#'
+#' # Zero substitution: <4 becomes =0
+#' half_lor(data, multiplier = 0)
+#'
+#' # No change (default): <4 remains =4
+#' half_lor(data, multiplier = 1)
+#'
+#' # Using custom column names WITHOUT quotes
+#' half_lor(data, multiplier = 0.5,
+#'          prefix_col = qualifier,
+#'          concentration_col = result_value)
+#'
+#' # Using custom column names WITH quotes also works
+#' half_lor(data, multiplier = 0.5,
+#'          prefix_col = "qualifier",
+#'          concentration_col = "result_value")
+#'
 #' @importFrom dplyr mutate
 #' @importFrom tidyr replace_na
-half_lor <- function(data){
+#' @importFrom rlang enquo !! :=
+half_lor <- function(
+  data,
+  multiplier = 1,
+  prefix_col = prefix,
+  concentration_col = concentration
+) {
+  # Quote the column name arguments
+  prefix_col <- rlang::enquo(prefix_col)
+  conc_col <- rlang::enquo(concentration_col)
 
   modified_data <- data %>%
-    mutate(
-      prefix = tidyr::replace_na(prefix, "="),
-      concentration = ifelse(prefix == "<", concentration * 0.5, concentration),
-      prefix = "="
+    dplyr::mutate(
+      !!prefix_col := tidyr::replace_na(!!prefix_col, "="),
+      !!conc_col := ifelse(
+        !!prefix_col == "<",
+        !!conc_col * multiplier,
+        !!conc_col
+      ),
+      !!prefix_col := "="
     )
 
   return(modified_data)
-
 }
-
-

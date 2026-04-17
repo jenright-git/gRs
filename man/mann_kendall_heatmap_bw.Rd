@@ -17,6 +17,8 @@ mann_kendall_heatmap_bw(
 \item{label_text_size}{size of trend labels}
 
 \item{plot_title}{Text for plot title}
+
+\item{width}{Maximum character width for wrapping trend labels (default: 20)}
 }
 \value{
 ggplot heatmap

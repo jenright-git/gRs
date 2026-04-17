@@ -2,31 +2,102 @@
 % Please edit documentation in R/plot_by_analyte.R
 \name{plot_by_analyte}
 \alias{plot_by_analyte}
-\title{Plots a timeseries_plot for each analyte and saves to designated location}
+\title{Create and save timeseries plots for each analyte}
 \usage{
 plot_by_analyte(
   data,
   save_path = NULL,
   smooth = FALSE,
   linear_smooth = FALSE,
+  location_col = location_code,
+  chem_name_col = chem_name,
+  chem_group_col = chem_group,
+  date_col = date,
+  concentration_col = concentration,
+  monitoring_zone_col = monitoring_zone,
+  site_id_col = site_id,
+  output_unit_col = output_unit,
+  show_progress = TRUE,
+  create_dirs = TRUE,
+  plot_width = 14,
+  plot_height = 10,
   ...
 )
 }
 \arguments{
-\item{data}{tibble of concentration data}
+\item{data}{A tibble or data frame of concentration data}
 
-\item{save_path}{path to directory where plots will be saved}
+\item{save_path}{Character. Path to directory where plots will be saved.
+If NULL, plots are not saved. Default is NULL}
 
-\item{smooth}{Apply a geom_smooth to the plot}
+\item{smooth}{Logical. Apply a loess smooth to the plot? Default is FALSE}
 
-\item{linear_smooth}{Apply a linear trendline to the plot}
+\item{linear_smooth}{Logical. Apply a linear trendline to the plot? Default is FALSE}
+
+\item{location_col}{Name of the column containing location codes.
+Can be provided with or without quotes. Default is location_code}
+
+\item{chem_name_col}{Name of the column containing chemical/analyte names.
+Can be provided with or without quotes. Default is chem_name}
+
+\item{chem_group_col}{Name of the column containing chemical groups.
+Can be provided with or without quotes. Default is chem_group}
+
+\item{date_col}{Name of the column containing dates.
+Can be provided with or without quotes. Default is date}
+
+\item{concentration_col}{Name of the column containing concentration values.
+Can be provided with or without quotes. Default is concentration}
+
+\item{monitoring_zone_col}{Name of the column containing monitoring zones.
+Can be provided with or without quotes. Default is monitoring_zone}
+
+\item{site_id_col}{Name of the column containing site IDs.
+Can be provided with or without quotes. Default is site_id}
+
+\item{output_unit_col}{Name of the column containing output units.
+Can be provided with or without quotes. Default is output_unit}
+
+\item{show_progress}{Logical. Show progress bar? Default is TRUE}
+
+\item{create_dirs}{Logical. Create subdirectories for each zone? Default is TRUE}
+
+\item{plot_width}{Numeric. Width of saved plots in cm. Default is 14}
+
+\item{plot_height}{Numeric. Height of saved plots in cm. Default is 10}
+
+\item{...}{Additional arguments passed to timeseries_plot()}
 }
 \value{
-jpeg of timeseries plots
+Invisibly returns a tibble of successfully created plots with columns:
+monitoring_zone, chem_name, filepath, status
 }
 \description{
-Plots a timeseries_plot for each analyte and saves to designated location
+Generates individual timeseries plots for each combination of analyte and
+monitoring zone, and saves them to the specified directory.
 }
 \examples{
-plot_by_analyte("my_project/figures")
+# Save plots to a directory
+plot_by_analyte(data, save_path = "my_project/figures")
+
+# With smoothing
+plot_by_analyte(data, save_path = "figures", smooth = TRUE)
+
+# With linear trend
+plot_by_analyte(data, save_path = "figures", linear_smooth = TRUE)
+
+# Custom column names
+plot_by_analyte(data,
+                save_path = "figures",
+                location_col = site_code,
+                chem_name_col = parameter,
+                date_col = sample_date)
+
+# Pass additional arguments to timeseries_plot
+plot_by_analyte(data,
+                save_path = "figures",
+                ymin = 0,
+                ymax = 100,
+                date_break = "3 months")
+
 }

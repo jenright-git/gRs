@@ -4,12 +4,40 @@
 \alias{mann_kendall_test}
 \title{Mann Kendall Function to loop through entire dataset}
 \usage{
-mann_kendall_test(data, traditional = FALSE)
+mann_kendall_test(
+  data,
+  traditional = FALSE,
+  lor_multiplier = 1,
+  location_col = location_code,
+  analyte_col = chem_name,
+  concentration_col = concentration,
+  date_col = date,
+  prefix_col = prefix
+)
 }
 \arguments{
 \item{data}{tibble processed with the data_processor function}
 
 \item{traditional}{perform the standard analysis and not analyse for "Probably" or "Stable" trends}
+
+\item{lor_multiplier}{Numeric value to multiply LOR concentrations by. Default is 1 (no change).
+Common values: 0 (zero substitution), 0.5 (half LOR), 1 (full LOR value).
+Set to NULL to use concentrations as-is without adjustment.}
+
+\item{location_col}{Name of the column containing location codes.
+Can be provided with or without quotes. Default is location_code}
+
+\item{analyte_col}{Name of the column containing chemical/analyte names.
+Can be provided with or without quotes. Default is chem_name}
+
+\item{concentration_col}{Name of the column containing concentration values.
+Can be provided with or without quotes. Default is concentration}
+
+\item{date_col}{Name of the column containing sample dates.
+Can be provided with or without quotes. Default is date}
+
+\item{prefix_col}{Name of the column containing prefix indicators (e.g., "<", "=").
+Can be provided with or without quotes. Default is prefix}
 }
 \value{
 A nested tibble of trends as well as the original nested data
@@ -18,5 +46,29 @@ A nested tibble of trends as well as the original nested data
 Mann Kendall Function to loop through entire dataset
 }
 \examples{
+# Default: no LOR adjustment, default column names
 mann_kendall_test(data)
+
+# Half LOR method with default column names
+mann_kendall_test(data, lor_multiplier = 0.5)
+
+# Zero substitution
+mann_kendall_test(data, lor_multiplier = 0)
+
+# Traditional trend categories with half LOR
+mann_kendall_test(data, traditional = TRUE, lor_multiplier = 0.5)
+
+# Custom column names WITHOUT quotes
+mann_kendall_test(data,
+                  location_col = site_code,
+                  analyte_col = parameter,
+                  concentration_col = result_value,
+                  date_col = sample_date,
+                  prefix_col = qualifier)
+
+# Custom column names WITH quotes also works
+mann_kendall_test(data,
+                  location_col = "site_code",
+                  analyte_col = "parameter")
+
 }

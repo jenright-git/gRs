@@ -2,16 +2,32 @@
 #'
 #' @param data tibble imported from the data_processor function
 #'
-#' @return lists and vectors for plots
+#' @return lists and vectors for plots (assigned to global environment using <<-)
 #' @export
 #'
-#' @examples analaytes date_range zones locations and colours
-#' @importFrom dplyr filter select distinct
+#' @note This function uses global assignment (<<-) to create variables in the
+#' global environment: chem_group, analytes, date_range, zones, locations_vec,
+#' colours_vec, and location_colours. These variables are then available for
+#' use in plotting functions.
+#'
+#' @examples
+#' \dontrun{
+#' # Establish plotting variables from processed data
+#' establish_plotting_variables(my_data)
+#'
+#' # The following variables are now available:
+#' # - chem_group: unique chemical groups
+#' # - analytes: vector of unique chemical names
+#' # - date_range: min and max dates
+#' # - zones: unique monitoring zones
+#' # - locations_vec: unique location codes
+#' # - colours_vec: color palette for locations
+#' # - location_colours: named vector mapping locations to colors
+#' }
+#' @importFrom dplyr filter select distinct mutate
 #' @importFrom tidyr drop_na
-#' @importFrom Polychrome alphabet.colors
 
-establish_plotting_variables <- function(data){
-
+establish_plotting_variables <- function(data) {
   chem_group <<- base::unique(data$chem_group)
 
   analytes <<- dplyr::filter(data, chem_group %in% chem_group) %>%
@@ -32,22 +48,24 @@ establish_plotting_variables <- function(data){
     zones <<- base::unique(data$monitoring_zone)
   }
 
-
   locations_vec <<- base::unique(data$location_code)
 
   set.seed(1239755)
 
-  colour <-  grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-  colours_vec <<- sample(colour,
-           size = base::length(locations_vec),
-           replace=FALSE)
+  colour <- grDevices::colors()[grep(
+    'gr(a|e)y',
+    grDevices::colors(),
+    invert = T
+  )]
+  colours_vec <<- sample(
+    colour,
+    size = base::length(locations_vec),
+    replace = FALSE
+  )
 
   # assign locations to colours
   location_colours <<- stats::setNames(colours_vec, locations_vec)
-
 }
-
-
 
 # Alternate AI generated to remove global assignment  <<-
 

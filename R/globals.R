@@ -1,0 +1,22 @@
+utils::globalVariables(c(
+  "chem_group",
+  "chem_name",
+  "colours_vec",
+  "concentration",
+  "criteria",
+  "location_analyte",
+  "location_code",
+  "locations_vec",
+  "monitoring_zone",
+  "n_samples",
+  "output_unit",
+  "prefix",
+  "result",
+  "result_unit",
+  "results",
+  "sampled_date_time",
+  "site",
+  "site_id",
+  "total_or_filtered",
+  "trend"
+))

@@ -6,47 +6,147 @@
 \usage{
 timeseries_plot(
   data,
+  filter_location = NULL,
+  filter_analyte = NULL,
+  date_col = date,
+  concentration_col = concentration,
+  location_col = location_code,
+  analyte_col = chem_name,
   date_size = 12,
   date_break = "month",
   date_label = "\%b-\%y",
+  dates_range = NULL,
   x_angle = 90,
   legend_text_size = 10,
   y_title_size = 10,
   y_unit = "mg/L",
-  dates_range = date_range,
   ymin = 0,
-  ymax = NA
+  ymax = NULL,
+  location_colours = NULL,
+  criteria_col = NULL,
+  criteria_colour = "black",
+  criteria_linetype = "dashed",
+  plot_title = NULL,
+  plot_subtitle = NULL,
+  n_facet_cols = 2
 )
 }
 \arguments{
-\item{data}{tibble}
+\item{data}{A tibble or data frame containing timeseries data}
 
-\item{date_size}{size of x-axis date labels}
+\item{filter_location}{Character vector. Specific location(s) to plot.
+If NULL (default), plots all locations. If multiple locations provided,
+plots will be colored by location}
 
-\item{date_break}{date breaks to be used ("2 weeks")}
+\item{filter_analyte}{Character vector. Specific analyte(s) to plot.
+If NULL (default), plots all analytes. If multiple analytes provided,
+plots will be faceted by analyte with free y-scales}
 
-\item{date_label}{format of date label (\%b-\%y)}
+\item{date_col}{Name of the column containing dates.
+Can be provided with or without quotes. Default is date}
 
-\item{x_angle}{angle of x axis text}
+\item{concentration_col}{Name of the column containing concentration values.
+Can be provided with or without quotes. Default is concentration}
 
-\item{legend_text_size}{size of the text in the legend}
+\item{location_col}{Name of the column containing location codes.
+Can be provided with or without quotes. Default is location_code}
 
-\item{y_title_size}{size of y_axis label}
+\item{analyte_col}{Name of the column containing analyte/chemical names.
+Can be provided with or without quotes. Default is chem_name}
 
-\item{y_unit}{unit to display on y_axis heading}
+\item{date_size}{Numeric. Size of x-axis date labels. Default is 12}
 
-\item{dates_range}{Range of dates to appear on x-axis}
+\item{date_break}{Character. Date breaks to be used (e.g., "2 weeks", "month", "year").
+Default is "month"}
 
-\item{ymin}{Minimum value on y-axis}
+\item{date_label}{Character. Format of date label (e.g., "\%b-\%y", "\%Y-\%m-\%d").
+Default is "\%b-\%y"}
 
-\item{ymax}{Maximum value on y-axis}
+\item{dates_range}{Date range vector to appear on x-axis. If NULL (default),
+uses the full range of dates in the data}
+
+\item{x_angle}{Numeric. Angle of x-axis text. Default is 90}
+
+\item{legend_text_size}{Numeric. Size of text in the legend. Default is 10}
+
+\item{y_title_size}{Numeric. Size of y-axis label. Default is 10}
+
+\item{y_unit}{Character. Unit to display on y-axis heading. Default is "mg/L"}
+
+\item{ymin}{Numeric. Minimum value on y-axis. Default is 0}
+
+\item{ymax}{Numeric or NULL. Maximum value on y-axis. If NULL (default),
+ggplot2 automatically calculates the upper limit based on the data}
+
+\item{location_colours}{Named vector of colors for each location. If NULL (default),
+automatically generates colors. Names should match location codes}
+
+\item{criteria_col}{Optional. Name of column containing criteria/limit values to plot
+as horizontal dashed lines. Default is NULL (no criteria line)}
+
+\item{criteria_colour}{Character. Colour for criteria line. Default is "black"}
+
+\item{criteria_linetype}{Numeric or character. Line type for criteria line. Default is "dashed"}
+
+\item{plot_title}{Character. Optional title for the plot. Default is NULL}
+
+\item{plot_subtitle}{Character. Optional subtitle for the plot. Default is NULL}
+
+\item{n_facet_cols}{Numeric. Number of columns when faceting by analyte. Default is 2}
 }
 \value{
-a timeseries plot based on the scale and date range of the dataset
+A ggplot2 object
 }
 \description{
 Timeseries Plot with standard formatting
 }
 \examples{
+# Basic usage with default column names
 timeseries_plot(data)
+
+# Filter to a single location
+timeseries_plot(data, filter_location = "LOC_01")
+
+# Filter to multiple locations (colored by location)
+timeseries_plot(data, filter_location = c("LOC_01", "LOC_02", "LOC_03"))
+
+# Filter to a single analyte
+timeseries_plot(data, filter_analyte = "Lead")
+
+# Filter to multiple analytes (faceted by analyte with free y-scales)
+timeseries_plot(data, filter_analyte = c("Lead", "Copper", "Zinc"))
+
+# Combine filters: specific locations and analytes
+timeseries_plot(data,
+                filter_location = c("LOC_01", "LOC_02"),
+                filter_analyte = c("Lead", "Copper"))
+
+# Custom column names without quotes
+timeseries_plot(data,
+                date_col = sample_date,
+                concentration_col = result,
+                location_col = site_code,
+                analyte_col = parameter)
+
+# With criteria line
+timeseries_plot(data,
+                filter_location = "LOC_01",
+                criteria_col = guideline_value)
+
+# Custom date formatting and colors
+my_colors <- c("Site1" = "blue", "Site2" = "red", "Site3" = "green")
+timeseries_plot(data,
+                filter_location = c("Site1", "Site2", "Site3"),
+                location_colours = my_colors,
+                date_break = "3 months",
+                date_label = "\%Y-\%m")
+
+# With title and custom y-axis limits
+timeseries_plot(data,
+                filter_analyte = "Lead",
+                plot_title = "Lead Concentrations",
+                plot_subtitle = "2020-2024",
+                ymin = 0,
+                ymax = 100)
+
 }

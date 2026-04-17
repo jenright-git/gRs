@@ -2,19 +2,23 @@
 % Please edit documentation in R/data_processor.R
 \name{data_processor}
 \alias{data_processor}
-\title{Data Processor}
+\title{data_processor}
 \usage{
-data_processor(myfile_path)
+data_processor(myfile_path, sheet_pattern = "Chem")
 }
 \arguments{
-\item{myfile_path}{path to excel file}
+\item{myfile_path}{file path to data}
+
+\item{sheet_pattern}{matching the excel sheet name for new or old esdat formats}
 }
 \value{
-tible of processed data
+uploaded file from esdat
 }
 \description{
-Data Processor
+data_processor
 }
 \examples{
-data_processor("sw_data.xlsx")
+\dontrun{
+data_processor('my_file_path')
+}
 }

@@ -10,11 +10,29 @@ establish_plotting_variables(data)
 \item{data}{tibble imported from the data_processor function}
 }
 \value{
-lists and vectors for plots
+lists and vectors for plots (assigned to global environment using <<-)
 }
 \description{
 Establish parameters for automated plots
 }
+\note{
+This function uses global assignment (<<-) to create variables in the
+global environment: chem_group, analytes, date_range, zones, locations_vec,
+colours_vec, and location_colours. These variables are then available for
+use in plotting functions.
+}
 \examples{
-anlaytes date_range zones locations and colours
+\dontrun{
+# Establish plotting variables from processed data
+establish_plotting_variables(my_data)
+
+# The following variables are now available:
+# - chem_group: unique chemical groups
+# - analytes: vector of unique chemical names
+# - date_range: min and max dates
+# - zones: unique monitoring zones
+# - locations_vec: unique location codes
+# - colours_vec: color palette for locations
+# - location_colours: named vector mapping locations to colors
+}
 }
