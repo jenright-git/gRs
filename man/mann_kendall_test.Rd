@@ -8,6 +8,7 @@ mann_kendall_test(
   data,
   traditional = FALSE,
   lor_multiplier = 1,
+  nd_threshold = NULL,
   location_col = location_code,
   analyte_col = chem_name,
   concentration_col = concentration,
@@ -23,6 +24,10 @@ mann_kendall_test(
 \item{lor_multiplier}{Numeric value to multiply LOR concentrations by. Default is 1 (no change).
 Common values: 0 (zero substitution), 0.5 (half LOR), 1 (full LOR value).
 Set to NULL to use concentrations as-is without adjustment.}
+
+\item{nd_threshold}{Optional numeric (0–1). Location-analyte combinations where the proportion of
+non-detects (prefix == "<") exceeds this value are excluded before analysis. Excluded
+combinations are reported to the console. Default is NULL (no filtering).}
 
 \item{location_col}{Name of the column containing location codes.
 Can be provided with or without quotes. Default is location_code}

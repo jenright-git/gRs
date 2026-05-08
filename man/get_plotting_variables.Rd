@@ -63,26 +63,14 @@ as a list. Unlike the original establish_plotting_variables(), this function
 does not use global assignment and returns all variables in a structured list.
 }
 \examples{
-# Extract plotting variables
-plot_vars <- get_plotting_variables(my_data)
+plot_vars <- get_plotting_variables(gRs_data)
 
 # Access individual variables
 analytes <- plot_vars$analytes
 location_colours <- plot_vars$location_colours
 date_range <- plot_vars$date_range
 
-# Use with timeseries_plot
-timeseries_plot(my_data, location_colours = plot_vars$location_colours)
-
-# Custom column names
-plot_vars <- get_plotting_variables(
-  my_data,
-  location_col = site_code,
-  chem_name_col = parameter,
-  date_col = sample_date
-)
-
 # With custom seed for different colors
-plot_vars <- get_plotting_variables(my_data, seed = 42)
+plot_vars <- get_plotting_variables(gRs_data, seed = 42)
 
 }
