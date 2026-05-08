@@ -47,7 +47,7 @@ half_lor <- function(
 
   modified_data <- data %>%
     dplyr::mutate(
-      !!prefix_col := tidyr::replace_na(!!prefix_col, "="),
+      !!prefix_col := tidyr::replace_na(as.character(!!prefix_col), "="),
       !!conc_col := ifelse(
         !!prefix_col == "<",
         !!conc_col * multiplier,

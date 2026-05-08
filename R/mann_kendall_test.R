@@ -224,7 +224,7 @@ mk_analysis <- function(
   if (!is.null(lor_multiplier)) {
     data <- data %>%
       dplyr::mutate(
-        !!prefix_sym := tidyr::replace_na(!!prefix_sym, "="),
+        !!prefix_sym := tidyr::replace_na(as.character(!!prefix_sym), "="),
         !!conc_sym := ifelse(
           !!prefix_sym == "<",
           !!conc_sym * lor_multiplier,
