@@ -5,6 +5,9 @@
 #' @param lor_multiplier Numeric value to multiply LOR concentrations by. Default is 1 (no change).
 #'   Common values: 0 (zero substitution), 0.5 (half LOR), 1 (full LOR value).
 #'   Set to NULL to use concentrations as-is without adjustment.
+#' @param nd_threshold Optional numeric (0–1). Location-analyte combinations where the proportion of
+#'   non-detects (prefix == "<") exceeds this value are excluded before analysis. Excluded
+#'   combinations are reported to the console. Default is NULL (no filtering).
 #' @param location_col Name of the column containing location codes.
 #'   Can be provided with or without quotes. Default is location_code
 #' @param analyte_col Name of the column containing chemical/analyte names.
@@ -45,14 +48,15 @@
 #'                   location_col = "site_code",
 #'                   analyte_col = "parameter")
 #'
-#' @importFrom dplyr bind_rows filter mutate case_when select
+#' @importFrom dplyr bind_rows filter mutate case_when select arrange
 #' @importFrom tidyr tibble nest unnest drop_na
-#' @importFrom purrr map
+#' @importFrom purrr map map_dbl
 #' @importFrom rlang enquo quo_name !! :=
 mann_kendall_test <- function(
   data,
   traditional = FALSE,
   lor_multiplier = 1,
+  nd_threshold = NULL,
   location_col = location_code,
   analyte_col = chem_name,
   concentration_col = concentration,
@@ -81,6 +85,46 @@ mann_kendall_test <- function(
 
   # Make sure there is at least one set of results to be analysed
   base::stopifnot("No data with more than 3 samples" = nrow(df) > 0)
+
+  if (!is.null(nd_threshold)) {
+    df <- df %>%
+      dplyr::mutate(
+        nd_pct = purrr::map_dbl(data, function(d) {
+          nd <- !is.na(d[[prefix_name]]) & d[[prefix_name]] == "<"
+          mean(nd)
+        })
+      )
+
+    excluded <- df %>% dplyr::filter(nd_pct > nd_threshold)
+
+    if (nrow(excluded) > 0) {
+      loc_name <- rlang::quo_name(location_col)
+      ana_name <- rlang::quo_name(analyte_col)
+      excl_lines <- paste(
+        sprintf(
+          "  - %s / %s (%.1f%% non-detects)",
+          excluded[[loc_name]],
+          excluded[[ana_name]],
+          excluded$nd_pct * 100
+        ),
+        collapse = "\n"
+      )
+      message(sprintf(
+        "Excluded %d location-analyte combination(s) with >%.0f%% non-detects:\n%s",
+        nrow(excluded),
+        nd_threshold * 100,
+        excl_lines
+      ))
+    }
+
+    df <- df %>%
+      dplyr::filter(nd_pct <= nd_threshold) %>%
+      dplyr::select(-nd_pct)
+
+    base::stopifnot(
+      "No data remaining after non-detect threshold filter" = nrow(df) > 0
+    )
+  }
 
   df <- df %>%
     dplyr::mutate(
@@ -124,7 +168,7 @@ mann_kendall_test <- function(
             p_value <= 0.1 &
             tau_statistic < 0 ~ "Probably Decreasing",
           p_value < 0.05 & tau_statistic < 0 ~ "Decreasing",
-          is.nan(p_value) & SD == 0 & COV == 0 ~ "Stable"
+          is.na(p_value) & SD == 0 & COV == 0 ~ "Stable"
         )
       ) # if all <LOR results then p_value comes back as NA..
   }
