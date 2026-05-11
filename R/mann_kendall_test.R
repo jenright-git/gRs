@@ -8,6 +8,11 @@
 #' @param nd_threshold Optional numeric (0–1). Location-analyte combinations where the proportion of
 #'   non-detects (prefix == "<") exceeds this value are excluded before analysis. Excluded
 #'   combinations are reported to the console. Default is NULL (no filtering).
+#'   Cannot be used together with \code{min_detects}.
+#' @param min_detects Optional positive integer. Location-analyte combinations with fewer detected
+#'   results than this value are excluded before analysis. A detect is any sample where prefix is
+#'   not "<" (including NA). Excluded combinations are reported to the console.
+#'   Default is NULL (no filtering). Cannot be used together with \code{nd_threshold}.
 #' @param location_col Name of the column containing location codes.
 #'   Can be provided with or without quotes. Default is location_code
 #' @param analyte_col Name of the column containing chemical/analyte names.
@@ -50,13 +55,14 @@
 #'
 #' @importFrom dplyr bind_rows filter mutate case_when select arrange
 #' @importFrom tidyr tibble nest unnest drop_na
-#' @importFrom purrr map map_dbl
+#' @importFrom purrr map map_dbl map_int
 #' @importFrom rlang enquo quo_name !! :=
 mann_kendall_test <- function(
   data,
   traditional = FALSE,
   lor_multiplier = 1,
   nd_threshold = NULL,
+  min_detects = NULL,
   location_col = location_code,
   analyte_col = chem_name,
   concentration_col = concentration,
@@ -86,7 +92,16 @@ mann_kendall_test <- function(
   # Make sure there is at least one set of results to be analysed
   base::stopifnot("No data with more than 3 samples" = nrow(df) > 0)
 
+  if (!is.null(nd_threshold) && !is.null(min_detects)) {
+    stop("Only one of `nd_threshold` or `min_detects` may be specified, not both.")
+  }
+
   if (!is.null(nd_threshold)) {
+    if (!is.numeric(nd_threshold) || length(nd_threshold) != 1 ||
+        nd_threshold < 0 || nd_threshold > 1) {
+      stop("`nd_threshold` must be a single numeric value between 0 and 1 (e.g., 0.75 for 75%).")
+    }
+
     df <- df %>%
       dplyr::mutate(
         nd_pct = purrr::map_dbl(data, function(d) {
@@ -121,9 +136,62 @@ mann_kendall_test <- function(
       dplyr::filter(nd_pct <= nd_threshold) %>%
       dplyr::select(-nd_pct)
 
-    base::stopifnot(
-      "No data remaining after non-detect threshold filter" = nrow(df) > 0
-    )
+    if (nrow(df) == 0) {
+      stop(sprintf(
+        "No data remaining after applying nd_threshold = %.2f. Consider raising the threshold.",
+        nd_threshold
+      ))
+    }
+  }
+
+  if (!is.null(min_detects)) {
+    if (!is.numeric(min_detects) || length(min_detects) != 1 ||
+        min_detects < 1 || min_detects != as.integer(min_detects)) {
+      stop("`min_detects` must be a single positive integer.")
+    }
+
+    loc_name <- rlang::quo_name(location_col)
+    ana_name <- rlang::quo_name(analyte_col)
+
+    df <- df %>%
+      dplyr::mutate(
+        n_samples = purrr::map_int(data, nrow),
+        n_detects = purrr::map_int(data, function(d) {
+          sum(is.na(d[[prefix_name]]) | d[[prefix_name]] != "<")
+        })
+      )
+
+    excluded <- df %>% dplyr::filter(n_detects < min_detects)
+
+    if (nrow(excluded) > 0) {
+      excl_lines <- paste(
+        sprintf(
+          "  - %s / %s (%d detect(s) out of %d sample(s))",
+          excluded[[loc_name]],
+          excluded[[ana_name]],
+          excluded$n_detects,
+          excluded$n_samples
+        ),
+        collapse = "\n"
+      )
+      message(sprintf(
+        "Excluded %d location-analyte combination(s) with fewer than %d detect(s):\n%s",
+        nrow(excluded),
+        min_detects,
+        excl_lines
+      ))
+    }
+
+    df <- df %>%
+      dplyr::filter(n_detects >= min_detects) %>%
+      dplyr::select(-n_samples, -n_detects)
+
+    if (nrow(df) == 0) {
+      stop(sprintf(
+        "No data remaining after applying min_detects = %d. Consider lowering the threshold.",
+        min_detects
+      ))
+    }
   }
 
   df <- df %>%

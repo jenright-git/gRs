@@ -51,3 +51,4 @@ rsconnect/
 
 # test files
 test_nd_threshold.R
+test_min_detects.R
