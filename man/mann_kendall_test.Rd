@@ -9,6 +9,7 @@ mann_kendall_test(
   traditional = FALSE,
   lor_multiplier = 1,
   nd_threshold = NULL,
+  min_detects = NULL,
   location_col = location_code,
   analyte_col = chem_name,
   concentration_col = concentration,
@@ -27,7 +28,13 @@ Set to NULL to use concentrations as-is without adjustment.}
 
 \item{nd_threshold}{Optional numeric (0–1). Location-analyte combinations where the proportion of
 non-detects (prefix == "<") exceeds this value are excluded before analysis. Excluded
-combinations are reported to the console. Default is NULL (no filtering).}
+combinations are reported to the console. Default is NULL (no filtering).
+Cannot be used together with \code{min_detects}.}
+
+\item{min_detects}{Optional positive integer. Location-analyte combinations with fewer detected
+results than this value are excluded before analysis. A detect is any sample where prefix is
+not "<" (including NA). Excluded combinations are reported to the console.
+Default is NULL (no filtering). Cannot be used together with \code{nd_threshold}.}
 
 \item{location_col}{Name of the column containing location codes.
 Can be provided with or without quotes. Default is location_code}
