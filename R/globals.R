@@ -19,5 +19,7 @@ utils::globalVariables(c(
   "site",
   "site_id",
   "total_or_filtered",
-  "trend"
+  "trend",
+  "sample_type",
+  "date"
 ))

@@ -37,7 +37,10 @@
 #' @param criteria_linetype Numeric or character. Line type for criteria line. Default is "dashed"
 #' @param plot_title Character. Optional title for the plot. Default is NULL
 #' @param plot_subtitle Character. Optional subtitle for the plot. Default is NULL
-#' @param n_facet_cols Numeric. Number of columns when faceting by analyte. Default is 2
+#' @param n_facet_cols Numeric. Number of columns when faceting. Default is 2
+#' @param facet_by Character. Whether to facet by \code{"analyte"} (default) or \code{"location"}.
+#'   When \code{"analyte"}, multiple locations are coloured by location.
+#'   When \code{"location"}, multiple analytes are coloured by analyte.
 #'
 #' @return A ggplot2 object
 #' @export
@@ -123,7 +126,8 @@ timeseries_plot <- function(
   criteria_linetype = "dashed",
   plot_title = NULL,
   plot_subtitle = NULL,
-  n_facet_cols = 2
+  n_facet_cols = 2,
+  facet_by = "analyte"
 ) {
   # Quote the column name arguments
   date_col_q <- rlang::enquo(date_col)
@@ -150,6 +154,9 @@ timeseries_plot <- function(
   if (length(missing_cols) > 0) {
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
   }
+
+  # Validate facet_by
+  facet_by <- match.arg(facet_by, choices = c("analyte", "location"))
 
   # Validate criteria column if specified
   if (
@@ -225,11 +232,35 @@ timeseries_plot <- function(
   analytes_vec <- base::unique(dplyr::pull(data, !!analyte_col_q))
   n_analytes_filtered <- length(analytes_vec)
 
-  # Determine if we should color by location (multiple locations)
-  color_by_location <- n_locations_filtered > 1
+  # Determine coloring and faceting based on facet_by
+  if (facet_by == "analyte") {
+    color_by_location <- n_locations_filtered > 1
+    color_by_analyte  <- FALSE
+    do_facet_analyte  <- n_analytes_filtered > 1
+    do_facet_location <- FALSE
+  } else {
+    color_by_location <- FALSE
+    color_by_analyte  <- n_analytes_filtered > 1
+    do_facet_analyte  <- FALSE
+    do_facet_location <- n_locations_filtered > 1
+  }
 
-  # Determine if we should facet by analyte (multiple analytes)
-  facet_by_analyte <- n_analytes_filtered > 1
+  # Helper to auto-generate a named colour vector for a set of labels
+  .auto_colours <- function(labels) {
+    n <- length(labels)
+    if (requireNamespace("RColorBrewer", quietly = TRUE) && n > 0) {
+      cols <- if (n <= 8) {
+        RColorBrewer::brewer.pal(max(3, n), "Set1")[1:n]
+      } else {
+        grDevices::colorRampPalette(RColorBrewer::brewer.pal(8, "Set1"))(n)
+      }
+    } else {
+      set.seed(1239755)
+      colour <- grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = TRUE)]
+      cols <- sample(colour, size = n, replace = FALSE)
+    }
+    stats::setNames(cols, labels)
+  }
 
   # Generate colors if not provided (only needed if coloring by location)
   if (color_by_location && is.null(location_colours)) {
@@ -294,6 +325,9 @@ timeseries_plot <- function(
     }
   }
 
+  # Generate analyte colours when faceting by location
+  analyte_colours <- if (color_by_analyte) .auto_colours(analytes_vec) else NULL
+
   # Set date range if not provided
   if (is.null(dates_range)) {
     dates_range <- c(
@@ -331,26 +365,25 @@ timeseries_plot <- function(
 
   # Create the base plot
   if (color_by_location) {
-    # Multiple locations - color by location
     plot <- data %>%
       ggplot2::ggplot(
-        ggplot2::aes(
-          x = !!date_col_q,
-          y = !!conc_col_q,
-          colour = !!location_col_q
-        )
+        ggplot2::aes(x = !!date_col_q, y = !!conc_col_q, colour = !!location_col_q)
       ) +
       ggplot2::geom_point(size = 0.6, alpha = 0.5) +
       ggplot2::geom_path() +
       ggplot2::scale_colour_manual(values = location_colours)
-  } else {
-    # Single location - no color aesthetic needed
+  } else if (color_by_analyte) {
     plot <- data %>%
       ggplot2::ggplot(
-        ggplot2::aes(
-          x = !!date_col_q,
-          y = !!conc_col_q
-        )
+        ggplot2::aes(x = !!date_col_q, y = !!conc_col_q, colour = !!analyte_col_q)
+      ) +
+      ggplot2::geom_point(size = 0.6, alpha = 0.5) +
+      ggplot2::geom_path() +
+      ggplot2::scale_colour_manual(values = analyte_colours)
+  } else {
+    plot <- data %>%
+      ggplot2::ggplot(
+        ggplot2::aes(x = !!date_col_q, y = !!conc_col_q)
       ) +
       ggplot2::geom_point(size = 0.6, alpha = 0.5) +
       ggplot2::geom_path()
@@ -387,11 +420,18 @@ timeseries_plot <- function(
       strip.text = element_text(colour = "black")
     )
 
-  # Add faceting if multiple analytes
-  if (facet_by_analyte) {
+  # Add faceting
+  if (do_facet_analyte) {
     plot <- plot +
       ggplot2::facet_wrap(
         rlang::as_label(analyte_col_q),
+        scales = "free_y",
+        ncol = n_facet_cols
+      )
+  } else if (do_facet_location) {
+    plot <- plot +
+      ggplot2::facet_wrap(
+        rlang::as_label(location_col_q),
         scales = "free_y",
         ncol = n_facet_cols
       )

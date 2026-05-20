@@ -34,6 +34,9 @@ data_processor <- function(myfile_path, sheet_pattern = "Chem") {
   } else if ("davLChem1_Chemistry" %in% matching_sheets) {
     sheet_name <- "davLChem1_Chemistry"
     skip_rows <- 1
+  } else if ("Chemistry List" %in% matching_sheets) {
+    sheet_name <- "Chemistry List"
+    skip_rows <- 0
   } else {
     warning(
       "Found matching sheets but none of the expected types: ",
@@ -52,6 +55,12 @@ data_processor <- function(myfile_path, sheet_pattern = "Chem") {
     janitor::clean_names() %>%
     resolve_columns(COLUMN_ALIASES)
 
+  if ("total_or_filtered" %in% names(sw_data) &&
+      is.logical(sw_data$total_or_filtered)) {
+    sw_data <- sw_data %>%
+      dplyr::mutate(total_or_filtered = ifelse(total_or_filtered, "F", "T"))
+  }
+
   if (!"detect" %in% names(sw_data) && "prefix" %in% names(sw_data)) {
     sw_data <- sw_data %>%
       dplyr::mutate(detect = ifelse(is.na(prefix), "Y", "N"))
@@ -64,6 +73,15 @@ data_processor <- function(myfile_path, sheet_pattern = "Chem") {
       paste(missing, collapse = ", "),
       "\nColumns found: ",
       paste(names(sw_data), collapse = ", ")
+    )
+  }
+
+  if (!"chem_group" %in% names(sw_data)) {
+    warning(
+      "Column 'chem_group' not found. ",
+      "plot_by_analyte(), summary_stats(), establish_plotting_variables(), ",
+      "and get_plotting_variables() require this column. ",
+      "Add it manually after data_processor() returns."
     )
   }
 
@@ -96,9 +114,10 @@ COLUMN_ALIASES <- list(
     "date_time",
     "datetime",
     "sample_date",
-    "collected_date_time"
+    "collected_date_time",
+    "sampled_date"
   ),
-  concentration = c("result", "report_result_value", "reported_value"),
+  concentration = c("result", "report_result_value", "reported_value", "result_numeric"),
   output_unit = c(
     "result_unit",
     "unit",
@@ -127,7 +146,8 @@ COLUMN_ALIASES <- list(
     "mth_anl_group_member",
     "method_analyte_group_member"
   ),
-  total_or_filtered = c("filtered", "fraction", "sample_fraction")
+  total_or_filtered = c("filtered", "fraction", "sample_fraction"),
+  sample_type = c("samp_type", "field_sample_type", "sample_type_code", "type")
 )
 
 REQUIRED_COLUMNS <- c(
