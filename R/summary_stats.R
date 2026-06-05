@@ -15,7 +15,7 @@
 summary_stats <- function(data, save_path=NULL){
 
   summary_table <- data %>%
-    dplyr::select(date, location_code, chem_group, total_or_filtered, chem_name, prefix, concentration, output_unit, criteria) %>%
+    dplyr::select(date, location_code, chem_group, fraction, chem_name, prefix, concentration, output_unit, criteria) %>%
     dplyr::group_by(location_code, chem_name) %>%
     dplyr::summarise(observations = n(),
               criteria = criteria,

@@ -24,11 +24,24 @@ data_processor <- function(myfile_path, sheet_pattern = "Chem") {
   matching_sheets <- base::grep(sheet_pattern, all_sheets, value = TRUE)
 
   if (length(matching_sheets) == 0) {
-    warning("No sheets matching pattern '", sheet_pattern, "' found")
-    return(NULL)
-  }
-
-  if ("LChem1_Chemistry" %in% matching_sheets) {
+    ar2_sheet <- NULL
+    for (s in all_sheets) {
+      peek <- tryCatch(
+        readxl::read_excel(myfile_path, sheet = s, n_max = 0),
+        error = function(e) NULL
+      )
+      if (!is.null(peek) && all(AR2_SIGNATURE_COLS %in% names(peek))) {
+        ar2_sheet <- s
+        break
+      }
+    }
+    if (is.null(ar2_sheet)) {
+      warning("No sheets matching pattern '", sheet_pattern, "' found")
+      return(NULL)
+    }
+    sheet_name <- ar2_sheet
+    skip_rows <- 0
+  } else if ("LChem1_Chemistry" %in% matching_sheets) {
     sheet_name <- "LChem1_Chemistry"
     skip_rows <- 0
   } else if ("davLChem1_Chemistry" %in% matching_sheets) {
@@ -55,15 +68,19 @@ data_processor <- function(myfile_path, sheet_pattern = "Chem") {
     janitor::clean_names() %>%
     resolve_columns(COLUMN_ALIASES)
 
-  if ("total_or_filtered" %in% names(sw_data) &&
-      is.logical(sw_data$total_or_filtered)) {
+  if ("fraction" %in% names(sw_data) && is.logical(sw_data$fraction)) {
     sw_data <- sw_data %>%
-      dplyr::mutate(total_or_filtered = ifelse(total_or_filtered, "F", "T"))
+      dplyr::mutate(fraction = ifelse(fraction, "F", "T"))
   }
 
-  if (!"detect" %in% names(sw_data) && "prefix" %in% names(sw_data)) {
+  if (!"prefix" %in% names(sw_data) && "detect_flag" %in% names(sw_data)) {
     sw_data <- sw_data %>%
-      dplyr::mutate(detect = ifelse(is.na(prefix), "Y", "N"))
+      dplyr::mutate(prefix = ifelse(detect_flag == "Y", "=", "<"))
+  }
+
+  if (!"detect_flag" %in% names(sw_data) && "prefix" %in% names(sw_data)) {
+    sw_data <- sw_data %>%
+      dplyr::mutate(detect_flag = ifelse(is.na(prefix), "Y", "N"))
   }
 
   missing <- setdiff(REQUIRED_COLUMNS, names(sw_data))
@@ -89,14 +106,14 @@ data_processor <- function(myfile_path, sheet_pattern = "Chem") {
     dplyr::mutate(date = lubridate::floor_date(sampled_date_time, "day"))
 
   if (
-    "total_or_filtered" %in%
+    "fraction" %in%
       names(sw_data) &&
-      any(!is.na(sw_data$total_or_filtered))
+      any(!is.na(sw_data$fraction))
   ) {
     sw_data <- sw_data %>%
       dplyr::mutate(
         chem_name = ifelse(
-          total_or_filtered == "F",
+          fraction == "F",
           yes = glue::glue("Dissolved {chem_name}"),
           no = chem_name
         )
@@ -106,8 +123,11 @@ data_processor <- function(myfile_path, sheet_pattern = "Chem") {
   sw_data %>% dplyr::arrange(date)
 }
 
+AR2_SIGNATURE_COLS <- c("DETECT_FLAG", "REPORT_RESULT_VALUE", "SYS_LOC_CODE")
+
 # Maps canonical column names to known aliases from different export formats.
 # Add new aliases here when a new export format is encountered.
+# Within each vector, earlier entries take priority over later ones.
 COLUMN_ALIASES <- list(
   sampled_date_time = c(
     "sample_date_time",
@@ -117,14 +137,20 @@ COLUMN_ALIASES <- list(
     "collected_date_time",
     "sampled_date"
   ),
-  concentration = c("result", "report_result_value", "reported_value", "result_numeric"),
+  concentration = c(
+    "report_result_value",
+    "reported_value",
+    "result_numeric",
+    "result"
+  ),
   output_unit = c(
+    "report_result_unit",
+    "reported_unit",
     "result_unit",
     "unit",
-    "units",
-    "reported_unit, report_result_unit"
+    "units"
   ),
-  site_id = c("site", "site_code"),
+  site_id = c("site", "site_code", "facility_code"),
   location_code = c(
     "loc_code",
     "location",
@@ -144,10 +170,12 @@ COLUMN_ALIASES <- list(
     "analyte_group",
     "param_group",
     "mth_anl_group_member",
-    "method_analyte_group_member"
+    "method_analyte_group_member",
+    "method_analyte_group"
   ),
-  total_or_filtered = c("filtered", "fraction", "sample_fraction"),
-  sample_type = c("samp_type", "field_sample_type", "sample_type_code", "type")
+  fraction = c("total_or_filtered", "filtered", "sample_fraction"),
+  sample_type = c("samp_type", "field_sample_type", "sample_type_code", "type"),
+  detect_flag = c("detect")
 )
 
 REQUIRED_COLUMNS <- c(
@@ -158,7 +186,7 @@ REQUIRED_COLUMNS <- c(
   "location_code",
   "prefix",
   "chem_name",
-  "detect"
+  "detect_flag"
 )
 
 #' Rename columns to canonical names based on an alias map

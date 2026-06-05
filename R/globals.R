@@ -1,5 +1,5 @@
 utils::globalVariables(c(
-  "detect",
+  "detect_flag",
   "chem_group",
   "chem_name",
   "colours_vec",
@@ -18,7 +18,7 @@ utils::globalVariables(c(
   "sampled_date_time",
   "site",
   "site_id",
-  "total_or_filtered",
+  "fraction",
   "trend",
   "sample_type",
   "date"

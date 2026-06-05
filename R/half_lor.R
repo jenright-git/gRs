@@ -8,7 +8,9 @@
 #' @param concentration_col Name of the column containing concentration values.
 #'   Can be provided with or without quotes. Default is concentration
 #'
-#' @return A tibble with modified concentrations
+#' @return A tibble with modified concentrations and a new `lor_multiplier_applied`
+#'   column (the multiplier value for non-detects, NA for detected results).
+#'   The prefix column is preserved unchanged to retain non-detect context.
 #' @export
 #'
 #' @examples
@@ -48,12 +50,12 @@ half_lor <- function(
   modified_data <- data %>%
     dplyr::mutate(
       !!prefix_col := tidyr::replace_na(as.character(!!prefix_col), "="),
+      lor_multiplier_applied = ifelse(!!prefix_col == "<", multiplier, NA_real_),
       !!conc_col := ifelse(
         !!prefix_col == "<",
         !!conc_col * multiplier,
         !!conc_col
-      ),
-      !!prefix_col := "="
+      )
     )
 
   return(modified_data)
