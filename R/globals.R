@@ -21,5 +21,13 @@ utils::globalVariables(c(
   "fraction",
   "trend",
   "sample_type",
-  "date"
+  "date",
+  # water level (gauging) report columns
+  "depth_unit",
+  "dry_indicator_yn",
+  "exact_elev",
+  "reference_elev",
+  "water_depth",
+  "water_level",
+  "water_level_depth"
 ))

@@ -4,12 +4,21 @@
 \alias{summary_stats}
 \title{Summary statistics table}
 \usage{
-summary_stats(data, save_path = NULL)
+summary_stats(
+  data,
+  save_path = NULL,
+  tidy_path = NULL,
+  include_criteria = FALSE
+)
 }
 \arguments{
 \item{data}{tibble from data_processor}
 
-\item{save_path}{path to save summary tables as .xlsx files}
+\item{save_path}{full file path including filename for the wide-format export, e.g. "C:/project/output/summary.xlsx". Stats are columns, rows are location x chemical. Directory is created if it does not exist.}
+
+\item{tidy_path}{full file path including filename for the tidy/long-format export. Produces one row per stat per location-chemical pair with columns: location_code, chem_name, stat, value. Directory is created if it does not exist.}
+
+\item{include_criteria}{logical; if TRUE, includes criteria and exceedance_count columns}
 }
 \value{
 tibbles and csv files

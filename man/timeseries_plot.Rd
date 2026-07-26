@@ -28,7 +28,8 @@ timeseries_plot(
   criteria_linetype = "dashed",
   plot_title = NULL,
   plot_subtitle = NULL,
-  n_facet_cols = 2
+  n_facet_cols = 2,
+  facet_by = "analyte"
 )
 }
 \arguments{
@@ -92,7 +93,11 @@ as horizontal dashed lines. Default is NULL (no criteria line)}
 
 \item{plot_subtitle}{Character. Optional subtitle for the plot. Default is NULL}
 
-\item{n_facet_cols}{Numeric. Number of columns when faceting by analyte. Default is 2}
+\item{n_facet_cols}{Numeric. Number of columns when faceting. Default is 2}
+
+\item{facet_by}{Character. Whether to facet by \code{"analyte"} (default) or \code{"location"}.
+When \code{"analyte"}, multiple locations are coloured by location.
+When \code{"location"}, multiple analytes are coloured by analyte.}
 }
 \value{
 A ggplot2 object

@@ -4,21 +4,66 @@
 \alias{data_processor}
 \title{data_processor}
 \usage{
-data_processor(myfile_path, sheet_pattern = "Chem")
+data_processor(
+  myfile_path,
+  sheet_pattern = "Chem",
+  report_type = c("auto", "chemistry", "water_level"),
+  default_depth_unit = "m"
+)
 }
 \arguments{
 \item{myfile_path}{file path to data}
 
-\item{sheet_pattern}{matching the excel sheet name for new or old esdat formats}
+\item{sheet_pattern}{pattern matching the excel sheet name for new or old
+esdat chemistry formats. Only used when locating a chemistry sheet.}
+
+\item{report_type}{one of \code{"auto"} (default), \code{"chemistry"} or
+\code{"water_level"}. \code{"auto"} tries chemistry first, then water level.}
+
+\item{default_depth_unit}{unit assumed for depths and elevations when the
+export carries no unit column (ESDAT gauging reports). Default \code{"m"}.}
 }
 \value{
-uploaded file from esdat
+A tibble of normalised data, arranged by date, with a
+\code{"report_type"} attribute recording which family was detected. Returns
+\code{NULL} (with a warning) if no readable sheet is found.
 }
 \description{
-data_processor
+Read an EQuIS or ESDAT export and normalise it to a consistent set of column
+names. Two report families are supported:
+}
+\details{
+\itemize{
+\item \strong{chemistry} - EQuIS Analytical Results II, ESDAT \code{LChem1_Chemistry} /
+\code{davLChem1_Chemistry}, and ESDAT \verb{Chemistry List} exports.
+\item \strong{water_level} - EQuIS \verb{Water Levels II} and ESDAT gauging reports.
+}
+
+The report family is detected from the worksheet contents, so a gauging
+report can be passed without changing \code{sheet_pattern}.
+
+Where EQuIS and ESDAT use different names for the same field, the \strong{EQuIS}
+name is adopted as canonical (e.g. \code{reference_elev}, \code{water_level},
+\code{measured_depth_of_well}, \code{lnapl_density}, \code{dry_indicator_yn}, \code{task_code}).
+The exceptions are the four concepts the package already had names for -
+\code{site_id}, \code{location_code}, \code{sampled_date_time} and \code{date} - which are kept
+so that the plotting and trend functions work unchanged across both report
+families. ESDAT-only fields that have no EQuIS equivalent (for example
+\code{product_corrected_water_level}) keep a snake_case version of the ESDAT name.
+
+Water level reports are returned with the full EQuIS field set present, so
+ESDAT and EQuIS gauging data can be combined with \code{\link[dplyr:bind_rows]{dplyr::bind_rows()}}.
 }
 \examples{
 \dontrun{
+# chemistry (unchanged behaviour)
 data_processor('my_file_path')
+
+# gauging reports - auto-detected, no extra arguments needed
+esdat_gw <- data_processor('GW4_URS_Gauging_Report_esdat.xlsx')
+equis_gw <- data_processor('Water Levels II_equis.xlsx')
+
+# both share a schema, so they bind cleanly
+dplyr::bind_rows(esdat_gw, equis_gw)
 }
 }

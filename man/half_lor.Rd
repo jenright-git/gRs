@@ -24,7 +24,9 @@ Can be provided with or without quotes. Default is prefix}
 Can be provided with or without quotes. Default is concentration}
 }
 \value{
-A tibble with modified concentrations
+A tibble with modified concentrations and a new \code{lor_multiplier_applied}
+column (the multiplier value for non-detects, NA for detected results).
+The prefix column is preserved unchanged to retain non-detect context.
 }
 \description{
 Apply multiplier to concentrations that are < LOR
