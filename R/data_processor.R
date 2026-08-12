@@ -3,12 +3,25 @@
 #' Read an EQuIS or ESDAT export and normalise it to a consistent set of column
 #' names. Two report families are supported:
 #'
-#' * **chemistry** - EQuIS Analytical Results II, ESDAT `LChem1_Chemistry` /
-#'   `davLChem1_Chemistry`, and ESDAT `Chemistry List` exports.
+#' * **chemistry** - EQuIS Analytical Results II, the ESDAT matrix-specific
+#'   exports (`LChem1_Chemistry` for liquids, `SChem1_Chemistry` for soils and
+#'   sediments, and their `dav`-prefixed variants), and ESDAT `Chemistry List`
+#'   exports.
 #' * **water_level** - EQuIS `Water Levels II` and ESDAT gauging reports.
 #'
-#' The report family is detected from the worksheet contents, so a gauging
-#' report can be passed without changing `sheet_pattern`.
+#' Both the report family and the sheet are detected from the worksheet
+#' contents rather than from sheet names, so a gauging report or a soil export
+#' can be passed without changing `sheet_pattern`.
+#'
+#' Soil exports differ from liquid exports in three ways that this function
+#' reconciles. They carry no `Total or Filtered` column, so `fraction` is
+#' returned as `NA` and no `Dissolved` prefix is applied to `chem_name`. They
+#' carry a sampled interval (`start_depth`, `end_depth`, `sample_depth`) that
+#' liquid exports leave empty. And they report each analyte twice - once as a
+#' solid-phase concentration (`REG`, mg/kg) and once as a leachate
+#' concentration (`LEACHED_REG`, mg/L or ug/L) - which `result_type` resolves.
+#' Soil and liquid chemistry therefore share a shape and can be combined with
+#' [dplyr::bind_rows()].
 #'
 #' Where EQuIS and ESDAT use different names for the same field, the **EQuIS**
 #' name is adopted as canonical (e.g. `reference_elev`, `water_level`,
@@ -27,6 +40,15 @@
 #'   esdat chemistry formats. Only used when locating a chemistry sheet.
 #' @param report_type one of `"auto"` (default), `"chemistry"` or
 #'   `"water_level"`. `"auto"` tries chemistry first, then water level.
+#' @param result_type which result types to keep from a chemistry export that
+#'   carries a result type column. `"primary"` (default) keeps the ordinary
+#'   reported result - `"REG"` in ESDAT exports, `"TRG"` in EQuIS exports -
+#'   and drops everything else, reporting what it dropped. `"all"` keeps every
+#'   row. Otherwise give the types to keep by name, e.g.
+#'   `c("REG", "LEACHED_REG")` for a soil export's solid and leachate results,
+#'   or `"LEACHED_REG"` for the leachate results alone. Matching is
+#'   case-insensitive, rows with no result type recorded are always kept, and
+#'   exports with no result type column are unaffected.
 #' @param default_depth_unit unit assumed for depths and elevations when the
 #'   export carries no unit column (ESDAT gauging reports). Default `"m"`.
 #'
@@ -38,6 +60,13 @@
 #' \dontrun{
 #' # chemistry (unchanged behaviour)
 #' data_processor('my_file_path')
+#'
+#' # soil / sediment - auto-detected; solid-phase results only by default
+#' soil <- data_processor('davSChem1_Chemistry.xlsx')
+#'
+#' # the leachate (ASLP/TCLP) results the default drops
+#' leachate <- data_processor('davSChem1_Chemistry.xlsx',
+#'                            result_type = 'LEACHED_REG')
 #'
 #' # gauging reports - auto-detected, no extra arguments needed
 #' esdat_gw <- data_processor('GW4_URS_Gauging_Report_esdat.xlsx')
@@ -57,6 +86,7 @@ data_processor <- function(
   myfile_path,
   sheet_pattern = "Chem",
   report_type = c("auto", "chemistry", "water_level"),
+  result_type = "primary",
   default_depth_unit = "m"
 ) {
   report_type <- match.arg(report_type)
@@ -108,7 +138,7 @@ data_processor <- function(
   out <- if (target$type == "water_level") {
     process_water_level(raw_data, default_depth_unit = default_depth_unit)
   } else {
-    process_chemistry(raw_data)
+    process_chemistry(raw_data, result_type = result_type)
   }
 
   attr(out, "report_type") <- target$type
@@ -122,43 +152,50 @@ data_processor <- function(
 
 #' Locate a chemistry sheet within a workbook
 #'
+#' Sheets are identified by their contents rather than by name, so the ESDAT
+#' matrix-specific exports (`LChem1_Chemistry` for liquids,
+#' `SChem1_Chemistry` for soils, and their `dav`-prefixed variants) are all
+#' handled without listing each one. Sheets whose name matches
+#' `sheet_pattern` are tried first, then every other sheet, which is what
+#' finds the EQuIS Analytical Results II export on its unnamed `Sheet1`.
+#' Each candidate is peeked at with a header offset of 0 and then 1, because
+#' the `dav` exports carry a source/URL banner on the first row.
+#'
 #' @param myfile_path path to the workbook
 #' @param all_sheets character vector of sheet names
 #' @param sheet_pattern pattern matching esdat chemistry sheet names
 #' @returns list(sheet, skip, type, note); `sheet` is NULL when nothing matched
 #' @noRd
 locate_chemistry_sheet <- function(myfile_path, all_sheets, sheet_pattern) {
-  none <- function(note) {
-    list(sheet = NULL, skip = NULL, type = "chemistry", note = note)
-  }
   matching_sheets <- base::grep(sheet_pattern, all_sheets, value = TRUE)
+  candidates <- unique(c(
+    matching_sheets,
+    setdiff(all_sheets, matching_sheets)
+  ))
 
-  if (length(matching_sheets) == 0) {
-    for (s in all_sheets) {
-      peek <- peek_names(myfile_path, s, skip = 0)
-      if (!is.null(peek) && all(AR2_SIGNATURE_COLS %in% peek)) {
-        return(list(sheet = s, skip = 0, type = "chemistry", note = NA))
+  for (s in candidates) {
+    for (skip in c(0, 1)) {
+      peek <- peek_names(myfile_path, s, skip = skip)
+      if (is.null(peek)) {
+        next
+      }
+      canonical <- canonical_names(peek, COLUMN_ALIASES)
+      if (all(CHEMISTRY_SIGNATURE_COLS %in% canonical)) {
+        return(list(sheet = s, skip = skip, type = "chemistry", note = NA))
       }
     }
-    return(none(paste0(
-      "- chemistry: no sheets matching pattern '",
-      sheet_pattern,
-      "' and no sheet carrying the Analytical Results II signature columns."
-    )))
   }
 
-  if ("LChem1_Chemistry" %in% matching_sheets) {
-    list(sheet = "LChem1_Chemistry", skip = 0, type = "chemistry", note = NA)
-  } else if ("davLChem1_Chemistry" %in% matching_sheets) {
-    list(sheet = "davLChem1_Chemistry", skip = 1, type = "chemistry", note = NA)
-  } else if ("Chemistry List" %in% matching_sheets) {
-    list(sheet = "Chemistry List", skip = 0, type = "chemistry", note = NA)
-  } else {
-    none(paste0(
-      "- chemistry: found matching sheets but none of the expected types: ",
-      paste(matching_sheets, collapse = ", ")
-    ))
-  }
+  list(
+    sheet = NULL,
+    skip = NULL,
+    type = "chemistry",
+    note = paste0(
+      "- chemistry: no sheet carrying all of: ",
+      paste(CHEMISTRY_SIGNATURE_COLS, collapse = ", "),
+      " (or a recognised alias of each)."
+    )
+  )
 }
 
 #' Locate a water level (gauging) sheet within a workbook
@@ -248,16 +285,26 @@ canonical_names <- function(nms, alias_map) {
 #' Normalise a raw chemistry export
 #'
 #' @param raw_sw_data data frame straight from readxl
+#' @param result_type result types to keep; see [data_processor()]
 #' @returns normalised tibble arranged by date
 #' @noRd
-process_chemistry <- function(raw_sw_data) {
+process_chemistry <- function(raw_sw_data, result_type = "primary") {
   sw_data <- raw_sw_data %>%
     janitor::clean_names() %>%
-    resolve_columns(COLUMN_ALIASES)
+    resolve_columns(COLUMN_ALIASES) %>%
+    filter_result_type(result_type)
 
   if ("fraction" %in% names(sw_data) && is.logical(sw_data$fraction)) {
     sw_data <- sw_data %>%
       dplyr::mutate(fraction = ifelse(fraction, "F", "T"))
+  }
+
+  # Soil exports have no filtered/unfiltered concept and so carry no fraction
+  # column. Supply it as NA rather than leaving it absent, so soil and liquid
+  # chemistry bind cleanly and summary_stats() - which selects fraction by
+  # name - keeps working on soil data.
+  if (!"fraction" %in% names(sw_data)) {
+    sw_data$fraction <- NA_character_
   }
 
   if (!"prefix" %in% names(sw_data) && "detect_flag" %in% names(sw_data)) {
@@ -308,6 +355,60 @@ process_chemistry <- function(raw_sw_data) {
   }
 
   sw_data %>% dplyr::arrange(date)
+}
+
+#' Keep only the requested result types
+#'
+#' Soil exports report the same analyte twice: once as a solid-phase
+#' concentration (`REG`, mg/kg) and once as a leachate concentration
+#' (`LEACHED_REG`, mg/L or ug/L). Pooling the two would mix unit systems under
+#' a single `chem_name`, so only the primary result types are kept by default.
+#'
+#' Rows with no result type recorded are always kept, and exports with no
+#' result type column at all pass through untouched.
+#'
+#' @param sw_data chemistry data with canonical column names
+#' @param result_type result types to keep; see [data_processor()]
+#' @returns `sw_data` with unwanted result types removed
+#' @noRd
+filter_result_type <- function(sw_data, result_type) {
+  if (!"result_type" %in% names(sw_data) || length(result_type) == 0) {
+    return(sw_data)
+  }
+
+  wanted <- toupper(trimws(as.character(result_type)))
+  if (any(wanted == "ALL")) {
+    return(sw_data)
+  }
+  if (any(wanted == "PRIMARY")) {
+    wanted <- unique(c(setdiff(wanted, "PRIMARY"), PRIMARY_RESULT_TYPES))
+  }
+
+  found <- toupper(trimws(as.character(sw_data$result_type)))
+  keep <- is.na(found) | found %in% wanted
+
+  if (!any(keep)) {
+    stop(
+      "No rows left after filtering on result_type. Requested: ",
+      paste(wanted, collapse = ", "),
+      "\nResult types present: ",
+      paste(sort(unique(found[!is.na(found)])), collapse = ", "),
+      "\nPass result_type = \"all\" to keep every row."
+    )
+  }
+
+  dropped <- table(found[!keep])
+  if (length(dropped) > 0) {
+    message(
+      "Dropped ",
+      sum(dropped),
+      " rows on result_type (",
+      paste(names(dropped), unname(dropped), sep = ": ", collapse = ", "),
+      "). Pass result_type = \"all\" to keep them."
+    )
+  }
+
+  sw_data[keep, , drop = FALSE]
 }
 
 
@@ -474,7 +575,21 @@ normalise_yn <- function(x) {
 # Column dictionaries
 # ---------------------------------------------------------------------------
 
-AR2_SIGNATURE_COLS <- c("DETECT_FLAG", "REPORT_RESULT_VALUE", "SYS_LOC_CODE")
+# All of these, in canonical form, identify a chemistry export. Every
+# supported format carries the four, so they discriminate chemistry sheets
+# from gauging sheets and from the banner rows the ESDAT exports start with.
+CHEMISTRY_SIGNATURE_COLS <- c(
+  "location_code",
+  "sampled_date_time",
+  "chem_name",
+  "concentration"
+)
+
+# Result types kept by result_type = "primary": the ordinary reported result
+# in ESDAT exports ("REG") and in EQuIS exports ("TRG", target analyte).
+# Anything else - leachate results ("LEACHED_REG"), surrogates, internal
+# standards - is dropped unless asked for by name.
+PRIMARY_RESULT_TYPES <- c("REG", "TRG")
 
 # Any one of these, plus a location and a date, identifies a gauging report.
 WATER_LEVEL_SIGNATURE_COLS <- c(
@@ -548,7 +663,16 @@ COLUMN_ALIASES <- c(
       "sample_type_code",
       "type"
     ),
-    detect_flag = c("detect")
+    detect_flag = c("detect"),
+    # Distinguishes an ordinary result from a leachate result in the ESDAT
+    # soil exports; see PRIMARY_RESULT_TYPES.
+    result_type = c("result_type_code"),
+    # Soil exports carry the matrix and the sampled interval; water exports
+    # leave the depth columns empty. EQuIS names are canonical, as elsewhere.
+    matrix_code = c("matrix_type", "matrix"),
+    start_depth = c("sample_depth_from", "depth_from", "top_depth"),
+    end_depth = c("sample_depth_to", "depth_to", "bottom_depth"),
+    sample_depth = c("sample_depth_avg", "average_depth", "depth")
   )
 )
 

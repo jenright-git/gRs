@@ -8,6 +8,7 @@ data_processor(
   myfile_path,
   sheet_pattern = "Chem",
   report_type = c("auto", "chemistry", "water_level"),
+  result_type = "primary",
   default_depth_unit = "m"
 )
 }
@@ -19,6 +20,16 @@ esdat chemistry formats. Only used when locating a chemistry sheet.}
 
 \item{report_type}{one of \code{"auto"} (default), \code{"chemistry"} or
 \code{"water_level"}. \code{"auto"} tries chemistry first, then water level.}
+
+\item{result_type}{which result types to keep from a chemistry export that
+carries a result type column. \code{"primary"} (default) keeps the ordinary
+reported result - \code{"REG"} in ESDAT exports, \code{"TRG"} in EQuIS exports -
+and drops everything else, reporting what it dropped. \code{"all"} keeps every
+row. Otherwise give the types to keep by name, e.g.
+\code{c("REG", "LEACHED_REG")} for a soil export's solid and leachate results,
+or \code{"LEACHED_REG"} for the leachate results alone. Matching is
+case-insensitive, rows with no result type recorded are always kept, and
+exports with no result type column are unaffected.}
 
 \item{default_depth_unit}{unit assumed for depths and elevations when the
 export carries no unit column (ESDAT gauging reports). Default \code{"m"}.}
@@ -34,13 +45,26 @@ names. Two report families are supported:
 }
 \details{
 \itemize{
-\item \strong{chemistry} - EQuIS Analytical Results II, ESDAT \code{LChem1_Chemistry} /
-\code{davLChem1_Chemistry}, and ESDAT \verb{Chemistry List} exports.
+\item \strong{chemistry} - EQuIS Analytical Results II, the ESDAT matrix-specific
+exports (\code{LChem1_Chemistry} for liquids, \code{SChem1_Chemistry} for soils and
+sediments, and their \code{dav}-prefixed variants), and ESDAT \verb{Chemistry List}
+exports.
 \item \strong{water_level} - EQuIS \verb{Water Levels II} and ESDAT gauging reports.
 }
 
-The report family is detected from the worksheet contents, so a gauging
-report can be passed without changing \code{sheet_pattern}.
+Both the report family and the sheet are detected from the worksheet
+contents rather than from sheet names, so a gauging report or a soil export
+can be passed without changing \code{sheet_pattern}.
+
+Soil exports differ from liquid exports in three ways that this function
+reconciles. They carry no \verb{Total or Filtered} column, so \code{fraction} is
+returned as \code{NA} and no \code{Dissolved} prefix is applied to \code{chem_name}. They
+carry a sampled interval (\code{start_depth}, \code{end_depth}, \code{sample_depth}) that
+liquid exports leave empty. And they report each analyte twice - once as a
+solid-phase concentration (\code{REG}, mg/kg) and once as a leachate
+concentration (\code{LEACHED_REG}, mg/L or ug/L) - which \code{result_type} resolves.
+Soil and liquid chemistry therefore share a shape and can be combined with
+\code{\link[dplyr:bind_rows]{dplyr::bind_rows()}}.
 
 Where EQuIS and ESDAT use different names for the same field, the \strong{EQuIS}
 name is adopted as canonical (e.g. \code{reference_elev}, \code{water_level},
@@ -58,6 +82,13 @@ ESDAT and EQuIS gauging data can be combined with \code{\link[dplyr:bind_rows]{d
 \dontrun{
 # chemistry (unchanged behaviour)
 data_processor('my_file_path')
+
+# soil / sediment - auto-detected; solid-phase results only by default
+soil <- data_processor('davSChem1_Chemistry.xlsx')
+
+# the leachate (ASLP/TCLP) results the default drops
+leachate <- data_processor('davSChem1_Chemistry.xlsx',
+                           result_type = 'LEACHED_REG')
 
 # gauging reports - auto-detected, no extra arguments needed
 esdat_gw <- data_processor('GW4_URS_Gauging_Report_esdat.xlsx')

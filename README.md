@@ -6,10 +6,23 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of gRs is to process and analyse surface water and groundwater
-data from esdat. Tha initial goal is to implement Mann-Kendall analysis
-on an entire dataset at once and produce data visualisation of those
-trends.
+The goal of gRs is to process and analyse surface water, groundwater and
+soil/sediment data from esdat and EQuIS. Tha initial goal is to implement
+Mann-Kendall analysis on an entire dataset at once and produce data
+visualisation of those trends.
+
+`data_processor()` reads chemistry exports (EQuIS Analytical Results II,
+esdat `LChem1_Chemistry` for liquids and `SChem1_Chemistry` for soils,
+and esdat `Chemistry List`) and gauging reports (EQuIS `Water Levels II`
+and esdat gauging reports), normalising each to a shared set of column
+names. The format is detected from the worksheet contents, so no extra
+arguments are needed.
+
+Soil exports report each analyte twice - once as a solid-phase
+concentration (mg/kg) and once as a leachate concentration (mg/L or
+ug/L). Only the solid-phase results are returned by default; pass
+`result_type = "LEACHED_REG"` for the leachate results, or
+`result_type = "all"` for both.
 
 ## Installation
 
