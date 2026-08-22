@@ -3,13 +3,19 @@
 #' @param data tibble from data_processor
 #' @param save_path full file path including filename for the wide-format export, e.g. "C:/project/output/summary.xlsx". Stats are columns, rows are location x chemical. Directory is created if it does not exist.
 #' @param tidy_path full file path including filename for the tidy/long-format export. Produces one row per stat per location-chemical pair with columns: location_code, chem_name, stat, value. Directory is created if it does not exist.
-#' @param include_criteria logical; if TRUE, includes criteria and exceedance_count columns
+#' @param include_criteria logical; if TRUE, includes the guideline value and an exceedance count. The count is taken from the `exceedance` column written by [join_action_levels()], so whether a non-detect above the guideline counts is decided there via its `lor_as_exceedance` argument, not here.
+#' @param value_col name of the column holding the guideline value, matching
+#'   the `value_col` it was joined under by [join_action_levels()]. Default
+#'   `"criteria"`. A set joined under its own name is summarised by naming it
+#'   here, and the output columns take that name too - `criteria_99` and
+#'   `criteria_99_exceedance_count` - so two sets summarised separately can be
+#'   told apart. Ignored unless `include_criteria = TRUE`.
 #'
 #' @return tibbles and csv files
 #' @export
 #'
 #' @examples summary_stats(df, save_path = "users/project/stats")
-#' @importFrom dplyr select group_by summarise arrange n
+#' @importFrom dplyr select group_by summarise arrange n all_of
 #' @importFrom stats quantile sd
 #' @importFrom tidyr pivot_longer pivot_wider unnest
 #' @importFrom writexl write_xlsx
@@ -18,9 +24,24 @@ summary_stats <- function(
   data,
   save_path = NULL,
   tidy_path = NULL,
-  include_criteria = FALSE
+  include_criteria = FALSE,
+  value_col = "criteria"
 ) {
+  value_name <- as.character(value_col)[[1]]
+  cmp <- comparison_columns(value_name)
+
   if (include_criteria) {
+    if (!value_name %in% names(data)) {
+      stop(
+        "`data` has no '",
+        value_name,
+        "' column. Join a guideline set onto it with join_action_levels(), ",
+        "or name the column it was joined into with `value_col`."
+      )
+    }
+
+    # Carried under the canonical name for the rest of the function, and put
+    # back under its own on the way out.
     selected_data <- data %>%
       dplyr::select(
         date,
@@ -32,8 +53,21 @@ summary_stats <- function(
         detect_flag,
         concentration,
         output_unit,
-        criteria
+        dplyr::all_of(c(criteria = value_name))
       )
+
+    # What counts as an exceedance is settled by join_action_levels() - detects
+    # only, or LORs above the guideline too, per its `lor_as_exceedance`. Its
+    # verdict is counted as it stands rather than the rule being applied a
+    # second time here, where the argument is not available to honour. A
+    # criteria column added by hand carries no verdict, and falls back to the
+    # detects-only rule.
+    if (cmp[["exceedance"]] %in% names(data)) {
+      selected_data$exceedance <- as.logical(data[[cmp[["exceedance"]]]])
+    } else {
+      selected_data$exceedance <- selected_data$detect_flag == "Y" &
+        selected_data$concentration > selected_data$criteria
+    }
   } else {
     selected_data <- data %>%
       dplyr::select(
@@ -81,14 +115,23 @@ summary_stats <- function(
     base::unique()
 
   if (include_criteria) {
+    # A location/chemical group can carry more than one criteria value when
+    # its results are reported in more than one unit, so the criteria is
+    # reduced to a single value per group rather than returned as-is.
     criteria_table <- selected_data %>%
       dplyr::group_by(location_code, chem_name) %>%
       dplyr::summarise(
-        criteria = criteria,
-        exceedance_count = sum(concentration > criteria),
+        criteria = single_criteria(criteria, chem_name),
+        exceedance_count = sum(exceedance, na.rm = TRUE),
         .groups = "drop"
       ) %>%
       base::unique()
+
+    # The set goes back out under the name it was joined in as, so summaries
+    # of two sets can be bound together without either losing its identity.
+    names(criteria_table)[names(criteria_table) == "criteria"] <- value_name
+    names(criteria_table)[names(criteria_table) == "exceedance_count"] <-
+      paste0(cmp[["exceedance"]], "_count")
 
     summary_table <- summary_table %>%
       dplyr::left_join(criteria_table, by = c("location_code", "chem_name"))
@@ -121,4 +164,34 @@ summary_stats <- function(
   }
 
   return(summary_table)
+}
+
+#' Reduce a group's criteria values to one
+#'
+#' [join_action_levels()] converts each guideline into the unit its result was
+#' reported in, so one chemical measured in two units carries two criteria
+#' values. The lowest is kept, since that is the one the exceedance count is
+#' most conservative against.
+#'
+#' @param x criteria values for one location/chemical group
+#' @param chem_name the group's chemical, used only in the warning
+#' @returns a single value
+#' @noRd
+single_criteria <- function(x, chem_name = NULL) {
+  vals <- unique(x[!is.na(x)])
+  if (length(vals) == 0) {
+    return(NA_real_)
+  }
+  if (length(vals) > 1) {
+    warning(
+      "Multiple criteria values for ",
+      if (is.null(chem_name)) "a group" else chem_name[[1]],
+      ": ",
+      paste(vals, collapse = ", "),
+      ". Using ",
+      min(vals),
+      ". Check the results are all reported in one unit."
+    )
+  }
+  min(vals)
 }

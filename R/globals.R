@@ -29,5 +29,15 @@ utils::globalVariables(c(
   "reference_elev",
   "water_depth",
   "water_level",
-  "water_level_depth"
+  "water_level_depth",
+  # action level (guideline) columns
+  "chem_code",
+  "criteria_basis",
+  "criteria_name",
+  "criteria_unit",
+  "exceedance",
+  "exceedance_ratio",
+  "lor_above_criteria",
+  "matrix_code",
+  "result_type"
 ))

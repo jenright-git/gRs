@@ -32,7 +32,12 @@
 #' @param location_colours Named vector of colors for each location. If NULL (default),
 #'   automatically generates colors. Names should match location codes
 #' @param criteria_col Optional. Name of column containing criteria/limit values to plot
-#'   as horizontal dashed lines. Default is NULL (no criteria line)
+#'   as horizontal dashed lines. Default is NULL (no criteria line). Where the
+#'   column holds more than one value the lowest is drawn - the same one
+#'   [summary_stats()] counts exceedances against - and the rest are warned
+#'   about. Several values for one guideline usually means the results are
+#'   reported in more than one unit, in which case filter to a single unit
+#'   before plotting: no single line is right for both
 #' @param criteria_colour Character. Colour for criteria line. Default is "black"
 #' @param criteria_linetype Numeric or character. Line type for criteria line. Default is "dashed"
 #' @param plot_title Character. Optional title for the plot. Default is NULL
@@ -99,7 +104,7 @@
 #'   scale_y_continuous geom_hline ggtitle facet_wrap
 #' @importFrom openair quickText
 #' @importFrom glue glue
-#' @importFrom rlang enquo quo_name !! sym
+#' @importFrom rlang enquo quo_name quo_is_null !! sym
 #' @importFrom dplyr pull filter
 
 timeseries_plot <- function(
@@ -158,18 +163,19 @@ timeseries_plot <- function(
   # Validate facet_by
   facet_by <- match.arg(facet_by, choices = c("analyte", "location"))
 
-  # Validate criteria column if specified
-  if (
-    !is.null(criteria_col) &&
-      criteria_name != "NULL" &&
-      !criteria_name %in% names(data)
-  ) {
+  # Validate criteria column if specified. The quosure is tested rather than
+  # the argument itself, because `criteria_col = criteria` is a bare column
+  # name and evaluating it here would look for it outside the data.
+  criteria_given <- !rlang::quo_is_null(criteria_col_q) &&
+    criteria_name != "NULL"
+
+  if (criteria_given && !criteria_name %in% names(data)) {
     warning(
       "Criteria column '",
       criteria_name,
       "' not found in data. Skipping criteria line."
     )
-    criteria_name <- NULL
+    criteria_given <- FALSE
   }
 
   # Apply filters if specified
@@ -438,29 +444,49 @@ timeseries_plot <- function(
   }
 
   # Add criteria line if specified
-  if (
-    !is.null(criteria_col) &&
-      criteria_name != "NULL" &&
-      criteria_name %in% names(data)
-  ) {
+  if (criteria_given && criteria_name %in% names(data)) {
     criteria_value <- unique(dplyr::pull(data, !!criteria_col_q))
-
-    # If multiple criteria values, use the first non-NA one
     criteria_value <- criteria_value[!is.na(criteria_value)]
 
     if (length(criteria_value) > 0) {
+      # The lowest, not the first. join_action_levels() converts each guideline
+      # into the unit its own result was reported in, so one chemical reported
+      # in both ug/L and mg/L carries two numbers for a single guideline - 180
+      # and 0.18. Taking the first would take whichever way the rows happened
+      # to be sorted, and an arrange() upstream would move the line by three
+      # orders of magnitude without the data changing. The lowest is at least
+      # the same line every time, and is the one summary_stats() counts
+      # exceedances against, so the plot and the table agree.
       if (length(criteria_value) > 1) {
+        units <- if ("output_unit" %in% names(data)) {
+          unique(stats::na.omit(as.character(data$output_unit)))
+        } else {
+          character(0)
+        }
         warning(
           "Multiple criteria values found: ",
-          paste(criteria_value, collapse = ", "),
-          ". Using first value: ",
-          criteria_value[1]
+          paste(sort(criteria_value), collapse = ", "),
+          ". Using the lowest: ",
+          min(criteria_value),
+          ".",
+          if (length(units) > 1) {
+            paste0(
+              " These results are reported in more than one unit (",
+              paste(units, collapse = ", "),
+              "), so one guideline has become several numbers and the line ",
+              "is only right for one of them - and the plotted ",
+              "concentrations are mixed units too. Filter to a single unit ",
+              "before plotting."
+            )
+          } else {
+            ""
+          }
         )
       }
 
       plot <- plot +
         ggplot2::geom_hline(
-          yintercept = criteria_value[1],
+          yintercept = min(criteria_value),
           linetype = criteria_linetype,
           colour = criteria_colour,
           linewidth = 0.7

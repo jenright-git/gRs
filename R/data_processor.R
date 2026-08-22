@@ -118,13 +118,23 @@ data_processor <- function(
   }
 
   if (is.null(target)) {
+    # Action level exports look like neither family; say so rather than
+    # leaving the user to work out why their guideline file read as nothing.
+    hint <- if (
+      !is.null(locate_action_level_sheet(myfile_path, all_sheets)$sheet)
+    ) {
+      "\nThis looks like an action level export - read it with action_level_processor()."
+    } else {
+      ""
+    }
     warning(
       "No readable sheet found in '",
       basename(myfile_path),
       "'.\n",
       paste(notes, collapse = "\n"),
       "\nSheets present: ",
-      paste(all_sheets, collapse = ", ")
+      paste(all_sheets, collapse = ", "),
+      hint
     )
     return(NULL)
   }
@@ -255,7 +265,10 @@ peek_names <- function(myfile_path, sheet, skip = 0) {
     return(NULL)
   }
   # AR2 detection matches on the raw uppercase names, so return both forms.
-  c(names(peek), names(janitor::clean_names(peek)))
+  # Peeking with an offset of 1 can turn a row of data into the header, so
+  # janitor is silenced here - it has nothing useful to say about a candidate
+  # that is about to be rejected anyway.
+  c(names(peek), names(suppressWarnings(janitor::clean_names(peek))))
 }
 
 #' Resolve a vector of column names to their canonical equivalents
@@ -346,8 +359,12 @@ process_chemistry <- function(raw_sw_data, result_type = "primary") {
   ) {
     sw_data <- sw_data %>%
       dplyr::mutate(
+        # Tested against NA explicitly: an export where only some rows record
+        # a fraction reaches here, and a bare `fraction == "F"` returns NA for
+        # the rest - which ifelse() would write into chem_name, losing the
+        # analyte's name altogether rather than leaving it unprefixed.
         chem_name = ifelse(
-          fraction == "F",
+          !is.na(fraction) & fraction == "F",
           yes = glue::glue("Dissolved {chem_name}"),
           no = chem_name
         )
@@ -647,6 +664,17 @@ COLUMN_ALIASES <- c(
       "analyte",
       "analyte_name",
       "chemical"
+    ),
+    # The analyte's code. ESDAT chemistry and ESDAT action level exports
+    # share this code set - including the disambiguating suffixes such as
+    # `91-20-3_VOC` - so it is what join_action_levels() matches on.
+    chem_code = c(
+      "cas_rn",
+      "cas_number",
+      "casrn",
+      "cas",
+      "chemical_code",
+      "analyte_code"
     ),
     chem_group = c(
       "chemical_group",

@@ -8,7 +8,8 @@ summary_stats(
   data,
   save_path = NULL,
   tidy_path = NULL,
-  include_criteria = FALSE
+  include_criteria = FALSE,
+  value_col = "criteria"
 )
 }
 \arguments{
@@ -18,7 +19,14 @@ summary_stats(
 
 \item{tidy_path}{full file path including filename for the tidy/long-format export. Produces one row per stat per location-chemical pair with columns: location_code, chem_name, stat, value. Directory is created if it does not exist.}
 
-\item{include_criteria}{logical; if TRUE, includes criteria and exceedance_count columns}
+\item{include_criteria}{logical; if TRUE, includes the guideline value and an exceedance count. The count is taken from the \code{exceedance} column written by \code{\link[=join_action_levels]{join_action_levels()}}, so whether a non-detect above the guideline counts is decided there via its \code{lor_as_exceedance} argument, not here.}
+
+\item{value_col}{name of the column holding the guideline value, matching
+the \code{value_col} it was joined under by \code{\link[=join_action_levels]{join_action_levels()}}. Default
+\code{"criteria"}. A set joined under its own name is summarised by naming it
+here, and the output columns take that name too - \code{criteria_99} and
+\code{criteria_99_exceedance_count} - so two sets summarised separately can be
+told apart. Ignored unless \code{include_criteria = TRUE}.}
 }
 \value{
 tibbles and csv files
