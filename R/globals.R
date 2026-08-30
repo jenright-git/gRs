@@ -1,28 +1,25 @@
+# Column names referenced inside tidy-eval expressions, declared here so
+# R CMD check does not read them as undefined globals. Grouped by where they
+# come from.
 utils::globalVariables(c(
-  "detect_flag",
+  # chemistry export
   "chem_group",
   "chem_name",
-  "colours_vec",
   "concentration",
-  "criteria",
-  "location_analyte",
+  "date",
+  "detect_flag",
+  "fraction",
   "location_code",
-  "locations_vec",
   "monitoring_zone",
-  "n_samples",
   "output_unit",
   "prefix",
-  "result",
   "result_unit",
-  "results",
+  "sample_type",
   "sampled_date_time",
   "site",
   "site_id",
-  "fraction",
-  "trend",
-  "sample_type",
-  "date",
-  # water level (gauging) report columns
+
+  # water level (gauging) export
   "depth_unit",
   "dry_indicator_yn",
   "exact_elev",
@@ -30,8 +27,10 @@ utils::globalVariables(c(
   "water_depth",
   "water_level",
   "water_level_depth",
-  # action level (guideline) columns
+
+  # action level (guideline) export
   "chem_code",
+  "criteria",
   "criteria_basis",
   "criteria_name",
   "criteria_unit",
@@ -39,5 +38,21 @@ utils::globalVariables(c(
   "exceedance_ratio",
   "lor_above_criteria",
   "matrix_code",
-  "result_type"
+  "result_type",
+
+  # computed inside summary_stats(), mann_kendall_test() and
+  # select_max_concentration()
+  ".has_duplicate",
+  ".is_detect",
+  ".label",
+  "COV",
+  "SD",
+  "n_detects",
+  "n_non_detects",
+  "n_samples",
+  "nd_pct",
+  "p_value",
+  "results",
+  "tau_statistic",
+  "trend"
 ))
