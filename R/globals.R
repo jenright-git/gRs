@@ -40,6 +40,9 @@ utils::globalVariables(c(
   "matrix_code",
   "result_type",
 
+  # computed inside historical_range()
+  "max_ratio",
+
   # computed inside summary_stats(), mann_kendall_test() and
   # select_max_concentration()
   ".has_duplicate",
