@@ -30,8 +30,25 @@
 #' @param ... Other arguments to pass to
 #'   [ggplot2::scale_x_continuous()]/[ggplot2::scale_y_continuous()].
 #'
+#' @returns A list of ggplot2 components: one marker line per value, plus the
+#'   position scale carrying their labels on a secondary axis.
+#'
+#' @examples
+#' library(ggplot2)
+#'
+#' ggplot(gRs_data, aes(x = date, y = concentration)) +
+#'   geom_point() +
+#'   scale_y_limitval(c(10, 50), marker_labels = c("Guideline", "Trigger"))
+#'
+#' ggplot(gRs_data, aes(x = concentration, y = chem_name)) +
+#'   geom_point() +
+#'   scale_x_limitval(10, marker_colours = "red")
+#'
 #' @name scale_limitval
 #' @aliases NULL
+#' @importFrom purrr pmap
+#' @importFrom ggplot2 geom_hline geom_vline sec_axis scale_x_continuous
+#'   scale_y_continuous
 NULL
 
 #' @rdname scale_limitval
@@ -77,7 +94,7 @@ scale_x_limitval <-
     out <-
       purrr::pmap(
         list(marker_values, marker_colours, marker_linetypes),
-        ~ ggplot2::geom_hline(xintercept = ..1, colour = ..2, lty = ..3)
+        ~ ggplot2::geom_vline(xintercept = ..1, colour = ..2, lty = ..3)
       )
 
     out <- append(

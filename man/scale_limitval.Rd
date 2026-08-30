@@ -43,6 +43,10 @@ same length as \code{marker_values}. Defaults to dashed lines (2).}
 \item{...}{Other arguments to pass to
 \code{\link[ggplot2:scale_continuous]{ggplot2::scale_x_continuous()}}/\code{\link[ggplot2:scale_continuous]{ggplot2::scale_y_continuous()}}.}
 }
+\value{
+A list of ggplot2 components: one marker line per value, plus the
+position scale carrying their labels on a secondary axis.
+}
 \description{
 This function is a wrapper around \code{\link[ggplot2:scale_continuous]{ggplot2::scale_x_continuous()}} or
 \code{\link[ggplot2:scale_continuous]{ggplot2::scale_y_continuous()}} which allows users to automatically draw
@@ -60,4 +64,16 @@ Unlike other "scale" functions the order in which this function is added to
 the \code{\link[ggplot2:ggplot]{ggplot2::ggplot()}} object matters. Adding \code{scale_*_limitval()}
 \emph{after} \code{\link[ggplot2:geom_path]{ggplot2::geom_line()}} will draw the line markers on top of the trend
 line, whereas adding it \emph{before} will draw the markers below.
+}
+\examples{
+library(ggplot2)
+
+ggplot(gRs_data, aes(x = date, y = concentration)) +
+  geom_point() +
+  scale_y_limitval(c(10, 50), marker_labels = c("Guideline", "Trigger"))
+
+ggplot(gRs_data, aes(x = concentration, y = chem_name)) +
+  geom_point() +
+  scale_x_limitval(10, marker_colours = "red")
+
 }
