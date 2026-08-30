@@ -79,7 +79,7 @@
 #'   any_of relocate
 #' @importFrom readxl excel_sheets read_excel
 #' @importFrom janitor clean_names
-#' @importFrom dplyr mutate rename arrange %>%
+#' @importFrom dplyr arrange
 #' @importFrom lubridate floor_date parse_date_time
 #' @importFrom glue glue
 data_processor <- function(
@@ -139,10 +139,16 @@ data_processor <- function(
     return(NULL)
   }
 
+  # readxl types each column from its first 1000 rows by default, which for
+  # these exports means a comments column that is empty for the first few
+  # thousand rows is typed logical - and then warns once per later row that
+  # holds text. A real export can produce hundreds of those warnings, burying
+  # the ones that matter. Reading the whole column types it correctly instead.
   raw_data <- suppressMessages(readxl::read_excel(
     myfile_path,
     sheet = target$sheet,
-    skip = target$skip
+    skip = target$skip,
+    guess_max = EXCEL_GUESS_MAX
   ))
 
   out <- if (target$type == "water_level") {
@@ -342,10 +348,10 @@ process_chemistry <- function(raw_sw_data, result_type = "primary") {
 
   if (!"chem_group" %in% names(sw_data)) {
     warning(
-      "Column 'chem_group' not found. ",
-      "plot_by_analyte(), summary_stats(), establish_plotting_variables(), ",
-      "and get_plotting_variables() require this column. ",
-      "Add it manually after data_processor() returns."
+      "Column 'chem_group' not found. plot_by_analyte() and ",
+      "get_plotting_variables() require it; summary_stats() carries it ",
+      "through where it is present. Add it after data_processor() returns ",
+      "if you need to group by chemical class."
     )
   }
 
@@ -363,8 +369,15 @@ process_chemistry <- function(raw_sw_data, result_type = "primary") {
         # a fraction reaches here, and a bare `fraction == "F"` returns NA for
         # the rest - which ifelse() would write into chem_name, losing the
         # analyte's name altogether rather than leaving it unprefixed.
+        #
+        # Some labs already name the analyte "Dissolved Total Phosphorus" and
+        # file it as filtered as well. Prefixing that unconditionally gives
+        # "Dissolved Dissolved Total Phosphorus", which then reaches every
+        # plot title and summary row, and matches no guideline.
         chem_name = ifelse(
-          !is.na(fraction) & fraction == "F",
+          !is.na(fraction) &
+            fraction == "F" &
+            !grepl("^dissolved\\b", chem_name, ignore.case = TRUE),
           yes = glue::glue("Dissolved {chem_name}"),
           no = chem_name
         )
@@ -595,6 +608,10 @@ normalise_yn <- function(x) {
 # All of these, in canonical form, identify a chemistry export. Every
 # supported format carries the four, so they discriminate chemistry sheets
 # from gauging sheets and from the banner rows the ESDAT exports start with.
+# Rows readxl reads before deciding a column's type. readxl caps its own
+# guess_max here; passing Inf gets this value plus a warning.
+EXCEL_GUESS_MAX <- 21474836
+
 CHEMISTRY_SIGNATURE_COLS <- c(
   "location_code",
   "sampled_date_time",
@@ -857,6 +874,7 @@ WATER_LEVEL_SCHEMA <- list(
 #' @param df data frame to normalise
 #' @param alias_map named list: canonical_name -> character vector of known aliases
 #' @returns df with columns renamed to canonical names where a match is found
+#' @noRd
 resolve_columns <- function(df, alias_map) {
   current_names <- names(df)
   for (canonical in names(alias_map)) {
