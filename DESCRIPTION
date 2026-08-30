@@ -18,8 +18,8 @@ Imports:
     DT,
     ggplot2,
     ggtext,
-    grDevices,
     glue,
+    grDevices,
     janitor,
     lubridate,
     magrittr,
@@ -36,7 +36,9 @@ Imports:
     writexl
 Suggests:
     gt,
-    RColorBrewer
+    RColorBrewer,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
 Depends:
     R (>= 3.5)
 LazyData: true
