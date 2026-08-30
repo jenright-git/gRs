@@ -31,9 +31,9 @@ The export carries no column naming the guideline set itself, so the name
 is supplied by \code{name} (or taken from the file name).
 }
 \details{
-The exported value and its unit share one cell (\code{"0.6 µg/L"}), so they are
+The exported value and its unit share one cell (\code{"0.6 ug/L"}, with a real micro sign), so they are
 split into \code{criteria} and \code{criteria_unit}. Where the unit records the
-basis of measurement - \code{"0.006 µg Sn/L"} for tributyltin as tin, \code{"as N"}
+basis of measurement - \code{"0.006 ug Sn/L"} for tributyltin as tin, \code{"as N"}
 for ammonia - the basis is stripped into \code{criteria_basis} and the unit is
 left as the plain concentration unit so it can be converted.
 

@@ -5,9 +5,9 @@
 #' The export carries no column naming the guideline set itself, so the name
 #' is supplied by `name` (or taken from the file name).
 #'
-#' The exported value and its unit share one cell (`"0.6 µg/L"`), so they are
+#' The exported value and its unit share one cell (`"0.6 ug/L"`, with a real micro sign), so they are
 #' split into `criteria` and `criteria_unit`. Where the unit records the
-#' basis of measurement - `"0.006 µg Sn/L"` for tributyltin as tin, `"as N"`
+#' basis of measurement - `"0.006 ug Sn/L"` for tributyltin as tin, `"as N"`
 #' for ammonia - the basis is stripped into `criteria_basis` and the unit is
 #' left as the plain concentration unit so it can be converted.
 #'
@@ -100,7 +100,8 @@ action_level_processor <- function(myfile_path, name = NULL, sheet = NULL) {
   raw <- suppressMessages(readxl::read_excel(
     myfile_path,
     sheet = target$sheet,
-    skip = target$skip
+    skip = target$skip,
+    guess_max = EXCEL_GUESS_MAX
   ))
 
   out <- process_action_levels(raw, name = name)
@@ -254,7 +255,7 @@ join_action_levels <- function(
 
   # A guideline with no unit cannot be compared against anything, and guessing
   # that it shares the result's unit is how a mg/kg number ends up drawn
-  # against a µg/L result. Where the whole set is unitless nothing could join,
+  # against a ug/L result. Where the whole set is unitless nothing could join,
   # so say so here rather than returning a table of empty columns.
   if (
     !"criteria_unit" %in% names(action_levels) ||
@@ -263,7 +264,7 @@ join_action_levels <- function(
     stop(
       "`action_levels` records no units, so no guideline can be compared ",
       "against a result. Add the unit to the guideline file - either in the ",
-      "action level cell (\"80 µg/L\") or in a units column - and read ",
+      "action level cell (\"80 \u00b5g/L\") or in a units column - and read ",
       "it again with action_level_processor()."
     )
   }
@@ -615,7 +616,7 @@ process_action_levels <- function(raw, name) {
     )
   }
 
-  # The value and its unit share a cell ("0.006 µg Sn/L") unless the export
+  # The value and its unit share a cell ("0.006 ug Sn/L") unless the export
   # carries a separate unit column, in which case that one wins.
   parsed <- parse_action_level(al$criteria)
   al$criteria_text <- as.character(al$criteria)
@@ -703,7 +704,7 @@ process_action_levels <- function(raw, name) {
       } else {
         ""
       },
-      ".\nAdd the unit to the action level cell (\"80 µg/L\") or to a ",
+      ".\nAdd the unit to the action level cell (\"80 \u00b5g/L\") or to a ",
       "units column. The result's own unit is not assumed."
     )
   }
@@ -1033,7 +1034,7 @@ report_action_level_join <- function(
 
 #' Split an action level cell into value, unit and basis
 #'
-#' Handles `"80 µg/L"`, `"0.006 µg Sn/L"`, `"<0.1 mg/L"`, `"1,000 µg/L"` and a
+#' Handles `"80 ug/L"`, `"0.006 ug Sn/L"`, `"<0.1 mg/L"`, `"1,000 ug/L"` and a
 #' bare number. A cell holding a range (`"6.5 - 8.5"`) has no single value to
 #' compare a result against, so it is left unreadable and reported rather than
 #' silently read as its lower bound.
@@ -1055,7 +1056,7 @@ parse_action_level <- function(x) {
   # What follows the number should be a unit. Where it opens with another
   # number the cell holds a range, and taking the first of the two would read
   # a pH band as an upper limit.
-  ranged <- !is.na(unit_txt) & grepl("^[-–—]?\\s*[0-9]", unit_txt)
+  ranged <- !is.na(unit_txt) & grepl("^[-\u2013\u2014]?\\s*[0-9]", unit_txt)
   value[ranged] <- NA_real_
   unit_txt[ranged] <- NA_character_
 
@@ -1066,7 +1067,7 @@ parse_action_level <- function(x) {
 
 #' Split a unit string into the unit and its basis of measurement
 #'
-#' ESDAT records the basis inside the unit - `"µg Sn/L"` for tributyltin
+#' ESDAT records the basis inside the unit - `"ug Sn/L"` for tributyltin
 #' expressed as tin, `"mg N/L"` for nitrogen species. The basis is pulled out
 #' so the remaining unit converts like any other.
 #'
@@ -1094,10 +1095,10 @@ parse_unit_basis <- function(x) {
     ignore.case = TRUE
   )
 
-  # "µg Sn/L" - an element symbol sitting between the mass and the divisor.
+  # "ug Sn/L" - an element symbol sitting between the mass and the divisor.
   # Matched against the raw string, not the folded one, so the symbol keeps
   # its capitalisation.
-  embedded <- "^\\s*([µμnumpk]?g)\\s+([A-Za-z]{1,3})\\s*/\\s*(.+)$"
+  embedded <- "^\\s*([\u00b5\u03bcnumpk]?g)\\s+([A-Za-z]{1,3})\\s*/\\s*(.+)$"
   has_embedded <- !is.na(txt) & grepl(embedded, txt)
   if (any(has_embedded)) {
     hit <- txt[has_embedded]
@@ -1123,7 +1124,7 @@ parse_unit_basis <- function(x) {
 #' @noRd
 normalise_unit_chars <- function(x) {
   u <- trimws(tolower(as.character(x)))
-  u <- gsub("µ|μ", "u", u)
+  u <- gsub("\u00b5|\u03bc", "u", u)
   u <- gsub("\\s+", "", u)
   u
 }
