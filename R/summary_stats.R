@@ -1,34 +1,82 @@
 #' Summary statistics table
 #'
-#' @param data tibble from data_processor
-#' @param save_path full file path including filename for the wide-format export, e.g. "C:/project/output/summary.xlsx". Stats are columns, rows are location x chemical. Directory is created if it does not exist.
-#' @param tidy_path full file path including filename for the tidy/long-format export. Produces one row per stat per location-chemical pair with columns: location_code, chem_name, stat, value. Directory is created if it does not exist.
-#' @param include_criteria logical; if TRUE, includes the guideline value and an exceedance count. The count is taken from the `exceedance` column written by [join_action_levels()], so whether a non-detect above the guideline counts is decided there via its `lor_as_exceedance` argument, not here.
-#' @param value_col name of the column holding the guideline value, matching
-#'   the `value_col` it was joined under by [join_action_levels()]. Default
-#'   `"criteria"`. A set joined under its own name is summarised by naming it
-#'   here, and the output columns take that name too - `criteria_99` and
+#' One row per location and chemical, with detection counts, the usual
+#' descriptive statistics and a set of percentiles. Optionally carries the
+#' guideline value joined on by [join_action_levels()] and a count of the
+#' results that exceeded it.
+#'
+#' @param data tibble from [data_processor()].
+#' @param save_path full file path, including filename, for the wide-format
+#'   export - stats as columns, one row per location/chemical, e.g.
+#'   `"output/summary.xlsx"`. The directory is created if it does not exist.
+#' @param tidy_path full file path, including filename, for the long-format
+#'   export - one row per statistic per location/chemical, with columns
+#'   `location_code`, `chem_name`, `stat` and `value`.
+#' @param include_criteria include the guideline value and an exceedance
+#'   count. The count comes from the `exceedance` column written by
+#'   [join_action_levels()], so whether a non-detect above the guideline
+#'   counts is decided there by `lor_as_exceedance`, not here.
+#' @param criteria_col name of the column holding the guideline value,
+#'   matching the `value_col` it was joined under by [join_action_levels()].
+#'   Can be given with or without quotes. Default `criteria`. The output
+#'   columns take the same name - `criteria_99` and
 #'   `criteria_99_exceedance_count` - so two sets summarised separately can be
 #'   told apart. Ignored unless `include_criteria = TRUE`.
 #'
-#' @return tibbles and csv files
+#' @returns A tibble of summary statistics, invisibly written to `save_path`
+#'   and `tidy_path` where those are given.
 #' @export
 #'
-#' @examples summary_stats(df, save_path = "users/project/stats")
-#' @importFrom dplyr select group_by summarise arrange n all_of
+#' @examples
+#' summary_stats(gRs_data)
+#'
+#' # With a guideline set joined on by join_action_levels()
+#' \dontrun{
+#' summary_stats(compared, include_criteria = TRUE)
+#' summary_stats(compared, include_criteria = TRUE, criteria_col = criteria_99)
+#' }
+#' @importFrom dplyr select group_by summarise arrange n all_of any_of
+#'   left_join
 #' @importFrom stats quantile sd
 #' @importFrom tidyr pivot_longer pivot_wider unnest
 #' @importFrom writexl write_xlsx
 #' @importFrom glue glue
+#' @importFrom rlang enquo quo_name
 summary_stats <- function(
   data,
   save_path = NULL,
   tidy_path = NULL,
   include_criteria = FALSE,
-  value_col = "criteria"
+  criteria_col = criteria
 ) {
-  value_name <- as.character(value_col)[[1]]
+  value_name <- rlang::quo_name(rlang::enquo(criteria_col))
   cmp <- comparison_columns(value_name)
+
+  # chem_group, fraction and prefix are carried through where the export has
+  # them. data_processor() warns rather than errors when chem_group is absent
+  # and tells the user the table still works, so this must not error either.
+  carried <- c(
+    "date",
+    "location_code",
+    "chem_group",
+    "fraction",
+    "chem_name",
+    "prefix",
+    "detect_flag",
+    "concentration",
+    "output_unit"
+  )
+  required <- c("location_code", "chem_name", "detect_flag", "concentration")
+  missing <- setdiff(required, names(data))
+  if (length(missing) > 0) {
+    stop(
+      "`data` is missing required columns: ",
+      paste(missing, collapse = ", "),
+      ". Pass a table from data_processor()."
+    )
+  }
+
+  selected_data <- dplyr::select(data, dplyr::any_of(carried))
 
   if (include_criteria) {
     if (!value_name %in% names(data)) {
@@ -36,25 +84,13 @@ summary_stats <- function(
         "`data` has no '",
         value_name,
         "' column. Join a guideline set onto it with join_action_levels(), ",
-        "or name the column it was joined into with `value_col`."
+        "or name the column it was joined into with `criteria_col`."
       )
     }
 
     # Carried under the canonical name for the rest of the function, and put
     # back under its own on the way out.
-    selected_data <- data %>%
-      dplyr::select(
-        date,
-        location_code,
-        chem_group,
-        fraction,
-        chem_name,
-        prefix,
-        detect_flag,
-        concentration,
-        output_unit,
-        dplyr::all_of(c(criteria = value_name))
-      )
+    selected_data$criteria <- as.numeric(data[[value_name]])
 
     # What counts as an exceedance is settled by join_action_levels() - detects
     # only, or LORs above the guideline too, per its `lor_as_exceedance`. Its
@@ -62,25 +98,12 @@ summary_stats <- function(
     # second time here, where the argument is not available to honour. A
     # criteria column added by hand carries no verdict, and falls back to the
     # detects-only rule.
-    if (cmp[["exceedance"]] %in% names(data)) {
-      selected_data$exceedance <- as.logical(data[[cmp[["exceedance"]]]])
+    selected_data$exceedance <- if (cmp[["exceedance"]] %in% names(data)) {
+      as.logical(data[[cmp[["exceedance"]]]])
     } else {
-      selected_data$exceedance <- selected_data$detect_flag == "Y" &
+      selected_data$detect_flag == "Y" &
         selected_data$concentration > selected_data$criteria
     }
-  } else {
-    selected_data <- data %>%
-      dplyr::select(
-        date,
-        location_code,
-        chem_group,
-        fraction,
-        chem_name,
-        prefix,
-        detect_flag,
-        concentration,
-        output_unit
-      )
   }
 
   summary_table <- selected_data %>%
@@ -89,30 +112,18 @@ summary_stats <- function(
       n_samples = n(),
       n_detects = sum(detect_flag == "Y", na.rm = TRUE),
       n_non_detects = sum(detect_flag == "N", na.rm = TRUE),
-      pct_detects = round(sum(detect_flag == "Y", na.rm = TRUE) / n() * 100, 1),
-      pct_non_detects = round(
-        sum(detect_flag == "N", na.rm = TRUE) / n() * 100,
-        1
-      ),
-      min = min(concentration, na.rm = TRUE),
+      pct_detects = round(n_detects / n_samples * 100, 1),
+      pct_non_detects = round(n_non_detects / n_samples * 100, 1),
+      min = safe_min(concentration),
       mean = mean(concentration, na.rm = TRUE),
-      max = max(concentration, na.rm = TRUE),
+      max = safe_max(concentration),
       std_dev = sd(concentration, na.rm = TRUE),
-      p5 = quantile(concentration, 0.05),
-      p10 = quantile(concentration, 0.10),
-      p20 = quantile(concentration, 0.20),
-      p25 = quantile(concentration, 0.25),
-      p50 = quantile(concentration, 0.50),
-      p70 = quantile(concentration, 0.70),
-      p75 = quantile(concentration, 0.75),
-      p80 = quantile(concentration, 0.80),
-      p85 = quantile(concentration, 0.85),
-      p90 = quantile(concentration, 0.90),
-      p95 = quantile(concentration, 0.95),
-      p99 = quantile(concentration, 0.99),
+      # na.rm on every one of these, as on every statistic above. A single
+      # missing concentration in a group is enough for quantile() to error
+      # outright otherwise, taking the whole table with it.
+      !!!percentile_exprs(),
       .groups = "drop"
-    ) %>%
-    base::unique()
+    )
 
   if (include_criteria) {
     # A location/chemical group can carry more than one criteria value when
@@ -124,8 +135,7 @@ summary_stats <- function(
         criteria = single_criteria(criteria, chem_name),
         exceedance_count = sum(exceedance, na.rm = TRUE),
         .groups = "drop"
-      ) %>%
-      base::unique()
+      )
 
     # The set goes back out under the name it was joined in as, so summaries
     # of two sets can be bound together without either losing its identity.
@@ -137,33 +147,67 @@ summary_stats <- function(
       dplyr::left_join(criteria_table, by = c("location_code", "chem_name"))
   }
 
-  if (!is.null(save_path)) {
-    out_dir <- dirname(save_path)
-    if (!dir.exists(out_dir)) {
-      dir.create(out_dir, recursive = TRUE)
-      message(glue::glue("Created directory: {out_dir}"))
-    }
-    writexl::write_xlsx(summary_table, save_path)
-    message(glue::glue("Saved: {basename(save_path)} -> {save_path}"))
-  }
+  write_summary(summary_table, save_path)
 
   if (!is.null(tidy_path)) {
-    tidy_dir <- dirname(tidy_path)
-    if (!dir.exists(tidy_dir)) {
-      dir.create(tidy_dir, recursive = TRUE)
-      message(glue::glue("Created directory: {tidy_dir}"))
-    }
     tidy_table <- summary_table %>%
       tidyr::pivot_longer(
         cols = c(-location_code, -chem_name),
         names_to = "stat",
         values_to = "value"
       )
-    writexl::write_xlsx(tidy_table, tidy_path)
-    message(glue::glue("Saved: {basename(tidy_path)} -> {tidy_path}"))
+    write_summary(tidy_table, tidy_path)
   }
 
-  return(summary_table)
+  summary_table
+}
+
+# Percentiles reported by summary_stats(), as a named list of expressions so
+# the set is stated once rather than sixteen near-identical lines.
+PERCENTILES <- c(5, 10, 20, 25, 50, 70, 75, 80, 85, 90, 95, 99)
+
+#' Build the percentile expressions for summary_stats()
+#' @noRd
+percentile_exprs <- function() {
+  exprs <- lapply(PERCENTILES / 100, function(p) {
+    rlang::expr(unname(quantile(concentration, !!p, na.rm = TRUE)))
+  })
+  stats::setNames(exprs, paste0("p", PERCENTILES))
+}
+
+#' min()/max() over a group that may hold nothing but missing values
+#'
+#' Base R returns `Inf` with a warning for an empty set; a group with no
+#' readable concentration has no minimum, and `NA` says so.
+#'
+#' @param x numeric vector
+#' @noRd
+safe_min <- function(x) {
+  if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE)
+}
+
+#' @rdname safe_min
+#' @noRd
+safe_max <- function(x) {
+  if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+}
+
+#' Write a summary table, creating its directory if need be
+#'
+#' @param table tibble to write
+#' @param path full file path including filename, or NULL to write nothing
+#' @noRd
+write_summary <- function(table, path) {
+  if (is.null(path)) {
+    return(invisible(NULL))
+  }
+  out_dir <- dirname(path)
+  if (!dir.exists(out_dir)) {
+    dir.create(out_dir, recursive = TRUE)
+    message(glue::glue("Created directory: {out_dir}"))
+  }
+  writexl::write_xlsx(table, path)
+  message(glue::glue("Saved: {basename(path)} -> {path}"))
 }
 
 #' Reduce a group's criteria values to one

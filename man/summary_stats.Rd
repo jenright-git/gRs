@@ -9,31 +9,48 @@ summary_stats(
   save_path = NULL,
   tidy_path = NULL,
   include_criteria = FALSE,
-  value_col = "criteria"
+  criteria_col = criteria
 )
 }
 \arguments{
-\item{data}{tibble from data_processor}
+\item{data}{tibble from \code{\link[=data_processor]{data_processor()}}.}
 
-\item{save_path}{full file path including filename for the wide-format export, e.g. "C:/project/output/summary.xlsx". Stats are columns, rows are location x chemical. Directory is created if it does not exist.}
+\item{save_path}{full file path, including filename, for the wide-format
+export - stats as columns, one row per location/chemical, e.g.
+\code{"output/summary.xlsx"}. The directory is created if it does not exist.}
 
-\item{tidy_path}{full file path including filename for the tidy/long-format export. Produces one row per stat per location-chemical pair with columns: location_code, chem_name, stat, value. Directory is created if it does not exist.}
+\item{tidy_path}{full file path, including filename, for the long-format
+export - one row per statistic per location/chemical, with columns
+\code{location_code}, \code{chem_name}, \code{stat} and \code{value}.}
 
-\item{include_criteria}{logical; if TRUE, includes the guideline value and an exceedance count. The count is taken from the \code{exceedance} column written by \code{\link[=join_action_levels]{join_action_levels()}}, so whether a non-detect above the guideline counts is decided there via its \code{lor_as_exceedance} argument, not here.}
+\item{include_criteria}{include the guideline value and an exceedance
+count. The count comes from the \code{exceedance} column written by
+\code{\link[=join_action_levels]{join_action_levels()}}, so whether a non-detect above the guideline
+counts is decided there by \code{lor_as_exceedance}, not here.}
 
-\item{value_col}{name of the column holding the guideline value, matching
-the \code{value_col} it was joined under by \code{\link[=join_action_levels]{join_action_levels()}}. Default
-\code{"criteria"}. A set joined under its own name is summarised by naming it
-here, and the output columns take that name too - \code{criteria_99} and
+\item{criteria_col}{name of the column holding the guideline value,
+matching the \code{value_col} it was joined under by \code{\link[=join_action_levels]{join_action_levels()}}.
+Can be given with or without quotes. Default \code{criteria}. The output
+columns take the same name - \code{criteria_99} and
 \code{criteria_99_exceedance_count} - so two sets summarised separately can be
 told apart. Ignored unless \code{include_criteria = TRUE}.}
 }
 \value{
-tibbles and csv files
+A tibble of summary statistics, invisibly written to \code{save_path}
+and \code{tidy_path} where those are given.
 }
 \description{
-Summary statistics table
+One row per location and chemical, with detection counts, the usual
+descriptive statistics and a set of percentiles. Optionally carries the
+guideline value joined on by \code{\link[=join_action_levels]{join_action_levels()}} and a count of the
+results that exceeded it.
 }
 \examples{
-summary_stats(df, save_path = "users/project/stats")
+summary_stats(gRs_data)
+
+# With a guideline set joined on by join_action_levels()
+\dontrun{
+summary_stats(compared, include_criteria = TRUE)
+summary_stats(compared, include_criteria = TRUE, criteria_col = criteria_99)
+}
 }
