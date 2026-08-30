@@ -1,16 +1,28 @@
-#' Black and White Heatmap for Mann-Kendall Test
+#' Black and white heatmap of Mann-Kendall trends
 #'
-#' @param data tibble exported from mann_kendall_reduced_test
-#' @param label_text_size size of trend labels
-#' @param width Maximum character width for wrapping trend labels (default: 20)
-#' @param plot_title Text for plot title
+#' The same grid as [mann_kendall_heatmap()] with no fill, for printing. A
+#' significant trend is emboldened in place of being coloured.
 #'
-#' @return ggplot heatmap
+#' Takes the three trend categories of `mann_kendall_test(traditional = TRUE)`;
+#' the six-category default has no unshaded equivalent for "Probably
+#' Increasing" and "Stable", and those tiles would come out blank.
+#'
+#' @param data tibble from `mann_kendall_test(traditional = TRUE)`.
+#' @param label_text_size size of the trend label inside each tile
+#' @param plot_title title text
+#' @param width maximum character width for wrapping trend labels
+#'
+#' @returns A ggplot2 object.
 #' @export
 #'
-#' @examples mann_kendall_heatmap_bw(mk_export_reduced)
+#' @seealso [mann_kendall_heatmap()] for the coloured six-category version.
+#'
+#' @examples
+#' mann_kendall_test(gRs_data, traditional = TRUE) |>
+#'   mann_kendall_heatmap_bw()
 #' @importFrom dplyr mutate
-#' @importFrom ggplot2 ggplot geom_tile aes theme_bw ggtitle theme element_blank element_text labs scale_x_discrete scale_y_discrete
+#' @importFrom ggplot2 ggplot geom_tile aes theme_bw ggtitle theme
+#'   element_blank element_text labs scale_x_discrete scale_y_discrete
 #' @importFrom stringr str_wrap
 #' @importFrom ggtext geom_richtext
 #' @importFrom glue glue
@@ -22,34 +34,24 @@ mann_kendall_heatmap_bw <- function(
 ) {
   data %>%
     dplyr::mutate(
-      trend = factor(
-        trend,
-        levels = c("Increasing", "No Significant Trend", "Decreasing")
+      trend = factor(trend, levels = TREND_LEVELS_TRADITIONAL),
+      # Emboldened rather than filled, so the tile stays readable in black and
+      # white. Wrapped before the markup goes on, or the tags are counted
+      # towards the width.
+      .label = stringr::str_wrap(as.character(trend), width = width),
+      .label = ifelse(
+        grepl("Increasing|Decreasing", trend),
+        glue::glue("<b>{.label}</b>"),
+        .label
       )
     ) %>%
-    ggplot2::ggplot(aes(x = location_code, y = chem_name)) +
+    ggplot2::ggplot(ggplot2::aes(x = location_code, y = chem_name)) +
     ggplot2::geom_tile(colour = "black", fill = "white") +
     ggtext::geom_richtext(
-      ggplot2::aes(
-        label = base::ifelse(
-          base::grepl("Increasing|Decreasing", trend),
-          glue::glue("<b>{str_wrap(trend, width = 20)}</b>"),
-          stringr::str_wrap(trend, width = width)
-        )
-      ),
+      ggplot2::aes(label = .label),
       colour = "black",
       size = label_text_size,
       label.color = "white"
     ) +
-    ggplot2::theme_bw() +
-    ggplot2::ggtitle(plot_title) +
-    ggplot2::theme(
-      legend.title = ggplot2::element_blank(),
-      plot.title = ggplot2::element_text(hjust = 0.5),
-      panel.grid = ggplot2::element_blank(),
-      axis.text.x = ggplot2::element_text(angle = 0, vjust = 0.5)
-    ) +
-    ggplot2::labs(x = NULL, y = NULL) +
-    ggplot2::scale_x_discrete(expand = c(0, 0)) +
-    ggplot2::scale_y_discrete(expand = c(0, 0))
+    heatmap_theme(plot_title, x_angle = 0)
 }

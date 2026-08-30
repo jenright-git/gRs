@@ -2,7 +2,7 @@
 % Please edit documentation in R/mann_kendall_heatmap.R
 \name{mann_kendall_heatmap}
 \alias{mann_kendall_heatmap}
-\title{Function to plot mann-kendall trends on a heatmap}
+\title{Heatmap of Mann-Kendall trends}
 \usage{
 mann_kendall_heatmap(
   data,
@@ -13,22 +13,30 @@ mann_kendall_heatmap(
 )
 }
 \arguments{
-\item{data}{tibble from the mann_kendall_test function}
+\item{data}{tibble from \code{\link[=mann_kendall_test]{mann_kendall_test()}}.}
 
-\item{label_text_size}{size of the label text}
+\item{label_text_size}{size of the trend label inside each tile}
 
-\item{plot_title}{Title Text}
+\item{plot_title}{title text}
 
-\item{heatmap_colours}{vector of colours to use for each category/tile}
+\item{heatmap_colours}{colours for the six trend categories, in the order
+Increasing, Probably Increasing, No Significant Trend, Stable, Probably
+Decreasing, Decreasing. \code{NULL} (default) uses a diverging pink-to-green
+scale.}
 
-\item{width}{Maximum character width for wrapping trend labels (default: 20)}
+\item{width}{maximum character width for wrapping trend labels}
 }
 \value{
-ggplot heatmap
+A ggplot2 object.
 }
 \description{
-Function to plot mann-kendall trends on a heatmap
+One tile per location and analyte, filled by trend direction.
 }
 \examples{
-mann_kendall_heatmap(mk_export)
+mann_kendall_test(gRs_data) |>
+  mann_kendall_heatmap()
+}
+\seealso{
+\code{\link[=mann_kendall_heatmap_bw]{mann_kendall_heatmap_bw()}} for a print-friendly version taking
+the three categories of \code{mann_kendall_test(traditional = TRUE)}.
 }

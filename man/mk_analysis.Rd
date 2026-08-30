@@ -32,14 +32,15 @@ tibble with result and stats
 Mann_Kendall Test returning test result and stats
 }
 \examples{
-# Typically called from mann_kendall_test(), not directly by users
-# Default: no LOR adjustment
-mk_analysis(df)
+# Normally reached through mann_kendall_test(), which calls it once per
+# location/analyte combination. Called directly it takes one such subset.
+one_series <- dplyr::filter(
+  gRs_data,
+  location_code == gRs_data$location_code[1],
+  chem_name == gRs_data$chem_name[1]
+)
 
-# Half LOR method
-mk_analysis(df, lor_multiplier = 0.5)
-
-# Zero substitution
-mk_analysis(df, lor_multiplier = 0)
+mk_analysis(one_series)
+mk_analysis(one_series, lor_multiplier = 0.5)
 
 }

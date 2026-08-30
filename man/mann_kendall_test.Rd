@@ -11,7 +11,7 @@ mann_kendall_test(
   nd_threshold = NULL,
   min_detects = NULL,
   location_col = location_code,
-  analyte_col = chem_name,
+  chem_name_col = chem_name,
   concentration_col = concentration,
   date_col = date,
   prefix_col = prefix
@@ -39,7 +39,7 @@ Default is NULL (no filtering). Cannot be used together with \code{nd_threshold}
 \item{location_col}{Name of the column containing location codes.
 Can be provided with or without quotes. Default is location_code}
 
-\item{analyte_col}{Name of the column containing chemical/analyte names.
+\item{chem_name_col}{Name of the column containing chemical/analyte names.
 Can be provided with or without quotes. Default is chem_name}
 
 \item{concentration_col}{Name of the column containing concentration values.
@@ -58,29 +58,27 @@ A nested tibble of trends as well as the original nested data
 Mann Kendall Function to loop through entire dataset
 }
 \examples{
-# Default: no LOR adjustment, default column names
-mann_kendall_test(data)
+# Six trend categories, LOR results left as reported
+trends <- mann_kendall_test(gRs_data)
+dplyr::select(trends, location_code, chem_name, p_value, trend)
 
-# Half LOR method with default column names
-mann_kendall_test(data, lor_multiplier = 0.5)
+# Three categories only
+mann_kendall_test(gRs_data, traditional = TRUE)
 
-# Zero substitution
-mann_kendall_test(data, lor_multiplier = 0)
+# Half-LOR substitution before testing
+mann_kendall_test(gRs_data, lor_multiplier = 0.5)
 
-# Traditional trend categories with half LOR
-mann_kendall_test(data, traditional = TRUE, lor_multiplier = 0.5)
+# Drop combinations that are mostly non-detects
+mann_kendall_test(gRs_data, nd_threshold = 0.75)
 
-# Custom column names WITHOUT quotes
-mann_kendall_test(data,
-                  location_col = site_code,
-                  analyte_col = parameter,
-                  concentration_col = result_value,
-                  date_col = sample_date,
-                  prefix_col = qualifier)
-
-# Custom column names WITH quotes also works
-mann_kendall_test(data,
-                  location_col = "site_code",
-                  analyte_col = "parameter")
+# Custom column names, with or without quotes
+\dontrun{
+mann_kendall_test(
+  my_data,
+  location_col = site_code,
+  chem_name_col = parameter,
+  concentration_col = result_value
+)
+}
 
 }

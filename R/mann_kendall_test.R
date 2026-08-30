@@ -15,7 +15,7 @@
 #'   Default is NULL (no filtering). Cannot be used together with \code{nd_threshold}.
 #' @param location_col Name of the column containing location codes.
 #'   Can be provided with or without quotes. Default is location_code
-#' @param analyte_col Name of the column containing chemical/analyte names.
+#' @param chem_name_col Name of the column containing chemical/analyte names.
 #'   Can be provided with or without quotes. Default is chem_name
 #' @param concentration_col Name of the column containing concentration values.
 #'   Can be provided with or without quotes. Default is concentration
@@ -28,30 +28,28 @@
 #' @export
 #'
 #' @examples
-#' # Default: no LOR adjustment, default column names
-#' mann_kendall_test(data)
+#' # Six trend categories, LOR results left as reported
+#' trends <- mann_kendall_test(gRs_data)
+#' dplyr::select(trends, location_code, chem_name, p_value, trend)
 #'
-#' # Half LOR method with default column names
-#' mann_kendall_test(data, lor_multiplier = 0.5)
+#' # Three categories only
+#' mann_kendall_test(gRs_data, traditional = TRUE)
 #'
-#' # Zero substitution
-#' mann_kendall_test(data, lor_multiplier = 0)
+#' # Half-LOR substitution before testing
+#' mann_kendall_test(gRs_data, lor_multiplier = 0.5)
 #'
-#' # Traditional trend categories with half LOR
-#' mann_kendall_test(data, traditional = TRUE, lor_multiplier = 0.5)
+#' # Drop combinations that are mostly non-detects
+#' mann_kendall_test(gRs_data, nd_threshold = 0.75)
 #'
-#' # Custom column names WITHOUT quotes
-#' mann_kendall_test(data,
-#'                   location_col = site_code,
-#'                   analyte_col = parameter,
-#'                   concentration_col = result_value,
-#'                   date_col = sample_date,
-#'                   prefix_col = qualifier)
-#'
-#' # Custom column names WITH quotes also works
-#' mann_kendall_test(data,
-#'                   location_col = "site_code",
-#'                   analyte_col = "parameter")
+#' # Custom column names, with or without quotes
+#' \dontrun{
+#' mann_kendall_test(
+#'   my_data,
+#'   location_col = site_code,
+#'   chem_name_col = parameter,
+#'   concentration_col = result_value
+#' )
+#' }
 #'
 #' @importFrom dplyr bind_rows filter mutate case_when select arrange
 #' @importFrom tidyr tibble nest unnest drop_na
@@ -64,14 +62,14 @@ mann_kendall_test <- function(
   nd_threshold = NULL,
   min_detects = NULL,
   location_col = location_code,
-  analyte_col = chem_name,
+  chem_name_col = chem_name,
   concentration_col = concentration,
   date_col = date,
   prefix_col = prefix
 ) {
   # Quote the column name arguments
   location_col <- rlang::enquo(location_col)
-  analyte_col <- rlang::enquo(analyte_col)
+  chem_name_col <- rlang::enquo(chem_name_col)
   conc_col <- rlang::enquo(concentration_col)
   date_col <- rlang::enquo(date_col)
   prefix_col <- rlang::enquo(prefix_col)
@@ -83,7 +81,7 @@ mann_kendall_test <- function(
 
   df <- data %>%
     tidyr::drop_na(!!conc_col) %>%
-    tidyr::nest(.by = c(!!location_col, !!analyte_col)) %>%
+    tidyr::nest(.by = c(!!location_col, !!chem_name_col)) %>%
     dplyr::mutate(n_samples = purrr::map(data, nrow)) %>%
     tidyr::unnest(n_samples) %>%
     dplyr::filter(n_samples > 3) %>% # filter out entries with less than 4 data points
@@ -114,7 +112,7 @@ mann_kendall_test <- function(
 
     if (nrow(excluded) > 0) {
       loc_name <- rlang::quo_name(location_col)
-      ana_name <- rlang::quo_name(analyte_col)
+      ana_name <- rlang::quo_name(chem_name_col)
       excl_lines <- paste(
         sprintf(
           "  - %s / %s (%.1f%% non-detects)",
@@ -151,7 +149,7 @@ mann_kendall_test <- function(
     }
 
     loc_name <- rlang::quo_name(location_col)
-    ana_name <- rlang::quo_name(analyte_col)
+    ana_name <- rlang::quo_name(chem_name_col)
 
     df <- df %>%
       dplyr::mutate(
@@ -259,15 +257,16 @@ mann_kendall_test <- function(
 #' @export
 #'
 #' @examples
-#' # Typically called from mann_kendall_test(), not directly by users
-#' # Default: no LOR adjustment
-#' mk_analysis(df)
+#' # Normally reached through mann_kendall_test(), which calls it once per
+#' # location/analyte combination. Called directly it takes one such subset.
+#' one_series <- dplyr::filter(
+#'   gRs_data,
+#'   location_code == gRs_data$location_code[1],
+#'   chem_name == gRs_data$chem_name[1]
+#' )
 #'
-#' # Half LOR method
-#' mk_analysis(df, lor_multiplier = 0.5)
-#'
-#' # Zero substitution
-#' mk_analysis(df, lor_multiplier = 0)
+#' mk_analysis(one_series)
+#' mk_analysis(one_series, lor_multiplier = 0.5)
 #'
 #' @importFrom trend mk.test
 #' @importFrom dplyr arrange mutate

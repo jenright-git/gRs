@@ -2,7 +2,7 @@
 % Please edit documentation in R/mann_kendall_heatmap_bw.R
 \name{mann_kendall_heatmap_bw}
 \alias{mann_kendall_heatmap_bw}
-\title{Black and White Heatmap for Mann-Kendall Test}
+\title{Black and white heatmap of Mann-Kendall trends}
 \usage{
 mann_kendall_heatmap_bw(
   data,
@@ -12,20 +12,30 @@ mann_kendall_heatmap_bw(
 )
 }
 \arguments{
-\item{data}{tibble exported from mann_kendall_reduced_test}
+\item{data}{tibble from \code{mann_kendall_test(traditional = TRUE)}.}
 
-\item{label_text_size}{size of trend labels}
+\item{label_text_size}{size of the trend label inside each tile}
 
-\item{plot_title}{Text for plot title}
+\item{plot_title}{title text}
 
-\item{width}{Maximum character width for wrapping trend labels (default: 20)}
+\item{width}{maximum character width for wrapping trend labels}
 }
 \value{
-ggplot heatmap
+A ggplot2 object.
 }
 \description{
-Black and White Heatmap for Mann-Kendall Test
+The same grid as \code{\link[=mann_kendall_heatmap]{mann_kendall_heatmap()}} with no fill, for printing. A
+significant trend is emboldened in place of being coloured.
+}
+\details{
+Takes the three trend categories of \code{mann_kendall_test(traditional = TRUE)};
+the six-category default has no unshaded equivalent for "Probably
+Increasing" and "Stable", and those tiles would come out blank.
 }
 \examples{
-mann_kendall_heatmap_bw(mk_export_reduced)
+mann_kendall_test(gRs_data, traditional = TRUE) |>
+  mann_kendall_heatmap_bw()
+}
+\seealso{
+\code{\link[=mann_kendall_heatmap]{mann_kendall_heatmap()}} for the coloured six-category version.
 }
