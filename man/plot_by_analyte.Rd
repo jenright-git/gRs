@@ -60,44 +60,41 @@ Can be provided with or without quotes. Default is output_unit}
 
 \item{show_progress}{Logical. Show progress bar? Default is TRUE}
 
-\item{create_dirs}{Logical. Create subdirectories for each zone? Default is TRUE}
+\item{create_dirs}{Logical. Write each zone's plots into its own
+subdirectory of \code{save_path}. Default TRUE. With FALSE every plot is
+written to \code{save_path} itself, with the zone carried in the file name}
 
 \item{plot_width}{Numeric. Width of saved plots in cm. Default is 14}
 
 \item{plot_height}{Numeric. Height of saved plots in cm. Default is 10}
 
-\item{...}{Additional arguments passed to timeseries_plot()}
+\item{...}{Additional arguments passed to \code{\link[=timeseries_plot]{timeseries_plot()}}}
 }
 \value{
-Invisibly returns a tibble of successfully created plots with columns:
-monitoring_zone, chem_name, filepath, status
+Invisibly, a tibble of every analyte/zone combination attempted,
+with columns \code{monitoring_zone}, \code{chem_name}, \code{filepath} and \code{status}
+(one of \code{"saved"}, \code{"not_saved"}, \code{"no_data"}, \code{"error"},
+\code{"save_error"}).
 }
 \description{
 Generates individual timeseries plots for each combination of analyte and
 monitoring zone, and saves them to the specified directory.
 }
 \examples{
-# Save plots to a directory
-plot_by_analyte(data, save_path = "my_project/figures")
+# Build the plots without writing anything
+plot_by_analyte(gRs_data, show_progress = FALSE)
 
-# With smoothing
-plot_by_analyte(data, save_path = "figures", smooth = TRUE)
+# Write them out, one directory per monitoring zone
+\dontrun{
+plot_by_analyte(gRs_data, save_path = "figures")
 
-# With linear trend
-plot_by_analyte(data, save_path = "figures", linear_smooth = TRUE)
+# All in one directory instead, with a loess smooth
+plot_by_analyte(gRs_data, save_path = "figures",
+                create_dirs = FALSE, smooth = TRUE)
 
-# Custom column names
-plot_by_analyte(data,
-                save_path = "figures",
-                location_col = site_code,
-                chem_name_col = parameter,
-                date_col = sample_date)
-
-# Pass additional arguments to timeseries_plot
-plot_by_analyte(data,
-                save_path = "figures",
-                ymin = 0,
-                ymax = 100,
-                date_break = "3 months")
+# Anything timeseries_plot() takes is passed through
+plot_by_analyte(gRs_data, save_path = "figures",
+                ymax = 100, date_break = "3 months")
+}
 
 }
