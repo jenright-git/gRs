@@ -1,6 +1,6 @@
 Package: gRs
 Title: Process and Analyse Environmental Data from esdat and EQuIS
-Version: 0.0.0.9000
+Version: 0.1.0
 Authors@R:
     person("James", "Enright", , "jamesenright43@gmail.com", role = c("aut", "cre"))
 Description: Convenience functions to read surface water, groundwater and
