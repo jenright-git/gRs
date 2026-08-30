@@ -2,54 +2,55 @@
 % Please edit documentation in R/half_lor.R
 \name{half_lor}
 \alias{half_lor}
-\title{Apply multiplier to concentrations that are < LOR}
+\title{Apply a multiplier to concentrations reported below the LOR}
 \usage{
 half_lor(
   data,
-  multiplier = 1,
+  lor_multiplier = 1,
   prefix_col = prefix,
   concentration_col = concentration
 )
 }
 \arguments{
-\item{data}{A tibble with columns for prefix and concentration}
+\item{data}{A tibble with a prefix column and a concentration column.
+Typically the output of \code{\link[=data_processor]{data_processor()}}.}
 
-\item{multiplier}{Numeric value to multiply LOR concentrations by. Default is 1 (no change).
-Common values: 0 (zero substitution), 0.5 (half LOR), 1 (full LOR value)}
+\item{lor_multiplier}{Numeric. What to multiply non-detect concentrations
+by. Default 1 (leave the LOR as reported). Common values: 0 (zero
+substitution), 0.5 (half LOR), 1 (full LOR).}
 
-\item{prefix_col}{Name of the column containing prefix indicators (e.g., "<", "=").
-Can be provided with or without quotes. Default is prefix}
+\item{prefix_col}{Name of the column holding the detect qualifier
+(\code{"<"} = non-detect). Can be given with or without quotes. Default
+\code{prefix}.}
 
-\item{concentration_col}{Name of the column containing concentration values.
-Can be provided with or without quotes. Default is concentration}
+\item{concentration_col}{Name of the column holding concentration values.
+Can be given with or without quotes. Default \code{concentration}.}
 }
 \value{
-A tibble with modified concentrations and a new \code{lor_multiplier_applied}
-column (the multiplier value for non-detects, NA for detected results).
-The prefix column is preserved unchanged to retain non-detect context.
+\code{data} with substituted concentrations and a new
+\code{lor_multiplier_applied} column - the multiplier for non-detects, \code{NA}
+for detected results. The prefix column is left as it was, so a
+substituted result is still identifiable as a non-detect.
 }
 \description{
-Apply multiplier to concentrations that are < LOR
+A non-detect is reported at its limit of reporting, which overstates a
+result that was not seen at all. This substitutes a fraction of the LOR -
+conventionally half - for those results, leaving detected results alone.
 }
 \examples{
-# Using default column names (no quotes needed)
-# Half LOR: <4 becomes =2
-half_lor(data, multiplier = 0.5)
+# Half LOR: a result reported as <4 becomes 2
+half_lor(gRs_data, lor_multiplier = 0.5)
 
-# Zero substitution: <4 becomes =0
-half_lor(data, multiplier = 0)
+# Zero substitution: <4 becomes 0
+half_lor(gRs_data, lor_multiplier = 0)
 
-# No change (default): <4 remains =4
-half_lor(data, multiplier = 1)
-
-# Using custom column names WITHOUT quotes
-half_lor(data, multiplier = 0.5,
-         prefix_col = qualifier,
-         concentration_col = result_value)
-
-# Using custom column names WITH quotes also works
-half_lor(data, multiplier = 0.5,
-         prefix_col = "qualifier",
-         concentration_col = "result_value")
-
+# Custom column names, with or without quotes
+\dontrun{
+half_lor(my_data, 0.5, prefix_col = qualifier, concentration_col = result)
+half_lor(my_data, 0.5, prefix_col = "qualifier")
+}
+}
+\seealso{
+\code{\link[=mann_kendall_test]{mann_kendall_test()}}, which takes \code{lor_multiplier} directly and
+so does not need this called first.
 }
