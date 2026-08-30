@@ -12,8 +12,7 @@ get_plotting_variables(
   date_col = date,
   monitoring_zone_col = monitoring_zone,
   site_id_col = site_id,
-  seed = 1239755,
-  use_rcolorbrewer = TRUE
+  seed = 1239755
 )
 }
 \arguments{
@@ -37,10 +36,9 @@ Can be provided with or without quotes. Default is monitoring_zone}
 \item{site_id_col}{Name of the column containing site IDs (used as fallback
 for monitoring zones). Can be provided with or without quotes. Default is site_id}
 
-\item{seed}{Numeric. Random seed for reproducible color generation. Default is 1239755}
-
-\item{use_rcolorbrewer}{Logical. Should RColorBrewer be used if available?
-Default is TRUE}
+\item{seed}{Numeric. Seed for the fallback colour palette, used only when
+RColorBrewer is not installed. Applied through \code{\link[withr:with_seed]{withr::with_seed()}}, so
+the caller's random stream is left as it was. Default is 1239755}
 }
 \value{
 A list containing:
@@ -58,9 +56,14 @@ A list containing:
 }
 }
 \description{
-This function extracts key plotting variables from a dataset and returns them
-as a list. Unlike the original establish_plotting_variables(), this function
-does not use global assignment and returns all variables in a structured list.
+Pulls the analytes, locations, date range, monitoring zones and location
+colour palette out of a chemistry table in one pass, so a plotting script
+derives them once instead of recomputing them per plot. \code{\link[=plot_by_analyte]{plot_by_analyte()}}
+uses it internally.
+}
+\details{
+Where \code{monitoring_zone} is absent or entirely missing, \code{site_id} stands in
+for it and a message says so.
 }
 \examples{
 plot_vars <- get_plotting_variables(gRs_data)

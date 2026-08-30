@@ -13,7 +13,7 @@
 #'   Can be provided with or without quotes. Default is concentration
 #' @param location_col Name of the column containing location codes.
 #'   Can be provided with or without quotes. Default is location_code
-#' @param analyte_col Name of the column containing analyte/chemical names.
+#' @param chem_name_col Name of the column containing analyte/chemical names.
 #'   Can be provided with or without quotes. Default is chem_name
 #' @param date_size Numeric. Size of x-axis date labels. Default is 12
 #' @param date_break Character. Date breaks to be used (e.g., "2 weeks", "month", "year").
@@ -51,57 +51,39 @@
 #' @export
 #'
 #' @examples
-#' # Basic usage with default column names
-#' timeseries_plot(data)
+#' analyte <- gRs_data$chem_name[1]
 #'
-#' # Filter to a single location
-#' timeseries_plot(data, filter_location = "LOC_01")
+#' # Every location, one analyte
+#' timeseries_plot(gRs_data, filter_analyte = analyte)
 #'
-#' # Filter to multiple locations (colored by location)
-#' timeseries_plot(data, filter_location = c("LOC_01", "LOC_02", "LOC_03"))
+#' # Several analytes - faceted, with free y-scales
+#' timeseries_plot(gRs_data, filter_analyte = unique(gRs_data$chem_name)[1:3])
 #'
-#' # Filter to a single analyte
-#' timeseries_plot(data, filter_analyte = "Lead")
+#' # Faceted by location instead, and coloured by analyte
+#' timeseries_plot(
+#'   gRs_data,
+#'   filter_analyte = unique(gRs_data$chem_name)[1:2],
+#'   facet_by = "location"
+#' )
 #'
-#' # Filter to multiple analytes (faceted by analyte with free y-scales)
-#' timeseries_plot(data, filter_analyte = c("Lead", "Copper", "Zinc"))
+#' # Title, axis limits and date formatting
+#' timeseries_plot(
+#'   gRs_data,
+#'   filter_analyte = analyte,
+#'   plot_title = analyte,
+#'   date_break = "3 months",
+#'   date_label = "%Y-%m",
+#'   ymax = 100
+#' )
 #'
-#' # Combine filters: specific locations and analytes
-#' timeseries_plot(data,
-#'                 filter_location = c("LOC_01", "LOC_02"),
-#'                 filter_analyte = c("Lead", "Copper"))
-#'
-#' # Custom column names without quotes
-#' timeseries_plot(data,
-#'                 date_col = sample_date,
-#'                 concentration_col = result,
-#'                 location_col = site_code,
-#'                 analyte_col = parameter)
-#'
-#' # With criteria line
-#' timeseries_plot(data,
-#'                 filter_location = "LOC_01",
-#'                 criteria_col = guideline_value)
-#'
-#' # Custom date formatting and colors
-#' my_colors <- c("Site1" = "blue", "Site2" = "red", "Site3" = "green")
-#' timeseries_plot(data,
-#'                 filter_location = c("Site1", "Site2", "Site3"),
-#'                 location_colours = my_colors,
-#'                 date_break = "3 months",
-#'                 date_label = "%Y-%m")
-#'
-#' # With title and custom y-axis limits
-#' timeseries_plot(data,
-#'                 filter_analyte = "Lead",
-#'                 plot_title = "Lead Concentrations",
-#'                 plot_subtitle = "2020-2024",
-#'                 ymin = 0,
-#'                 ymax = 100)
+#' # A guideline line, from join_action_levels()
+#' \dontrun{
+#' timeseries_plot(compared, filter_analyte = "Copper", criteria_col = criteria)
+#' }
 #'
 #' @importFrom ggplot2 ggplot aes geom_point geom_path scale_colour_manual
 #'   theme_light labs scale_x_datetime theme element_text element_blank
-#'   scale_y_continuous geom_hline ggtitle facet_wrap
+#'   element_rect scale_y_continuous geom_hline ggtitle facet_wrap
 #' @importFrom openair quickText
 #' @importFrom glue glue
 #' @importFrom rlang enquo quo_name quo_is_null !! sym
@@ -114,7 +96,7 @@ timeseries_plot <- function(
   date_col = date,
   concentration_col = concentration,
   location_col = location_code,
-  analyte_col = chem_name,
+  chem_name_col = chem_name,
   date_size = 12,
   date_break = "month",
   date_label = "%b-%y",
@@ -138,14 +120,14 @@ timeseries_plot <- function(
   date_col_q <- rlang::enquo(date_col)
   conc_col_q <- rlang::enquo(concentration_col)
   location_col_q <- rlang::enquo(location_col)
-  analyte_col_q <- rlang::enquo(analyte_col)
+  chem_name_col_q <- rlang::enquo(chem_name_col)
   criteria_col_q <- rlang::enquo(criteria_col)
 
   # Convert to strings for validation
   date_name <- rlang::quo_name(date_col_q)
   conc_name <- rlang::quo_name(conc_col_q)
   location_name <- rlang::quo_name(location_col_q)
-  analyte_name <- rlang::quo_name(analyte_col_q)
+  analyte_name <- rlang::quo_name(chem_name_col_q)
   criteria_name <- rlang::quo_name(criteria_col_q)
 
   # Input validation
@@ -205,7 +187,7 @@ timeseries_plot <- function(
       stop("'filter_analyte' must be a character vector")
     }
 
-    available_analytes <- unique(dplyr::pull(data, !!analyte_col_q))
+    available_analytes <- unique(dplyr::pull(data, !!chem_name_col_q))
     missing_analytes <- setdiff(filter_analyte, available_analytes)
 
     if (length(missing_analytes) > 0) {
@@ -216,7 +198,7 @@ timeseries_plot <- function(
     }
 
     data <- data %>%
-      dplyr::filter(!!analyte_col_q %in% filter_analyte)
+      dplyr::filter(!!chem_name_col_q %in% filter_analyte)
   }
 
   # Check for sufficient data after filtering
@@ -235,7 +217,7 @@ timeseries_plot <- function(
   n_locations_filtered <- length(locations_vec)
 
   # Extract unique analytes (after filtering)
-  analytes_vec <- base::unique(dplyr::pull(data, !!analyte_col_q))
+  analytes_vec <- base::unique(dplyr::pull(data, !!chem_name_col_q))
   n_analytes_filtered <- length(analytes_vec)
 
   # Determine coloring and faceting based on facet_by
@@ -251,88 +233,26 @@ timeseries_plot <- function(
     do_facet_location <- n_locations_filtered > 1
   }
 
-  # Helper to auto-generate a named colour vector for a set of labels
-  .auto_colours <- function(labels) {
-    n <- length(labels)
-    if (requireNamespace("RColorBrewer", quietly = TRUE) && n > 0) {
-      cols <- if (n <= 8) {
-        RColorBrewer::brewer.pal(max(3, n), "Set1")[1:n]
-      } else {
-        grDevices::colorRampPalette(RColorBrewer::brewer.pal(8, "Set1"))(n)
-      }
-    } else {
-      set.seed(1239755)
-      colour <- grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = TRUE)]
-      cols <- sample(colour, size = n, replace = FALSE)
-    }
-    stats::setNames(cols, labels)
-  }
-
-  # Generate colors if not provided (only needed if coloring by location)
-  if (color_by_location && is.null(location_colours)) {
-    n_locations <- length(locations_vec)
-
-    # Try to use RColorBrewer if available
-    if (requireNamespace("RColorBrewer", quietly = TRUE) && n_locations > 0) {
-      if (n_locations <= 8) {
-        colours_vec <- RColorBrewer::brewer.pal(
-          max(3, n_locations),
-          "Set1"
-        )[1:n_locations]
-      } else {
-        colours_vec <- grDevices::colorRampPalette(
-          RColorBrewer::brewer.pal(8, "Set1")
-        )(n_locations)
-      }
-    } else {
-      # Fallback to filtered colors if RColorBrewer not available
-      set.seed(1239755)
-      colour <- grDevices::colors()[grep(
-        'gr(a|e)y',
-        grDevices::colors(),
-        invert = TRUE
-      )]
-      colours_vec <- sample(
-        colour,
-        size = n_locations,
-        replace = FALSE
-      )
-    }
-
-    location_colours <- stats::setNames(colours_vec, locations_vec)
-  } else if (color_by_location && !is.null(location_colours)) {
-    # Validate provided colors
-    if (!is.null(names(location_colours))) {
-      missing_locations <- setdiff(locations_vec, names(location_colours))
-      if (length(missing_locations) > 0) {
+  if (color_by_location) {
+    if (is.null(location_colours)) {
+      location_colours <- gRs_colours(locations_vec)
+    } else if (!is.null(names(location_colours))) {
+      # A named palette covering some locations but not others leaves the rest
+      # unpainted; fill the gaps rather than drop the series. An unnamed vector
+      # is matched positionally by ggplot2 and is left alone.
+      uncoloured <- setdiff(locations_vec, names(location_colours))
+      if (length(uncoloured) > 0) {
         warning(
           "Some locations missing from location_colours: ",
-          paste(missing_locations, collapse = ", "),
-          ". Generating colors for these locations."
+          paste(uncoloured, collapse = ", "),
+          ". Generating colours for these locations."
         )
-        # Generate colors for missing locations
-        set.seed(1239755)
-        colour <- grDevices::colors()[grep(
-          'gr(a|e)y',
-          grDevices::colors(),
-          invert = TRUE
-        )]
-        additional_colours <- sample(
-          colour,
-          size = length(missing_locations),
-          replace = FALSE
-        )
-        additional_colours <- stats::setNames(
-          additional_colours,
-          missing_locations
-        )
-        location_colours <- c(location_colours, additional_colours)
+        location_colours <- c(location_colours, gRs_colours(uncoloured))
       }
     }
   }
 
-  # Generate analyte colours when faceting by location
-  analyte_colours <- if (color_by_analyte) .auto_colours(analytes_vec) else NULL
+  analyte_colours <- if (color_by_analyte) gRs_colours(analytes_vec) else NULL
 
   # Set date range if not provided
   if (is.null(dates_range)) {
@@ -381,7 +301,7 @@ timeseries_plot <- function(
   } else if (color_by_analyte) {
     plot <- data %>%
       ggplot2::ggplot(
-        ggplot2::aes(x = !!date_col_q, y = !!conc_col_q, colour = !!analyte_col_q)
+        ggplot2::aes(x = !!date_col_q, y = !!conc_col_q, colour = !!chem_name_col_q)
       ) +
       ggplot2::geom_point(size = 0.6, alpha = 0.5) +
       ggplot2::geom_path() +
@@ -422,15 +342,15 @@ timeseries_plot <- function(
       ),
       axis.title.y = ggplot2::element_text(size = y_title_size),
       axis.text.x = ggplot2::element_text(angle = x_angle, size = date_size),
-      strip.background = element_rect(fill = NA, colour = 'black'),
-      strip.text = element_text(colour = "black")
+      strip.background = ggplot2::element_rect(fill = NA, colour = 'black'),
+      strip.text = ggplot2::element_text(colour = "black")
     )
 
   # Add faceting
   if (do_facet_analyte) {
     plot <- plot +
       ggplot2::facet_wrap(
-        rlang::as_label(analyte_col_q),
+        rlang::as_label(chem_name_col_q),
         scales = "free_y",
         ncol = n_facet_cols
       )
@@ -444,7 +364,7 @@ timeseries_plot <- function(
   }
 
   # Add criteria line if specified
-  if (criteria_given && criteria_name %in% names(data)) {
+  if (criteria_given) {
     criteria_value <- unique(dplyr::pull(data, !!criteria_col_q))
     criteria_value <- criteria_value[!is.na(criteria_value)]
 

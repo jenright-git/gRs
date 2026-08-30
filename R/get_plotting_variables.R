@@ -1,8 +1,12 @@
 #' Extract plotting variables from data
 #'
-#' This function extracts key plotting variables from a dataset and returns them
-#' as a list. Unlike the original establish_plotting_variables(), this function
-#' does not use global assignment and returns all variables in a structured list.
+#' Pulls the analytes, locations, date range, monitoring zones and location
+#' colour palette out of a chemistry table in one pass, so a plotting script
+#' derives them once instead of recomputing them per plot. [plot_by_analyte()]
+#' uses it internally.
+#'
+#' Where `monitoring_zone` is absent or entirely missing, `site_id` stands in
+#' for it and a message says so.
 #'
 #' @param data A tibble or data frame containing the data to extract variables from
 #' @param location_col Name of the column containing location codes.
@@ -17,9 +21,9 @@
 #'   Can be provided with or without quotes. Default is monitoring_zone
 #' @param site_id_col Name of the column containing site IDs (used as fallback
 #'   for monitoring zones). Can be provided with or without quotes. Default is site_id
-#' @param seed Numeric. Random seed for reproducible color generation. Default is 1239755
-#' @param use_rcolorbrewer Logical. Should RColorBrewer be used if available?
-#'   Default is TRUE
+#' @param seed Numeric. Seed for the fallback colour palette, used only when
+#'   RColorBrewer is not installed. Applied through [withr::with_seed()], so
+#'   the caller's random stream is left as it was. Default is 1239755
 #'
 #' @return A list containing:
 #' \describe{
@@ -60,8 +64,7 @@ get_plotting_variables <- function(
   date_col = date,
   monitoring_zone_col = monitoring_zone,
   site_id_col = site_id,
-  seed = 1239755,
-  use_rcolorbrewer = TRUE
+  seed = 1239755
 ) {
   # Quote the column name arguments
   location_col_q <- rlang::enquo(location_col)
@@ -148,48 +151,10 @@ get_plotting_variables <- function(
   locations_vec <- base::unique(dplyr::pull(data, !!location_col_q))
   n_locations <- length(locations_vec)
 
-  # Set seed for reproducibility
-  if (!is.null(seed)) {
-    set.seed(seed)
-  }
+  location_colours <- gRs_colours(locations_vec, seed = seed)
+  colours_vec <- unname(location_colours)
 
-  # Generate color palette
-  if (
-    use_rcolorbrewer &&
-      requireNamespace("RColorBrewer", quietly = TRUE) &&
-      n_locations > 0
-  ) {
-    # Use RColorBrewer if available
-    if (n_locations <= 8) {
-      colours_vec <- RColorBrewer::brewer.pal(
-        max(3, n_locations),
-        "Set1"
-      )[1:n_locations]
-    } else {
-      # For more locations, create a larger palette
-      colours_vec <- grDevices::colorRampPalette(
-        RColorBrewer::brewer.pal(8, "Set1")
-      )(n_locations)
-    }
-  } else {
-    # Fallback to filtered colors if RColorBrewer not available
-    colour <- grDevices::colors()[grep(
-      'gr(a|e)y',
-      grDevices::colors(),
-      invert = TRUE
-    )]
-    colours_vec <- sample(
-      colour,
-      size = n_locations,
-      replace = FALSE
-    )
-  }
-
-  # Assign locations to colours
-  location_colours <- stats::setNames(colours_vec, locations_vec)
-
-  # Return all variables in a list
-  result <- list(
+  list(
     chem_group = chem_group,
     analytes = analytes,
     date_range = date_range,
@@ -201,6 +166,4 @@ get_plotting_variables <- function(
     n_analytes = length(analytes),
     n_zones = length(zones)
   )
-
-  return(result)
 }

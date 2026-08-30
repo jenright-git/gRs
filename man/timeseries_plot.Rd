@@ -11,7 +11,7 @@ timeseries_plot(
   date_col = date,
   concentration_col = concentration,
   location_col = location_code,
-  analyte_col = chem_name,
+  chem_name_col = chem_name,
   date_size = 12,
   date_break = "month",
   date_label = "\%b-\%y",
@@ -52,7 +52,7 @@ Can be provided with or without quotes. Default is concentration}
 \item{location_col}{Name of the column containing location codes.
 Can be provided with or without quotes. Default is location_code}
 
-\item{analyte_col}{Name of the column containing analyte/chemical names.
+\item{chem_name_col}{Name of the column containing analyte/chemical names.
 Can be provided with or without quotes. Default is chem_name}
 
 \item{date_size}{Numeric. Size of x-axis date labels. Default is 12}
@@ -111,52 +111,34 @@ A ggplot2 object
 Timeseries Plot with standard formatting
 }
 \examples{
-# Basic usage with default column names
-timeseries_plot(data)
+analyte <- gRs_data$chem_name[1]
 
-# Filter to a single location
-timeseries_plot(data, filter_location = "LOC_01")
+# Every location, one analyte
+timeseries_plot(gRs_data, filter_analyte = analyte)
 
-# Filter to multiple locations (colored by location)
-timeseries_plot(data, filter_location = c("LOC_01", "LOC_02", "LOC_03"))
+# Several analytes - faceted, with free y-scales
+timeseries_plot(gRs_data, filter_analyte = unique(gRs_data$chem_name)[1:3])
 
-# Filter to a single analyte
-timeseries_plot(data, filter_analyte = "Lead")
+# Faceted by location instead, and coloured by analyte
+timeseries_plot(
+  gRs_data,
+  filter_analyte = unique(gRs_data$chem_name)[1:2],
+  facet_by = "location"
+)
 
-# Filter to multiple analytes (faceted by analyte with free y-scales)
-timeseries_plot(data, filter_analyte = c("Lead", "Copper", "Zinc"))
+# Title, axis limits and date formatting
+timeseries_plot(
+  gRs_data,
+  filter_analyte = analyte,
+  plot_title = analyte,
+  date_break = "3 months",
+  date_label = "\%Y-\%m",
+  ymax = 100
+)
 
-# Combine filters: specific locations and analytes
-timeseries_plot(data,
-                filter_location = c("LOC_01", "LOC_02"),
-                filter_analyte = c("Lead", "Copper"))
-
-# Custom column names without quotes
-timeseries_plot(data,
-                date_col = sample_date,
-                concentration_col = result,
-                location_col = site_code,
-                analyte_col = parameter)
-
-# With criteria line
-timeseries_plot(data,
-                filter_location = "LOC_01",
-                criteria_col = guideline_value)
-
-# Custom date formatting and colors
-my_colors <- c("Site1" = "blue", "Site2" = "red", "Site3" = "green")
-timeseries_plot(data,
-                filter_location = c("Site1", "Site2", "Site3"),
-                location_colours = my_colors,
-                date_break = "3 months",
-                date_label = "\%Y-\%m")
-
-# With title and custom y-axis limits
-timeseries_plot(data,
-                filter_analyte = "Lead",
-                plot_title = "Lead Concentrations",
-                plot_subtitle = "2020-2024",
-                ymin = 0,
-                ymax = 100)
+# A guideline line, from join_action_levels()
+\dontrun{
+timeseries_plot(compared, filter_analyte = "Copper", criteria_col = criteria)
+}
 
 }
