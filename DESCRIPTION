@@ -35,6 +35,7 @@ Imports:
     withr,
     writexl
 Suggests:
+    gt,
     RColorBrewer
 Depends:
     R (>= 3.5)
