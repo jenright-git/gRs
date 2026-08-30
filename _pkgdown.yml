@@ -1,0 +1,55 @@
+url: https://jenright-git.github.io/gRs/
+template:
+  bootstrap: 5
+
+reference:
+- title: Reading exports
+  desc: Read an esdat or EQuIS export and normalise it to a shared set of
+    column names.
+  contents:
+  - data_processor
+  - action_level_processor
+
+- title: Preparing results
+  desc: Collapse duplicates, substitute non-detects, and compare against
+    guideline values.
+  contents:
+  - select_max_concentration
+  - half_lor
+  - join_action_levels
+  - criteria_long
+
+- title: Summarising
+  desc: Summarise a monitoring round or the whole record, and format the
+    result for a report.
+  contents:
+  - analyte_summary
+  - exceedance_summary
+  - historical_range
+  - min_max_locations
+  - summary_stats
+  - create_gt
+  - create_dt
+
+- title: Trend analysis
+  contents:
+  - mann_kendall_test
+  - mk_analysis
+  - mann_kendall_heatmap
+  - mann_kendall_heatmap_bw
+
+- title: Plotting
+  contents:
+  - timeseries_plot
+  - plot_by_analyte
+  - get_plotting_variables
+  - scale_limitval
+
+- title: Data
+  contents:
+  - gRs_data
+
+- title: Utilities
+  contents:
+  - zero_row_tibble
+  - "%>%"
