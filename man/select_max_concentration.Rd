@@ -8,7 +8,7 @@ select_max_concentration(
   data,
   location_col = location_code,
   date_col = date,
-  chem_col = chem_name,
+  chem_name_col = chem_name,
   concentration_col = concentration,
   prefix_col = prefix,
   sample_type_col = sample_type,
@@ -25,7 +25,7 @@ Can be provided with or without quotes. Default is location_code}
 \item{date_col}{Name of the column containing sample dates.
 Can be provided with or without quotes. Default is date}
 
-\item{chem_col}{Name of the column containing analyte names.
+\item{chem_name_col}{Name of the column containing analyte names.
 Can be provided with or without quotes. Default is chem_name}
 
 \item{concentration_col}{Name of the column containing concentration values.
@@ -45,42 +45,44 @@ A tibble with the same columns as \code{data} but with duplicate/triplicate
 groups collapsed to one row each. Row order is not guaranteed.
 }
 \description{
-Reduces field duplicate (Field_D) and interlaboratory duplicate (Interlab_D)
-sample groups to a single representative row per location, date, and analyte.
-For groups containing duplicate samples, detected results are preferred over
-non-detects; if all are non-detects, the row with the highest LOR is returned.
-Groups with only primary samples pass through unchanged.
+Reduces each location/date/analyte group to a single representative row.
+Where the group holds a field duplicate (\code{Field_D}) or an interlaboratory
+duplicate (\code{Interlab_D}), detected results are preferred over non-detects,
+and the highest of them is kept; if every result is a non-detect, the row
+with the highest LOR is returned.
 }
 \details{
+A group holding a single result is returned as it stands. A group holding
+several results none of which is flagged as a duplicate is a data quality
+problem rather than a duplicate pair - the highest concentration is still
+returned, so the output is one row per location, date and analyte either
+way.
+
 Intended for use after \code{\link[=data_processor]{data_processor()}} and before \code{\link[=half_lor]{half_lor()}}.
 }
 \examples{
-library(dplyr)
-
-# Build a small example with a primary and a field duplicate
-test_data <- tibble::tribble(
-  ~location_code, ~date,       ~chem_name, ~concentration, ~prefix, ~sample_type,
-  "MW01", as.Date("2024-01-15"), "Benzene",  5.2,  "=", "Normal",
-  "MW01", as.Date("2024-01-15"), "Benzene",  6.1,  "=", "Field_D",
-  "MW02", as.Date("2024-01-15"), "Benzene",  1.0,  "<", "Normal"
+# A primary sample and its field duplicate, plus an unduplicated location
+samples <- dplyr::tribble(
+  ~location_code, ~date, ~chem_name, ~concentration, ~prefix, ~sample_type,
+  "MW01", as.Date("2024-01-15"), "Benzene", 5.2, "=", "Normal",
+  "MW01", as.Date("2024-01-15"), "Benzene", 6.1, "=", "Field_D",
+  "MW02", as.Date("2024-01-15"), "Benzene", 1.0, "<", "Normal"
 )
 
-# Default usage — Field_D row returned for MW01 (higher concentration)
-select_max_concentration(test_data)
+# The Field_D row wins for MW01; MW02 passes through
+select_max_concentration(samples)
 
-# Custom duplicate_types
-select_max_concentration(test_data, duplicate_types = c("Field_D", "Interlab_D", "Field_T"))
-
-# Custom column names (with or without quotes)
-select_max_concentration(test_data,
-                         location_col = location_code,
-                         concentration_col = concentration)
+# Triplicates too
+select_max_concentration(
+  samples,
+  duplicate_types = c("Field_D", "Interlab_D", "Field_T")
+)
 
 # Typical workflow
 \dontrun{
-gRs_data <- data_processor("my_file.xlsx") |>
+data_processor("my_file.xlsx") |>
   select_max_concentration() |>
-  half_lor(multiplier = 0.5)
+  half_lor(lor_multiplier = 0.5)
 }
 
 }
