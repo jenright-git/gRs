@@ -5,26 +5,75 @@
 \alias{gRs_data}
 \title{Example environmental monitoring dataset}
 \format{
-A data frame with columns including:
+A data frame with 1,232 rows and 53 columns:
 \describe{
-\item{date}{Sample date (POSIXct)}
-\item{location_code}{Monitoring location identifier}
-\item{chem_name}{Chemical/analyte name}
-\item{chem_group}{Chemical group classification}
-\item{concentration}{Measured concentration value}
-\item{prefix}{Qualifier prefix (e.g. "<" for less than LOR, "=" for detected)}
-\item{output_unit}{Unit of concentration measurement}
-\item{site_id}{Site identifier}
-\item{monitoring_zone}{Monitoring zone classification}
+\item{x_coord}{numeric}
+\item{y_coord}{numeric}
+\item{latitude}{numeric}
+\item{longitude}{numeric}
+\item{site_id}{character}
+\item{project_id}{character}
+\item{monitoring_zone}{character}
+\item{sample_code}{character}
+\item{field_id}{character}
+\item{location_code}{character}
+\item{alternative_name}{numeric}
+\item{well}{numeric}
+\item{monitoring_unit}{numeric}
+\item{sample_elevation}{numeric}
+\item{sample_depth_avg}{numeric}
+\item{sampled_date_time}{POSIXct}
+\item{monitoring_round}{character}
+\item{sdg}{numeric}
+\item{chem_name}{character}
+\item{fraction}{character}
+\item{prefix}{character}
+\item{detect_flag}{character}
+\item{concentration}{numeric}
+\item{output_unit}{character}
+\item{chem_code}{character}
+\item{chem_name_abbrev}{character}
+\item{chem_group}{character}
+\item{method_type}{character}
+\item{method_name}{character}
+\item{eql}{numeric}
+\item{eql_units}{numeric}
+\item{lab_comments}{numeric}
+\item{lab_report_number}{numeric}
+\item{lab_name}{numeric}
+\item{location_type}{character}
+\item{sample_type}{character}
+\item{matrix_type}{character}
+\item{matrix_state}{character}
+\item{env_stds_conditional_matrix_type}{numeric}
+\item{sample_comments}{character}
+\item{qualifier}{numeric}
+\item{result_comments}{numeric}
+\item{data_source}{numeric}
+\item{id}{numeric}
+\item{sid}{numeric}
+\item{pid}{numeric}
+\item{metadata_id}{numeric}
+\item{elevation}{numeric}
+\item{purpose}{character}
+\item{description1}{character}
+\item{description2}{numeric}
+\item{description3}{numeric}
+\item{date}{POSIXct}
 }
 }
 \source{
-Synthetic example data for package demonstration
+An esdat chemistry export, anonymised for use as example data.
 }
 \usage{
 gRs_data
 }
 \description{
-A sample dataset for use in examples and testing of gRs package functions.
+A groundwater chemistry export read through \code{\link[=data_processor]{data_processor()}}, kept whole
+rather than trimmed so that examples exercise the same shape of table a
+real esdat export produces. Most columns are carried through from the
+export untouched; the ones the package's functions read by name are
+\code{date}, \code{location_code}, \code{chem_name}, \code{chem_group}, \code{concentration},
+\code{prefix}, \code{detect_flag}, \code{output_unit}, \code{site_id} and \code{monitoring_zone}.
 }
 \keyword{datasets}
