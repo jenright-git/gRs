@@ -1,15 +1,19 @@
 Package: gRs
-Title: Tools to process and analyse surfacewater and groundwater data from esdat
+Title: Process and Analyse Environmental Data from esdat and EQuIS
 Version: 0.0.0.9000
-Authors@R: 
-    person("James", "Enright", , "first.last@example.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: Convenience functions to process and analyse environmental data.
+Authors@R:
+    person("James", "Enright", , "jamesenright43@gmail.com", role = c("aut", "cre"))
+Description: Convenience functions to read surface water, groundwater and
+    soil chemistry exports from esdat and EQuIS, normalise them to a shared
+    set of column names, compare results against action levels, summarise
+    them, and test them for trends.
+URL: https://github.com/jenright-git/gRs, https://jenright-git.github.io/gRs/
+BugReports: https://github.com/jenright-git/gRs/issues
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-Imports: 
+Imports:
     dplyr,
     DT,
     ggplot2,
@@ -31,5 +35,5 @@ Imports:
 Suggests:
     RColorBrewer
 Depends:
-    R (>= 2.10)
+    R (>= 3.5)
 LazyData: true

@@ -2,3 +2,13 @@
 ^\.Rproj\.user$
 ^LICENSE\.md$
 ^README\.Rmd$
+^\.claude$
+^example_reports$
+^example_action_levels\.R$
+^dup_test\.xlsx$
+^\.github$
+^docs$
+^_pkgdown\.yml$
+^data-raw$
+^planned_functions\.txt$
+^trial\.R$
