@@ -56,3 +56,5 @@ test_select_max_concentration.R
 
 # example reports
 example_reports/
+# knitted README preview
+README.html
