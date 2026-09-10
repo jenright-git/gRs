@@ -192,6 +192,9 @@ mka_to_excel(trends, save_path = "output/MKA Trend Summary.xlsx")
 
 # Recolour one category and leave the rest alone
 mka_to_excel(trends, trend_colours = c(Increasing = "#E06666"))
+
+# Group the wells by monitoring zone, read out of the nested data
+mka_to_excel(trends, include_zone = TRUE)
 ```
 
 ## Plotting

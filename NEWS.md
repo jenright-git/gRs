@@ -28,6 +28,22 @@
   favourable, built from whatever palette was used, so a recoloured workbook
   stays self-documenting. `legend = FALSE` omits it.
 
+  `include_zone = TRUE` writes the monitoring zone as a further column ahead of
+  the well names, sorts the rows by zone and then well, and merges each zone's
+  repeated cells into one block, so a suite reads zone by zone. Because
+  `mann_kendall_test()` nests by location and analyte, the zone is not a column
+  of its output; it is read back out of the nested `data` column, so no join is
+  needed first. A well that falls in two zones is an error rather than a
+  silently duplicated row. `merge_zones = FALSE` leaves a value in every row for
+  sorting and filtering, `zone_label` sets the heading, and `zone_col` names the
+  column where it is not `monitoring_zone`.
+
+  The well names are set a shade back from the zone beside them - `#9BBEAF`
+  against the zone's deep green - so the grouping reads at a glance. The header
+  row above stays one colour across. `location_fill` and `location_font` change
+  those names. Without a zone column the well names keep the deep green they
+  always had.
+
 # gRs 0.1.0
 
 ## New features

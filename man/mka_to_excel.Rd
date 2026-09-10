@@ -18,13 +18,20 @@ mka_to_excel(
   overwrite = TRUE,
   location_col = location_code,
   chem_name_col = chem_name,
-  trend_col = trend
+  trend_col = trend,
+  include_zone = FALSE,
+  merge_zones = TRUE,
+  zone_label = "Monitoring Zone",
+  zone_col = monitoring_zone,
+  location_fill = "#9BBEAF",
+  location_font = header_font
 )
 }
 \arguments{
 \item{data}{tibble from \code{\link[=mann_kendall_test]{mann_kendall_test()}}. Only the location, analyte
 and trend columns are used; the nested \code{data} column and the test
-statistics are ignored, so there is no need to drop them first.}
+statistics are ignored, so there is no need to drop them first - though
+\code{include_zone = TRUE} reads the zone back out of that nested column.}
 
 \item{save_path}{full file path, including filename, for the workbook. The
 directory is created if it does not exist. Defaults to
@@ -67,6 +74,35 @@ Can be provided with or without quotes. Default is chem_name}
 
 \item{trend_col}{Name of the column containing the trend category.
 Can be provided with or without quotes. Default is trend}
+
+\item{include_zone}{write the monitoring zone as the first column, ahead of
+the location names, and sort the rows by zone. Default \code{FALSE}, which
+lays the sheet out as before.}
+
+\item{merge_zones}{merge each zone's repeated cells into a single block, so
+the zone is named once against its wells. Default \code{TRUE}. Set \code{FALSE} to
+leave a value in every row, which is what Excel's sort, filter and pivot
+tools want. Ignored unless \code{include_zone = TRUE}.}
+
+\item{zone_label}{heading for the zone column. Default
+\code{"Monitoring Zone"}.}
+
+\item{zone_col}{Name of the column containing monitoring zones. Can be
+provided with or without quotes. Default is monitoring_zone. Where \code{data}
+has no such column of its own, the zone is read out of the nested \code{data}
+column that \code{\link[=mann_kendall_test]{mann_kendall_test()}} returns. Locations with no zone
+recorded are left blank.}
+
+\item{location_fill}{background colour for the location names, where a zone
+column sits to their left. Default \code{"#9BBEAF"}, a lighter sage against the
+zone's deep green. The heading above them is part of the header row and
+stays \code{header_fill}. Ignored unless \code{include_zone = TRUE}, since with no
+zone beside them the location names take \code{header_fill} too.}
+
+\item{location_font}{text colour for those same names. Defaults to
+\code{header_font}, so white unless changed - note that white on the default
+\code{location_fill} is a contrast ratio of about 2:1, and a dark green such as
+\code{"#14401F"} reads better if the sheet is to be printed.}
 }
 \value{
 The wide tibble that was written, invisibly - locations down,
@@ -87,12 +123,31 @@ because they had too few samples or too few detects, are absent from its
 output and so come through the pivot as \code{NA}. They are written as
 \code{na_label} rather than left blank, so a gap in the table reads as "not
 calculated" rather than as an oversight.
+
+With \code{include_zone = TRUE} the monitoring zone is written as a further
+column to the left of the location names, the rows are sorted by zone and
+then location so each zone's wells sit together, and the repeated zone
+cells of a block are merged into one, and the location names are set a
+shade back from the zone beside them, in \code{location_fill}, so the grouping
+reads at a glance. \code{\link[=mann_kendall_test]{mann_kendall_test()}} nests by
+location and analyte, so the zone is not a column of its output; where
+\code{data} has no zone column of its own it is recovered from that nested
+\code{data} column, and a location falling in more than one zone is an error
+rather than a silently duplicated row.
 }
 \examples{
 trends <- mann_kendall_test(gRs_data)
 
 out <- mka_to_excel(trends, save_path = tempfile(fileext = ".xlsx"))
 out[, 1:3]
+
+# Group the wells by monitoring zone, read back out of the nested data
+zoned <- mka_to_excel(
+  trends,
+  save_path = tempfile(fileext = ".xlsx"),
+  include_zone = TRUE
+)
+zoned[, 1:3]
 
 \dontrun{
 # Default filename, in the working directory
@@ -103,6 +158,12 @@ mka_to_excel(trends, trend_colours = c(Increasing = "#E06666"))
 
 # No legend sheet, blank cells instead of "NC"
 mka_to_excel(trends, legend = FALSE, na_label = "")
+
+# Zones down the side, but a value in every row so the sheet still filters
+mka_to_excel(trends, include_zone = TRUE, merge_zones = FALSE)
+
+# Darker text on the well names, for printing
+mka_to_excel(trends, include_zone = TRUE, location_font = "#14401F")
 }
 
 }
