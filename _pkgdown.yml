@@ -37,6 +37,7 @@ reference:
   - mk_analysis
   - mann_kendall_heatmap
   - mann_kendall_heatmap_bw
+  - mka_to_excel
 
 - title: Plotting
   contents:

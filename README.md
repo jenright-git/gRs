@@ -264,6 +264,15 @@ mann_kendall_heatmap(trends, width = 18)
 
 <img src="man/figures/README-trend-heatmap-1.png" width="100%"/>
 
+`mka_to_excel()` writes the same grid to a formatted workbook - analytes across the top, trends in the cells, coloured by direction - with a second sheet explaining the categories.
+
+``` r
+mka_to_excel(trends, save_path = "output/MKA Trend Summary.xlsx")
+
+# Recolour one category and leave the rest alone
+mka_to_excel(trends, trend_colours = c(Increasing = "#E06666"))
+```
+
 ## Plotting
 
 `timeseries_plot()` facets by analyte and colours by location.

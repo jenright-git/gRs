@@ -1,3 +1,33 @@
+# gRs (development version)
+
+## New features
+
+* `mka_to_excel()` writes the output of `mann_kendall_test()` to a formatted
+  Excel workbook: one row per location, one column per analyte, the trend in
+  each cell, and the cell filled by trend direction - green for decreasing
+  through neutral grey to orange for increasing. Analyte headers are rotated so
+  a wide suite still fits on a page, and the first row and column are frozen so
+  the well name stays visible while scrolling across.
+
+  Location/analyte pairs the test could not reach - too few samples, too few
+  detects - are absent from its output and so pivot to `NA`. They are written
+  as `"NC"` rather than left blank, so a gap reads as "not calculated" rather
+  than as an oversight. `na_label` sets that text.
+
+  The analyte headings across the top and the location names down the side are
+  set in white on a deep green, as is the legend's header row. `header_fill` and
+  `header_font` change both sheets together.
+
+  Colours are passed as a named vector or list keyed by trend category, e.g.
+  `trend_colours = c(Increasing = "#E06666")`. Only the categories named are
+  changed, so one colour can be overridden without restating the rest;
+  `font_colours` sets the text colours the same way. A category the palette
+  does not name is left unformatted with a warning rather than failing.
+
+  A second sheet explains what each category means and whether it is
+  favourable, built from whatever palette was used, so a recoloured workbook
+  stays self-documenting. `legend = FALSE` omits it.
+
 # gRs 0.1.0
 
 ## New features
