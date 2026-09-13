@@ -4,6 +4,8 @@
 
 <!-- badges: start -->
 
+[![R-CMD-check](https://github.com/jenright-git/gRs/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/jenright-git/gRs/actions/workflows/R-CMD-check.yaml)
+
 <!-- badges: end -->
 
 An R package for reading, analysing and visualising esdat and EQuIS environmental data.
