@@ -11,5 +11,18 @@
       "Bash(cat)",
       "Bash(\"/c/Users/Enrightj/AppData/Local/Programs/R/R-4.5.1/bin/Rscript.exe\" /tmp/inspect_xlsx.R)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
   }
 }
