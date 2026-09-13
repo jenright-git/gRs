@@ -59,7 +59,8 @@
 #' @importFrom ggplot2 ggsave geom_smooth
 #' @importFrom glue glue
 #' @importFrom purrr pmap
-#' @importFrom tidyr crossing tibble
+#' @importFrom tidyr crossing
+#' @importFrom tibble tibble
 #' @importFrom rlang enquo quo_name !! :=
 
 plot_by_analyte <- function(
@@ -106,19 +107,17 @@ plot_by_analyte <- function(
     stop("'data' must be a data frame or tibble")
   }
 
-  required_cols <- c(
-    location_name,
-    chem_name_name,
-    chem_group_name,
-    date_name,
-    conc_name,
-    unit_name
+  require_columns(
+    data,
+    c(
+      location_name,
+      chem_name_name,
+      chem_group_name,
+      date_name,
+      conc_name,
+      unit_name
+    )
   )
-  missing_cols <- required_cols[!required_cols %in% names(data)]
-
-  if (length(missing_cols) > 0) {
-    stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
-  }
 
   if (nrow(data) == 0) {
     stop("Data contains no rows")
@@ -128,7 +127,20 @@ plot_by_analyte <- function(
     stop("'save_path' must be a character string or NULL")
   }
 
-  # Get plotting variables
+  # Zones are resolved before the plotting variables are derived, not after.
+  # Every plot is written into a zone, so a table with no zone to group by has
+  # nothing to draw and stops here - and resolving first means the zone column
+  # is already filled when get_plotting_variables() looks at it, so the
+  # fallback is reported once rather than by both.
+  zoned <- resolve_zone_column(
+    data,
+    zone_col_q,
+    site_col_q,
+    on_missing = "error"
+  )
+  data <- zoned$data
+  zones <- zoned$zones
+
   plot_vars <- get_plotting_variables(
     data,
     location_col = !!location_col_q,
@@ -141,28 +153,7 @@ plot_by_analyte <- function(
 
   analytes <- plot_vars$analytes
   date_range <- plot_vars$date_range
-  zones <- plot_vars$zones
   location_colours <- plot_vars$location_colours
-
-  # Handle monitoring zones
-  if (zone_name %in% names(data)) {
-    zone_values <- dplyr::pull(data, !!zone_col_q)
-    if (all(is.na(zone_values))) {
-      if (site_name %in% names(data)) {
-        data <- data %>%
-          dplyr::mutate(!!zone_col_q := !!site_col_q)
-        message("Using site_id as monitoring_zone")
-      } else {
-        stop("monitoring_zone is all NA and site_id column not found")
-      }
-    }
-  } else if (site_name %in% names(data)) {
-    data <- data %>%
-      dplyr::mutate(!!zone_col_q := !!site_col_q)
-    message("monitoring_zone column not found. Using site_id")
-  } else {
-    stop("Neither monitoring_zone nor site_id column found")
-  }
 
   # Where each zone's plots are written. With create_dirs = FALSE they all go
   # to save_path itself, and the zone is carried in the file name instead -
@@ -198,7 +189,7 @@ plot_by_analyte <- function(
 
   one_plot <- function(analyte_val, zone_val) {
     row <- function(status, filepath = NA_character_) {
-      tidyr::tibble(
+      tibble::tibble(
         monitoring_zone = zone_val,
         chem_name = analyte_val,
         filepath = as.character(filepath),

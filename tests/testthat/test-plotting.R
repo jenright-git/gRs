@@ -21,7 +21,10 @@ test_that("a missing column is named rather than failing inside ggplot2", {
   data <- chem_fixture()
   data$concentration <- NULL
 
-  expect_error(timeseries_plot(data), "Missing required columns: concentration")
+  expect_error(
+    timeseries_plot(data),
+    "`data` is missing required columns: concentration"
+  )
 })
 
 test_that("filtering to nothing is an error, not an empty plot", {

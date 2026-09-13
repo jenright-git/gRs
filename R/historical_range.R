@@ -102,8 +102,8 @@
 #'   [select_max_concentration()] to collapse duplicates beforehand, and
 #'   [create_gt()] to format the result.
 #' @importFrom dplyr group_by group_modify ungroup across all_of arrange desc
-#'   tibble
-#' @importFrom rlang enquo quo_name quo_is_null
+#' @importFrom tibble tibble
+#' @importFrom rlang enquo as_label abort caller_env
 historical_range <- function(
   data,
   group_vars = "location_code",
@@ -122,18 +122,10 @@ historical_range <- function(
   }
   keep <- match.arg(keep)
 
-  value_name <- rlang::quo_name(rlang::enquo(criteria_col))
+  value_name <- quo_column_name(rlang::enquo(criteria_col))
   cmp <- comparison_columns(value_name)
 
-  required <- c("chem_name", "concentration", "detect_flag")
-  missing <- setdiff(required, names(data))
-  if (length(missing) > 0) {
-    stop(
-      "`data` is missing required columns: ",
-      paste(missing, collapse = ", "),
-      ". Pass a table from data_processor()."
-    )
-  }
+  require_columns(data, c("chem_name", "concentration", "detect_flag"))
 
   if (!is.null(spike_factor)) {
     spike_factor <- as.numeric(spike_factor)[[1]]
@@ -148,24 +140,20 @@ historical_range <- function(
     )
   }
 
-  round_q <- rlang::enquo(round_col)
-  round_name <- if (rlang::quo_is_null(round_q)) {
-    NULL
-  } else {
-    rlang::quo_name(round_q)
-  }
-  picked <- resolve_round(data, round_name, round, quiet = quiet)
+  prepared <- prepare_round_summary(
+    data,
+    required = character(0),
+    round_col = quo_column_name(rlang::enquo(round_col)),
+    round = round,
+    group_vars = group_vars,
+    value_name = value_name,
+    include_criteria = include_criteria,
+    quiet = quiet
+  )
+  picked <- prepared$picked
+  groups <- prepared$groups
+  include_criteria <- prepared$include_criteria
 
-  if (is.null(include_criteria)) {
-    include_criteria <- value_name %in% names(data)
-  } else if (include_criteria && !value_name %in% names(data)) {
-    stop(
-      "`data` has no '",
-      value_name,
-      "' column. Join a guideline set onto it with join_action_levels(), or ",
-      "name the column it was joined into with `criteria_col`."
-    )
-  }
   if (identical(keep, "exceedance") && !include_criteria) {
     stop(
       "`keep = \"exceedance\"` needs a guideline to compare against. Join one ",
@@ -173,27 +161,7 @@ historical_range <- function(
     )
   }
 
-  group_vars <- if (is.null(group_vars)) {
-    character(0)
-  } else {
-    as.character(group_vars)
-  }
-  unknown <- setdiff(group_vars, names(data))
-  if (length(unknown) > 0) {
-    stop(
-      "`group_vars` names columns `data` does not have: ",
-      paste(unknown, collapse = ", "),
-      "."
-    )
-  }
-  groups <- unique(c(
-    group_vars,
-    "chem_name",
-    intersect(c("output_unit", "criteria_set"), names(data))
-  ))
-
-  date_q <- rlang::enquo(date_col)
-  date_name <- rlang::quo_name(date_q)
+  date_name <- quo_column_name(rlang::enquo(date_col))
 
   work <- data
   work$.current <- picked$is_current
@@ -211,9 +179,7 @@ historical_range <- function(
       "`data` has no '",
       date_name,
       "' column, so every result outside ",
-      picked$col,
-      " = ",
-      format(picked$value),
+      round_label(picked),
       " is treated as history - including any collected after it. Name the ",
       "date column with `date_col`."
     )
@@ -221,14 +187,7 @@ historical_range <- function(
 
   if (include_criteria) {
     work$.criteria <- suppressWarnings(as.numeric(work[[value_name]]))
-    work$.exceedance <- if (cmp[["exceedance"]] %in% names(work)) {
-      as.logical(work[[cmp[["exceedance"]]]])
-    } else {
-      !is.na(work$detect_flag) &
-        work$detect_flag == "Y" &
-        !is.na(work$.criteria) &
-        suppressWarnings(as.numeric(work$concentration)) > work$.criteria
-    }
+    work$.exceedance <- exceedance_verdict(work, value_name, cmp)
   }
 
   out <- work %>%
@@ -259,9 +218,7 @@ historical_range <- function(
   if (nrow(out) == 0 && !quiet) {
     message(
       "historical_range(): nothing in ",
-      picked$col,
-      " = ",
-      format(picked$value),
+      round_label(picked),
       " met keep = \"",
       keep,
       "\"",
@@ -300,28 +257,20 @@ historical_range <- function(
 #' @returns a one-row tibble
 #' @noRd
 historical_row <- function(df, key, spike_factor, include_criteria) {
-  conc <- suppressWarnings(as.numeric(df$concentration))
-  detect <- !is.na(df$detect_flag) & df$detect_flag == "Y"
-  usable <- !is.na(conc)
+  g <- group_vectors(df)
+  conc <- g$conc
+  detect <- g$detect
+  usable <- g$usable
+  prefix <- g$prefix
   cur <- df$.current
   hist <- !cur
-  prefix <- if ("prefix" %in% names(df)) {
-    as.character(df$prefix)
-  } else {
-    rep(NA_character_, nrow(df))
-  }
 
-  # Indexed back into the full vectors, so the prefix always belongs to the
-  # value reported beside it.
-  pick <- function(mask, choose) {
-    i <- which(mask & usable)
-    if (length(i) == 0) integer(0) else i[[choose(conc[i])]]
-  }
+  pick <- function(mask, choose) pick_within(conc, usable, mask, choose)
   min_i <- pick(hist, which.min)
   max_i <- pick(hist & detect, which.max)
   cur_i <- pick(cur, which.max)
 
-  at <- function(v, i, empty) if (length(i) == 0) empty else v[[i]]
+  at <- value_at
 
   hist_min <- at(conc, min_i, NA_real_)
   hist_max <- at(conc, max_i, NA_real_)
@@ -335,7 +284,7 @@ historical_row <- function(df, key, spike_factor, include_criteria) {
   spike <- !is.null(spike_factor) && new_max && !is.na(max_ratio) &&
     max_ratio > spike_factor
 
-  out <- dplyr::tibble(
+  out <- tibble::tibble(
     n_samples = nrow(df),
     n_current = sum(cur),
     hist_min_prefix = at(prefix, min_i, NA_character_),
@@ -392,9 +341,7 @@ report_duplicate_rounds <- function(out, groups, picked) {
   warning(
     length(dup),
     " groups hold more than one result in ",
-    picked$col,
-    " = ",
-    format(picked$value),
+    round_label(picked),
     "; the maximum was reported: ",
     paste(utils::head(labels, 8), collapse = ", "),
     if (length(labels) > 8) ", ..." else "",

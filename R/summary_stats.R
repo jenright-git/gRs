@@ -41,7 +41,7 @@
 #' @importFrom tidyr pivot_longer pivot_wider unnest
 #' @importFrom writexl write_xlsx
 #' @importFrom glue glue
-#' @importFrom rlang enquo quo_name
+#' @importFrom rlang enquo as_label abort caller_env
 summary_stats <- function(
   data,
   save_path = NULL,
@@ -49,7 +49,7 @@ summary_stats <- function(
   include_criteria = FALSE,
   criteria_col = criteria
 ) {
-  value_name <- rlang::quo_name(rlang::enquo(criteria_col))
+  value_name <- quo_column_name(rlang::enquo(criteria_col))
   cmp <- comparison_columns(value_name)
 
   # chem_group, fraction and prefix are carried through where the export has
@@ -66,44 +66,21 @@ summary_stats <- function(
     "concentration",
     "output_unit"
   )
-  required <- c("location_code", "chem_name", "detect_flag", "concentration")
-  missing <- setdiff(required, names(data))
-  if (length(missing) > 0) {
-    stop(
-      "`data` is missing required columns: ",
-      paste(missing, collapse = ", "),
-      ". Pass a table from data_processor()."
-    )
-  }
+  require_columns(
+    data,
+    c("location_code", "chem_name", "detect_flag", "concentration")
+  )
 
   selected_data <- dplyr::select(data, dplyr::any_of(carried))
 
   if (include_criteria) {
-    if (!value_name %in% names(data)) {
-      stop(
-        "`data` has no '",
-        value_name,
-        "' column. Join a guideline set onto it with join_action_levels(), ",
-        "or name the column it was joined into with `criteria_col`."
-      )
-    }
+    resolve_include_criteria(data, value_name, TRUE)
 
     # Carried under the canonical name for the rest of the function, and put
     # back under its own on the way out.
     selected_data$criteria <- as.numeric(data[[value_name]])
 
-    # What counts as an exceedance is settled by join_action_levels() - detects
-    # only, or LORs above the guideline too, per its `lor_as_exceedance`. Its
-    # verdict is counted as it stands rather than the rule being applied a
-    # second time here, where the argument is not available to honour. A
-    # criteria column added by hand carries no verdict, and falls back to the
-    # detects-only rule.
-    selected_data$exceedance <- if (cmp[["exceedance"]] %in% names(data)) {
-      as.logical(data[[cmp[["exceedance"]]]])
-    } else {
-      selected_data$detect_flag == "Y" &
-        selected_data$concentration > selected_data$criteria
-    }
+    selected_data$exceedance <- exceedance_verdict(data, value_name, cmp)
   }
 
   summary_table <- selected_data %>%
@@ -175,67 +152,4 @@ percentile_exprs <- function() {
   stats::setNames(exprs, paste0("p", PERCENTILES))
 }
 
-#' min()/max() over a group that may hold nothing but missing values
-#'
-#' Base R returns `Inf` with a warning for an empty set; a group with no
-#' readable concentration has no minimum, and `NA` says so.
-#'
-#' @param x numeric vector
-#' @noRd
-safe_min <- function(x) {
-  if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE)
-}
 
-#' @rdname safe_min
-#' @noRd
-safe_max <- function(x) {
-  if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
-}
-
-#' Write a summary table, creating its directory if need be
-#'
-#' @param table tibble to write
-#' @param path full file path including filename, or NULL to write nothing
-#' @noRd
-write_summary <- function(table, path) {
-  if (is.null(path)) {
-    return(invisible(NULL))
-  }
-  out_dir <- dirname(path)
-  if (!dir.exists(out_dir)) {
-    dir.create(out_dir, recursive = TRUE)
-    message(glue::glue("Created directory: {out_dir}"))
-  }
-  writexl::write_xlsx(table, path)
-  message(glue::glue("Saved: {basename(path)} -> {path}"))
-}
-
-#' Reduce a group's criteria values to one
-#'
-#' [join_action_levels()] converts each guideline into the unit its result was
-#' reported in, so one chemical measured in two units carries two criteria
-#' values. The lowest is kept, since that is the one the exceedance count is
-#' most conservative against.
-#'
-#' @param x criteria values for one location/chemical group
-#' @param chem_name the group's chemical, used only in the warning
-#' @returns a single value
-#' @noRd
-single_criteria <- function(x, chem_name = NULL) {
-  vals <- unique(x[!is.na(x)])
-  if (length(vals) == 0) {
-    return(NA_real_)
-  }
-  if (length(vals) > 1) {
-    warning(
-      "Multiple criteria values for ",
-      if (is.null(chem_name)) "a group" else chem_name[[1]],
-      ": ",
-      paste(vals, collapse = ", "),
-      ". Using ",
-      min(vals),
-      ". Check the results are all reported in one unit."
-    )
-  }
-  min(vals)
-}

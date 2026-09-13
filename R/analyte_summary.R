@@ -82,8 +82,8 @@
 #'   record, [join_action_levels()] for the guideline join this reads, and
 #'   [create_gt()] to format the result.
 #' @importFrom dplyr group_by group_modify ungroup across all_of bind_cols
-#'   tibble
-#' @importFrom rlang enquo quo_name quo_is_null
+#' @importFrom tibble tibble
+#' @importFrom rlang enquo as_label abort caller_env
 analyte_summary <- function(
   data,
   round_col = NULL,
@@ -98,60 +98,27 @@ analyte_summary <- function(
     return(NULL)
   }
 
-  value_name <- rlang::quo_name(rlang::enquo(criteria_col))
+  value_name <- quo_column_name(rlang::enquo(criteria_col))
   cmp <- comparison_columns(value_name)
 
-  required <- c("chem_name", "location_code", "concentration", "detect_flag")
-  missing <- setdiff(required, names(data))
-  if (length(missing) > 0) {
-    stop(
-      "`data` is missing required columns: ",
-      paste(missing, collapse = ", "),
-      ". Pass a table from data_processor()."
-    )
-  }
-
-  round_q <- rlang::enquo(round_col)
-  round_name <- if (rlang::quo_is_null(round_q)) {
-    NULL
-  } else {
-    rlang::quo_name(round_q)
-  }
-  picked <- resolve_round(data, round_name, round, quiet = quiet)
-
-  if (is.null(include_criteria)) {
-    include_criteria <- value_name %in% names(data)
-  } else if (include_criteria && !value_name %in% names(data)) {
-    stop(
-      "`data` has no '",
-      value_name,
-      "' column. Join a guideline set onto it with join_action_levels(), or ",
-      "name the column it was joined into with `criteria_col`."
-    )
-  }
-
-  group_vars <- if (is.null(group_vars)) {
-    character(0)
-  } else {
-    as.character(group_vars)
-  }
-  unknown <- setdiff(group_vars, names(data))
-  if (length(unknown) > 0) {
-    stop(
-      "`group_vars` names columns `data` does not have: ",
-      paste(unknown, collapse = ", "),
-      "."
-    )
-  }
-
-  # criteria_set is written by criteria_long(); grouping by it is what turns
-  # several joined guideline sets into one row per analyte per set, with no
-  # bookkeeping beyond having stacked them.
-  groups <- unique(c(
-    group_vars,
-    "chem_name",
-    intersect(c("output_unit", "criteria_set"), names(data))
-  ))
+  prepared <- prepare_round_summary(
+    data,
+    required = c(
+      "chem_name",
+      "location_code",
+      "concentration",
+      "detect_flag"
+    ),
+    round_col = quo_column_name(rlang::enquo(round_col)),
+    round = round,
+    group_vars = group_vars,
+    value_name = value_name,
+    include_criteria = include_criteria,
+    quiet = quiet
+  )
+  picked <- prepared$picked
+  groups <- prepared$groups
+  include_criteria <- prepared$include_criteria
 
   if (include_criteria && !quiet && !"criteria_set" %in% names(data)) {
     joined <- criteria_sets(data)
@@ -172,16 +139,7 @@ analyte_summary <- function(
 
   if (include_criteria) {
     current$.criteria <- suppressWarnings(as.numeric(current[[value_name]]))
-    # join_action_levels() has already settled whether an LOR above the
-    # guideline counts; its verdict is read rather than the rule re-applied.
-    current$.exceedance <- if (cmp[["exceedance"]] %in% names(current)) {
-      as.logical(current[[cmp[["exceedance"]]]])
-    } else {
-      !is.na(current$detect_flag) &
-        current$detect_flag == "Y" &
-        !is.na(current$.criteria) &
-        suppressWarnings(as.numeric(current$concentration)) > current$.criteria
-    }
+    current$.exceedance <- exceedance_verdict(current, value_name, cmp)
   }
 
   out <- current %>%
@@ -209,35 +167,20 @@ analyte_summary <- function(
 #' @returns a one-row tibble
 #' @noRd
 analyte_row <- function(df, key, include_criteria) {
-  conc <- suppressWarnings(as.numeric(df$concentration))
-  detect <- !is.na(df$detect_flag) & df$detect_flag == "Y"
-  usable <- !is.na(conc)
-  prefix <- if ("prefix" %in% names(df)) {
-    as.character(df$prefix)
-  } else {
-    rep(NA_character_, nrow(df))
-  }
+  g <- group_vectors(df)
+  conc <- g$conc
+  detect <- g$detect
+  usable <- g$usable
+  prefix <- g$prefix
 
-  # The maximum is the highest detection. Where nothing was detected there is
-  # no detection to report, so the highest result stands in and carries its
-  # "<" through rather than the row coming out blank.
-  pool <- which(detect & usable)
-  if (length(pool) == 0) {
-    pool <- which(usable)
-  }
-  min_i <- if (any(usable)) {
-    which(usable)[[which.min(conc[usable])]]
-  } else {
-    integer(0)
-  }
-  max_i <- if (length(pool) > 0) {
-    pool[[which.max(conc[pool])]]
-  } else {
-    integer(0)
-  }
-  at <- function(v, i, empty) if (length(i) == 0) empty else v[[i]]
+  # The minimum is the lowest result of the round, detected or not; the
+  # maximum is the highest detection, standing in from the readable results
+  # where nothing was detected.
+  min_i <- pick_within(conc, usable, TRUE, which.min)
+  max_i <- pick_within(conc, usable, detected_pool(detect, usable), which.max)
+  at <- value_at
 
-  out <- dplyr::tibble(
+  out <- tibble::tibble(
     n_samples = nrow(df),
     n_detects = sum(detect),
     pct_detects = round(sum(detect) / nrow(df) * 100, 1),
@@ -280,7 +223,7 @@ exceedance_cells <- function(criteria, exceedance, location_code, label) {
   value <- single_criteria(criteria, label)
 
   if (is.na(value)) {
-    return(dplyr::tibble(
+    return(tibble::tibble(
       criteria = NA_real_,
       n_exceedances = NA_integer_,
       n_exceedance_locations = NA_integer_,
@@ -291,7 +234,7 @@ exceedance_cells <- function(criteria, exceedance, location_code, label) {
   hit <- !is.na(exceedance) & exceedance
   locs <- sort(unique(as.character(location_code[hit])))
 
-  dplyr::tibble(
+  tibble::tibble(
     criteria = value,
     n_exceedances = sum(hit),
     n_exceedance_locations = length(locs),
@@ -316,30 +259,3 @@ group_label <- function(key) {
 }
 
 
-#' Put the guideline columns back under the name the set was joined as
-#'
-#' A set joined under its own `value_col` keeps that name here too, so
-#' summaries of two sets can be bound together without either losing its
-#' identity - the same rule [summary_stats()] follows. Shared with
-#' [historical_range()], so it covers both tables' guideline columns and
-#' renames only the ones present.
-#'
-#' @param out the summary table
-#' @param value_name name of the guideline value column
-#' @returns `out`, renamed
-#' @noRd
-rename_criteria_columns <- function(out, value_name) {
-  if (identical(value_name, "criteria")) {
-    return(out)
-  }
-  renamed <- c(
-    criteria = value_name,
-    n_exceedances = paste0(value_name, "_n_exceedances"),
-    n_exceedance_locations = paste0(value_name, "_n_exceedance_locations"),
-    exceedance_locations = paste0(value_name, "_exceedance_locations"),
-    current_exceedance = paste0(value_name, "_current_exceedance")
-  )
-  hit <- match(names(renamed), names(out))
-  names(out)[hit[!is.na(hit)]] <- renamed[!is.na(hit)]
-  out
-}

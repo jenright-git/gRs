@@ -52,7 +52,8 @@
 #' }
 #'
 #' @importFrom dplyr bind_rows filter mutate case_when select arrange
-#' @importFrom tidyr tibble nest unnest drop_na
+#' @importFrom tidyr nest unnest drop_na
+#' @importFrom tibble tibble
 #' @importFrom purrr map map_dbl map_int
 #' @importFrom rlang enquo quo_name !! :=
 mann_kendall_test <- function(
@@ -108,38 +109,28 @@ mann_kendall_test <- function(
         })
       )
 
-    excluded <- df %>% dplyr::filter(nd_pct > nd_threshold)
-
-    if (nrow(excluded) > 0) {
-      loc_name <- rlang::quo_name(location_col)
-      ana_name <- rlang::quo_name(chem_name_col)
-      excl_lines <- paste(
+    df <- exclude_groups(
+      df,
+      keep = df$nd_pct <= nd_threshold,
+      describe = function(x) sprintf("%.1f%% non-detects", x$nd_pct * 100),
+      loc_name = rlang::as_label(location_col),
+      ana_name = rlang::as_label(chem_name_col),
+      headline = function(n) {
         sprintf(
-          "  - %s / %s (%.1f%% non-detects)",
-          excluded[[loc_name]],
-          excluded[[ana_name]],
-          excluded$nd_pct * 100
+          "Excluded %d location-analyte combination(s) with >%.0f%% non-detects:",
+          n,
+          nd_threshold * 100
+        )
+      },
+      empty_message = sprintf(
+        paste0(
+          "No data remaining after applying nd_threshold = %.2f. Consider ",
+          "raising the threshold."
         ),
-        collapse = "\n"
-      )
-      message(sprintf(
-        "Excluded %d location-analyte combination(s) with >%.0f%% non-detects:\n%s",
-        nrow(excluded),
-        nd_threshold * 100,
-        excl_lines
-      ))
-    }
-
-    df <- df %>%
-      dplyr::filter(nd_pct <= nd_threshold) %>%
-      dplyr::select(-nd_pct)
-
-    if (nrow(df) == 0) {
-      stop(sprintf(
-        "No data remaining after applying nd_threshold = %.2f. Consider raising the threshold.",
         nd_threshold
-      ))
-    }
+      )
+    )
+    df <- dplyr::select(df, -nd_pct)
   }
 
   if (!is.null(min_detects)) {
@@ -147,9 +138,6 @@ mann_kendall_test <- function(
         min_detects < 1 || min_detects != as.integer(min_detects)) {
       stop("`min_detects` must be a single positive integer.")
     }
-
-    loc_name <- rlang::quo_name(location_col)
-    ana_name <- rlang::quo_name(chem_name_col)
 
     df <- df %>%
       dplyr::mutate(
@@ -159,37 +147,37 @@ mann_kendall_test <- function(
         })
       )
 
-    excluded <- df %>% dplyr::filter(n_detects < min_detects)
-
-    if (nrow(excluded) > 0) {
-      excl_lines <- paste(
+    df <- exclude_groups(
+      df,
+      keep = df$n_detects >= min_detects,
+      describe = function(x) {
         sprintf(
-          "  - %s / %s (%d detect(s) out of %d sample(s))",
-          excluded[[loc_name]],
-          excluded[[ana_name]],
-          excluded$n_detects,
-          excluded$n_samples
+          "%d detect(s) out of %d sample(s)",
+          x$n_detects,
+          x$n_samples
+        )
+      },
+      loc_name = rlang::as_label(location_col),
+      ana_name = rlang::as_label(chem_name_col),
+      headline = function(n) {
+        sprintf(
+          paste0(
+            "Excluded %d location-analyte combination(s) with fewer than %d ",
+            "detect(s):"
+          ),
+          n,
+          min_detects
+        )
+      },
+      empty_message = sprintf(
+        paste0(
+          "No data remaining after applying min_detects = %d. Consider ",
+          "lowering the threshold."
         ),
-        collapse = "\n"
-      )
-      message(sprintf(
-        "Excluded %d location-analyte combination(s) with fewer than %d detect(s):\n%s",
-        nrow(excluded),
-        min_detects,
-        excl_lines
-      ))
-    }
-
-    df <- df %>%
-      dplyr::filter(n_detects >= min_detects) %>%
-      dplyr::select(-n_samples, -n_detects)
-
-    if (nrow(df) == 0) {
-      stop(sprintf(
-        "No data remaining after applying min_detects = %d. Consider lowering the threshold.",
         min_detects
-      ))
-    }
+      )
+    )
+    df <- dplyr::select(df, -n_samples, -n_detects)
   }
 
   df <- df %>%
@@ -270,7 +258,8 @@ mann_kendall_test <- function(
 #'
 #' @importFrom trend mk.test
 #' @importFrom dplyr arrange mutate
-#' @importFrom tidyr drop_na tibble
+#' @importFrom tidyr drop_na
+#' @importFrom tibble tibble
 #' @importFrom rlang sym !! :=
 
 mk_analysis <- function(
@@ -308,7 +297,7 @@ mk_analysis <- function(
   conc_values <- data[[concentration_col]]
   result <- trend::mk.test(conc_values)
 
-  mk_result <- tidyr::tibble(
+  mk_result <- tibble::tibble(
     p_value = result$p.value,
     tau_statistic = result$estimates[3],
     S_statistic = result$estimates[1],

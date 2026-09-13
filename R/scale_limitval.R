@@ -51,64 +51,100 @@
 #'   scale_y_continuous
 NULL
 
-#' @rdname scale_limitval
-#' @export
-scale_y_limitval <-
-  function(marker_values,
-           marker_colours = "black",
-           marker_labels = marker_values,
-           marker_linetypes = 5,
-           trans = "identity",
-           ...) {
-    out <-
-      purrr::pmap(
-        list(marker_values, marker_colours, marker_linetypes),
-        ~ ggplot2::geom_hline(yintercept = ..1, colour = ..2, lty = ..3)
-      )
+#' Build one axis's marker lines and the scale carrying their labels
+#'
+#' `scale_x_limitval()` and `scale_y_limitval()` differ only in the axis they
+#' act on, so the axis is the argument and the body is written once.
+#'
+#' @param axis `"x"` or `"y"`
+#' @inheritParams scale_y_limitval
+#' @returns a list of ggplot2 components
+#' @noRd
+limitval_scale <- function(
+  axis,
+  marker_values,
+  marker_colours = "black",
+  marker_labels = marker_values,
+  marker_linetypes = 5,
+  trans = "identity",
+  ...
+) {
+  axis <- match.arg(axis, c("x", "y"))
+  horizontal <- identical(axis, "y")
 
-    out <- append(
-      out,
-      ggplot2::scale_y_continuous(
-        trans = trans,
-        ...,
-        sec.axis = ggplot2::sec_axis(
-          ~.,
-          breaks = marker_values,
-          labels = marker_labels
-        )
-      )
-    )
-
-    out
+  marker <- if (horizontal) ggplot2::geom_hline else ggplot2::geom_vline
+  intercept <- if (horizontal) "yintercept" else "xintercept"
+  position_scale <- if (horizontal) {
+    ggplot2::scale_y_continuous
+  } else {
+    ggplot2::scale_x_continuous
   }
 
-#' @rdname scale_limitval
-#' @export
-scale_x_limitval <-
-  function(marker_values,
-           marker_colours = "black",
-           marker_labels = marker_values,
-           marker_linetypes = 5,
-           trans = "identity",
-           ...) {
-    out <-
-      purrr::pmap(
-        list(marker_values, marker_colours, marker_linetypes),
-        ~ ggplot2::geom_vline(xintercept = ..1, colour = ..2, lty = ..3)
-      )
-
-    out <- append(
-      out,
-      ggplot2::scale_x_continuous(
-        trans = trans,
-        ...,
-        sec.axis = ggplot2::sec_axis(
-          ~.,
-          breaks = marker_values,
-          labels = marker_labels
+  out <- purrr::pmap(
+    list(marker_values, marker_colours, marker_linetypes),
+    function(value, colour, linetype) {
+      do.call(
+        marker,
+        stats::setNames(
+          list(value, colour, linetype),
+          c(intercept, "colour", "lty")
         )
       )
-    )
+    }
+  )
 
-    out
-  }
+  append(
+    out,
+    position_scale(
+      trans = trans,
+      ...,
+      sec.axis = ggplot2::sec_axis(
+        ~.,
+        breaks = marker_values,
+        labels = marker_labels
+      )
+    )
+  )
+}
+
+#' @rdname scale_limitval
+#' @export
+scale_y_limitval <- function(
+  marker_values,
+  marker_colours = "black",
+  marker_labels = marker_values,
+  marker_linetypes = 5,
+  trans = "identity",
+  ...
+) {
+  limitval_scale(
+    "y",
+    marker_values = marker_values,
+    marker_colours = marker_colours,
+    marker_labels = marker_labels,
+    marker_linetypes = marker_linetypes,
+    trans = trans,
+    ...
+  )
+}
+
+#' @rdname scale_limitval
+#' @export
+scale_x_limitval <- function(
+  marker_values,
+  marker_colours = "black",
+  marker_labels = marker_values,
+  marker_linetypes = 5,
+  trans = "identity",
+  ...
+) {
+  limitval_scale(
+    "x",
+    marker_values = marker_values,
+    marker_colours = marker_colours,
+    marker_labels = marker_labels,
+    marker_linetypes = marker_linetypes,
+    trans = trans,
+    ...
+  )
+}

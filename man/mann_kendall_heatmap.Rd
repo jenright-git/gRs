@@ -33,7 +33,7 @@ A ggplot2 object.
 One tile per location and analyte, filled by trend direction.
 }
 \examples{
-mann_kendall_test(gRs_data) |>
+mann_kendall_test(gRs_data) %>%
   mann_kendall_heatmap()
 }
 \seealso{

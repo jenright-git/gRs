@@ -18,7 +18,7 @@
 #'   the three categories of `mann_kendall_test(traditional = TRUE)`.
 #'
 #' @examples
-#' mann_kendall_test(gRs_data) |>
+#' mann_kendall_test(gRs_data) %>%
 #'   mann_kendall_heatmap()
 #' @importFrom dplyr mutate
 #' @import ggplot2

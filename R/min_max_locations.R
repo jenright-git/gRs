@@ -80,7 +80,7 @@
 #'   behind it, and [create_gt()] to format the result.
 #' @importFrom dplyr group_by group_modify ungroup across all_of any_of
 #'   relocate
-#' @importFrom rlang enquo quo_name quo_is_null
+#' @importFrom rlang enquo as_label abort caller_env
 min_max_locations <- function(
   data,
   n_max = 1,
@@ -96,15 +96,10 @@ min_max_locations <- function(
     return(NULL)
   }
 
-  required <- c("chem_name", "location_code", "concentration", "detect_flag")
-  missing <- setdiff(required, names(data))
-  if (length(missing) > 0) {
-    stop(
-      "`data` is missing required columns: ",
-      paste(missing, collapse = ", "),
-      ". Pass a table from data_processor()."
-    )
-  }
+  require_columns(
+    data,
+    c("chem_name", "location_code", "concentration", "detect_flag")
+  )
 
   counts <- lapply(list(n_max = n_max, n_min = n_min), read_count)
   bad <- names(counts)[vapply(counts, is.na, logical(1))]
@@ -124,35 +119,16 @@ min_max_locations <- function(
     )
   }
 
-  round_q <- rlang::enquo(round_col)
-  round_name <- if (rlang::quo_is_null(round_q)) {
-    NULL
-  } else {
-    rlang::quo_name(round_q)
-  }
-  picked <- resolve_round(data, round_name, round, quiet = quiet)
-
-  group_vars <- if (is.null(group_vars)) {
-    character(0)
-  } else {
-    as.character(group_vars)
-  }
-  unknown <- setdiff(group_vars, names(data))
-  if (length(unknown) > 0) {
-    stop(
-      "`group_vars` names columns `data` does not have: ",
-      paste(unknown, collapse = ", "),
-      "."
-    )
-  }
-
-  # criteria_set is written by criteria_long(); ranking within it keeps two
-  # stacked guideline sets from ranking the same results against each other.
-  groups <- unique(c(
-    group_vars,
-    "chem_name",
-    intersect(c("output_unit", "criteria_set"), names(data))
-  ))
+  prepared <- prepare_round_summary(
+    data,
+    required = character(0),
+    round_col = quo_column_name(rlang::enquo(round_col)),
+    round = round,
+    group_vars = group_vars,
+    quiet = quiet
+  )
+  picked <- prepared$picked
+  groups <- prepared$groups
 
   current <- data[picked$is_current, , drop = FALSE]
 
@@ -198,18 +174,14 @@ min_max_locations <- function(
 #' @returns the selected rows, with `extreme` and `rank` added
 #' @noRd
 extreme_rows <- function(df, n_max, n_min, with_ties) {
-  conc <- suppressWarnings(as.numeric(df$concentration))
-  detected <- !is.na(df$detect_flag) & df$detect_flag == "Y"
-  usable <- which(!is.na(conc))
+  g <- group_vectors(df)
+  conc <- g$conc
+  usable <- which(g$usable)
   tie_break <- as.character(df$location_code)
 
-  # The maximum is the highest detection. Where nothing was detected there is
-  # no detection to report, so the highest result stands in and carries its
-  # "<" through - the rule analyte_summary() reports the maximum under.
-  pool <- which(detected & !is.na(conc))
-  if (length(pool) == 0) {
-    pool <- usable
-  }
+  # The same rule analyte_summary() reports the maximum under, so the two
+  # tables cannot disagree about the highest result of a round.
+  pool <- which(detected_pool(g$detect, g$usable) & g$usable)
 
   top <- pick_extreme(conc, pool, n_max, TRUE, with_ties, tie_break)
   bottom <- pick_extreme(conc, usable, n_min, FALSE, with_ties, tie_break)
@@ -295,9 +267,7 @@ report_min_max <- function(out, picked, n_max, n_min) {
   if (nrow(out) == 0) {
     message(
       "min_max_locations(): no readable concentration in ",
-      picked$col,
-      " = ",
-      format(picked$value),
+      round_label(picked),
       "."
     )
     return(invisible(NULL))
@@ -307,9 +277,7 @@ report_min_max <- function(out, picked, n_max, n_min) {
     " results reported across ",
     length(unique(out$chem_name)),
     " analytes in ",
-    picked$col,
-    " = ",
-    format(picked$value),
+    round_label(picked),
     ": the highest ",
     n_max,
     " and the lowest ",

@@ -18,7 +18,7 @@
 #' @seealso [mann_kendall_heatmap()] for the coloured six-category version.
 #'
 #' @examples
-#' mann_kendall_test(gRs_data, traditional = TRUE) |>
+#' mann_kendall_test(gRs_data, traditional = TRUE) %>%
 #'   mann_kendall_heatmap_bw()
 #' @importFrom dplyr mutate
 #' @importFrom ggplot2 ggplot geom_tile aes theme_bw ggtitle theme

@@ -119,7 +119,8 @@
 #' mka_to_excel(trends, include_zone = TRUE, location_font = "#14401F")
 #' }
 #'
-#' @importFrom dplyr select arrange mutate across all_of tibble
+#' @importFrom dplyr select arrange mutate across all_of
+#' @importFrom tibble tibble
 #' @importFrom tidyr pivot_wider replace_na
 #' @importFrom rlang enquo quo_name sym !!
 #' @importFrom glue glue
@@ -663,7 +664,7 @@ add_legend_sheet <- function(
   meanings <- rename_na_level(TREND_MEANING_DEFAULT, na_label)
   interpretations <- rename_na_level(TREND_INTERPRETATION_DEFAULT, na_label)
 
-  legend <- dplyr::tibble(
+  legend <- tibble::tibble(
     Trend = lvls,
     Meaning = unname(meanings[lvls]),
     Interpretation = unname(interpretations[lvls])

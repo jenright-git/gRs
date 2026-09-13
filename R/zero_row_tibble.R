@@ -7,7 +7,7 @@
 #' @export
 #'
 #' @examples zero_row_tibble(c("A", "B", "C"))
-#' @importFrom tidyr as_tibble
+#' @importFrom tibble as_tibble
 #' @importFrom purrr set_names
 zero_row_tibble <- function(names, base = FALSE) {
 
@@ -19,7 +19,7 @@ zero_row_tibble <- function(names, base = FALSE) {
 
   # To tibble
   if (!base) {
-    df <- tidyr::as_tibble(df)
+    df <- tibble::as_tibble(df)
   }
 
   return(df)

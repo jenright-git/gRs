@@ -238,14 +238,11 @@ join_action_levels <- function(
     stop("`action_levels` is empty. Read one with action_level_processor().")
   }
 
-  missing <- setdiff(c("chem_name", "concentration"), names(chem_data))
-  if (length(missing) > 0) {
-    stop(
-      "`chem_data` is missing required columns: ",
-      paste(missing, collapse = ", "),
-      ". Pass a table from data_processor()."
-    )
-  }
+  require_columns(
+    chem_data,
+    c("chem_name", "concentration"),
+    arg = "chem_data"
+  )
   if (!"criteria" %in% names(action_levels)) {
     stop(
       "`action_levels` has no 'criteria' column. Pass a table from ",
@@ -530,40 +527,6 @@ criteria_long <- function(data, sets = NULL, keep_unmatched = TRUE) {
   out
 }
 
-#' Name every column belonging to one guideline set
-#'
-#' @param value_name name of the guideline value column
-#' @returns character vector of column names
-#' @noRd
-set_columns <- function(value_name) {
-  c(
-    value_name,
-    paste0(value_name, c("_name", "_unit", "_basis")),
-    unname(comparison_columns(value_name))
-  )
-}
-
-#' Find the guideline sets joined onto a chemistry table
-#'
-#' A set is a value column carrying the `_name`, `_unit` and `_basis` columns
-#' [join_action_levels()] writes beside it. Matching on all three keeps a
-#' chemistry column that merely happens to be called `criteria` from being
-#' read as a set.
-#'
-#' @param data chemistry tibble
-#' @returns character vector of value column names
-#' @noRd
-criteria_sets <- function(data) {
-  nms <- names(data)
-  suffixed <- grep("_name$", nms, value = TRUE)
-  stems <- sub("_name$", "", suffixed)
-  stems <- stems[nzchar(stems) & stems %in% nms]
-  stems[
-    paste0(stems, "_unit") %in% nms &
-      paste0(stems, "_basis") %in% nms
-  ]
-}
-
 
 # ---------------------------------------------------------------------------
 # Reading
@@ -580,20 +543,15 @@ criteria_sets <- function(data) {
 #' @returns list(sheet, skip); `sheet` is NULL when nothing matched
 #' @noRd
 locate_action_level_sheet <- function(myfile_path, all_sheets) {
-  for (skip in c(0, 1)) {
-    for (s in all_sheets) {
-      peek <- peek_names(myfile_path, s, skip = skip)
-      if (is.null(peek)) {
-        next
-      }
-      canonical <- canonical_names(peek, ACTION_LEVEL_ALIASES)
-      has_chem <- any(c("chem_code", "chem_name") %in% canonical)
-      if (has_chem && "criteria" %in% canonical) {
-        return(list(sheet = s, skip = skip))
-      }
+  locate_sheet(
+    myfile_path,
+    all_sheets,
+    ACTION_LEVEL_ALIASES,
+    function(canonical) {
+      any(c("chem_code", "chem_name") %in% canonical) &&
+        "criteria" %in% canonical
     }
-  }
-  list(sheet = NULL, skip = NULL)
+  )
 }
 
 #' Normalise a raw action level export
@@ -844,28 +802,6 @@ applies_to_fraction <- function(cand) {
   leach_ok & frac_ok
 }
 
-#' Name the comparison columns for a guideline set
-#'
-#' The default set keeps the bare names the rest of the package reads. A
-#' second set joined under its own `value_col` takes that name as a prefix, so
-#' joining it does not overwrite the first set's verdict - which is what makes
-#' several sets stackable by [criteria_long()].
-#'
-#' @param value_name name of the guideline value column
-#' @returns named character vector: ratio, exceedance, lor
-#' @noRd
-comparison_columns <- function(value_name) {
-  stem <- if (identical(value_name, "criteria")) {
-    ""
-  } else {
-    paste0(value_name, "_")
-  }
-  c(
-    ratio = paste0(stem, "exceedance_ratio"),
-    exceedance = paste0(stem, "exceedance"),
-    lor = paste0(stem, "lor_above_criteria")
-  )
-}
 
 #' Add the guideline columns to a chemistry table with no rows
 #'

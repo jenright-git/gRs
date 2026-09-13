@@ -33,7 +33,7 @@ the six-category default has no unshaded equivalent for "Probably
 Increasing" and "Stable", and those tiles would come out blank.
 }
 \examples{
-mann_kendall_test(gRs_data, traditional = TRUE) |>
+mann_kendall_test(gRs_data, traditional = TRUE) %>%
   mann_kendall_heatmap_bw()
 }
 \seealso{

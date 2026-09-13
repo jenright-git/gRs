@@ -135,12 +135,7 @@ timeseries_plot <- function(
     stop("'data' must be a data frame or tibble")
   }
 
-  required_cols <- c(date_name, conc_name, location_name, analyte_name)
-  missing_cols <- required_cols[!required_cols %in% names(data)]
-
-  if (length(missing_cols) > 0) {
-    stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
-  }
+  require_columns(data, c(date_name, conc_name, location_name, analyte_name))
 
   # Validate facet_by
   facet_by <- match.arg(facet_by, choices = c("analyte", "location"))

@@ -37,7 +37,7 @@
 #'
 #' @examples
 #' # A primary sample and its field duplicate, plus an unduplicated location
-#' samples <- dplyr::tribble(
+#' samples <- tibble::tribble(
 #'   ~location_code, ~date, ~chem_name, ~concentration, ~prefix, ~sample_type,
 #'   "MW01", as.Date("2024-01-15"), "Benzene", 5.2, "=", "Normal",
 #'   "MW01", as.Date("2024-01-15"), "Benzene", 6.1, "=", "Field_D",
@@ -55,13 +55,13 @@
 #'
 #' # Typical workflow
 #' \dontrun{
-#' data_processor("my_file.xlsx") |>
-#'   select_max_concentration() |>
+#' data_processor("my_file.xlsx") %>%
+#'   select_max_concentration() %>%
 #'   half_lor(lor_multiplier = 0.5)
 #' }
 #'
 #' @importFrom dplyr group_by mutate filter slice_max select ungroup any_of
-#'   tribble
+#' @importFrom tibble tribble
 #' @importFrom rlang enquo !!
 select_max_concentration <- function(
   data,

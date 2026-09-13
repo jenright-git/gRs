@@ -87,12 +87,10 @@ get_plotting_variables <- function(
     stop("'data' must be a data frame or tibble")
   }
 
-  required_cols <- c(location_name, chem_name_name, chem_group_name, date_name)
-  missing_cols <- required_cols[!required_cols %in% names(data)]
-
-  if (length(missing_cols) > 0) {
-    stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
-  }
+  require_columns(
+    data,
+    c(location_name, chem_name_name, chem_group_name, date_name)
+  )
 
   if (nrow(data) == 0) {
     stop("Data contains no rows")
@@ -115,37 +113,11 @@ get_plotting_variables <- function(
     base::max(dplyr::pull(data, !!date_col_q), na.rm = TRUE)
   )
 
-  # Handle monitoring zones
-  if (zone_name %in% names(data)) {
-    zone_values <- dplyr::pull(data, !!zone_col_q)
-
-    if (all(is.na(zone_values))) {
-      # Use site_id as fallback if monitoring_zone is all NA
-      if (site_name %in% names(data)) {
-        data <- data %>%
-          dplyr::mutate(!!zone_col_q := !!site_col_q)
-        zones <- base::unique(dplyr::pull(data, !!zone_col_q))
-        message("All monitoring_zone values are NA. Using site_id as zones.")
-      } else {
-        warning(
-          "monitoring_zone column is all NA and site_id column not found. ",
-          "Zones will be empty."
-        )
-        zones <- character(0)
-      }
-    } else {
-      zones <- base::unique(zone_values[!is.na(zone_values)])
-    }
-  } else if (site_name %in% names(data)) {
-    # If monitoring_zone doesn't exist, use site_id
-    zones <- base::unique(dplyr::pull(data, !!site_col_q))
-    message("monitoring_zone column not found. Using site_id as zones.")
-  } else {
-    warning(
-      "Neither monitoring_zone nor site_id columns found. Zones will be empty."
-    )
-    zones <- character(0)
-  }
+  # A missing zone is not fatal here: the rest of the list is still usable,
+  # so the caller is warned and gets no zones rather than nothing at all.
+  zoned <- resolve_zone_column(data, zone_col_q, site_col_q, on_missing = "warn")
+  data <- zoned$data
+  zones <- zoned$zones
 
   # Extract unique locations
   locations_vec <- base::unique(dplyr::pull(data, !!location_col_q))

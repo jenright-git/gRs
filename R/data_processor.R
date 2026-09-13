@@ -189,28 +189,27 @@ locate_chemistry_sheet <- function(myfile_path, all_sheets, sheet_pattern) {
     setdiff(all_sheets, matching_sheets)
   ))
 
-  for (s in candidates) {
-    for (skip in c(0, 1)) {
-      peek <- peek_names(myfile_path, s, skip = skip)
-      if (is.null(peek)) {
-        next
-      }
-      canonical <- canonical_names(peek, COLUMN_ALIASES)
-      if (all(CHEMISTRY_SIGNATURE_COLS %in% canonical)) {
-        return(list(sheet = s, skip = skip, type = "chemistry", note = NA))
-      }
-    }
-  }
+  found <- locate_sheet(
+    myfile_path,
+    candidates,
+    COLUMN_ALIASES,
+    function(canonical) all(CHEMISTRY_SIGNATURE_COLS %in% canonical),
+    by_candidate = TRUE
+  )
 
   list(
-    sheet = NULL,
-    skip = NULL,
+    sheet = found$sheet,
+    skip = found$skip,
     type = "chemistry",
-    note = paste0(
-      "- chemistry: no sheet carrying all of: ",
-      paste(CHEMISTRY_SIGNATURE_COLS, collapse = ", "),
-      " (or a recognised alias of each)."
-    )
+    note = if (is.null(found$sheet)) {
+      paste0(
+        "- chemistry: no sheet carrying all of: ",
+        paste(CHEMISTRY_SIGNATURE_COLS, collapse = ", "),
+        " (or a recognised alias of each)."
+      )
+    } else {
+      NA
+    }
   )
 }
 
@@ -224,76 +223,31 @@ locate_chemistry_sheet <- function(myfile_path, all_sheets, sheet_pattern) {
 #' @returns list(sheet, skip, type, note); `sheet` is NULL when nothing matched
 #' @noRd
 locate_water_level_sheet <- function(myfile_path, all_sheets) {
-  for (skip in c(0, 1)) {
-    for (s in all_sheets) {
-      peek <- peek_names(myfile_path, s, skip = skip)
-      if (is.null(peek)) {
-        next
-      }
-      canonical <- canonical_names(peek, WATER_LEVEL_ALIASES)
-      has_keys <- all(
-        c("location_code", "sampled_date_time") %in% canonical
-      )
-      has_measure <- any(WATER_LEVEL_SIGNATURE_COLS %in% canonical)
-      if (has_keys && has_measure) {
-        return(list(sheet = s, skip = skip, type = "water_level", note = NA))
-      }
+  found <- locate_sheet(
+    myfile_path,
+    all_sheets,
+    WATER_LEVEL_ALIASES,
+    function(canonical) {
+      all(c("location_code", "sampled_date_time") %in% canonical) &&
+        any(WATER_LEVEL_SIGNATURE_COLS %in% canonical)
     }
-  }
+  )
+
   list(
-    sheet = NULL,
-    skip = NULL,
+    sheet = found$sheet,
+    skip = found$skip,
     type = "water_level",
-    note = paste0(
-      "- water level: no sheet carrying a location column, a date column and ",
-      "one of: ",
-      paste(WATER_LEVEL_SIGNATURE_COLS, collapse = ", "),
-      "."
-    )
-  )
-}
-
-#' Read only the header row of a worksheet
-#'
-#' @param myfile_path path to the workbook
-#' @param sheet sheet name
-#' @param skip rows to skip before the header
-#' @returns character vector of cleaned column names, or NULL if unreadable
-#' @noRd
-peek_names <- function(myfile_path, sheet, skip = 0) {
-  peek <- tryCatch(
-    suppressMessages(suppressWarnings(
-      readxl::read_excel(myfile_path, sheet = sheet, skip = skip, n_max = 0)
-    )),
-    error = function(e) NULL
-  )
-  if (is.null(peek) || ncol(peek) == 0) {
-    return(NULL)
-  }
-  # AR2 detection matches on the raw uppercase names, so return both forms.
-  # Peeking with an offset of 1 can turn a row of data into the header, so
-  # janitor is silenced here - it has nothing useful to say about a candidate
-  # that is about to be rejected anyway.
-  c(names(peek), names(suppressWarnings(janitor::clean_names(peek))))
-}
-
-#' Resolve a vector of column names to their canonical equivalents
-#'
-#' @param nms character vector of (cleaned) column names
-#' @param alias_map named list: canonical_name -> character vector of aliases
-#' @returns character vector of canonical names present in `nms`
-#' @noRd
-canonical_names <- function(nms, alias_map) {
-  resolved <- nms
-  for (canonical in names(alias_map)) {
-    if (canonical %in% nms) {
-      next
+    note = if (is.null(found$sheet)) {
+      paste0(
+        "- water level: no sheet carrying a location column, a date column ",
+        "and one of: ",
+        paste(WATER_LEVEL_SIGNATURE_COLS, collapse = ", "),
+        "."
+      )
+    } else {
+      NA
     }
-    if (any(alias_map[[canonical]] %in% nms)) {
-      resolved <- c(resolved, canonical)
-    }
-  }
-  unique(resolved)
+  )
 }
 
 
@@ -869,33 +823,3 @@ WATER_LEVEL_SCHEMA <- list(
   product_corrected_water_level = NA_real_
 )
 
-#' Rename columns to canonical names based on an alias map
-#'
-#' @param df data frame to normalise
-#' @param alias_map named list: canonical_name -> character vector of known aliases
-#' @returns df with columns renamed to canonical names where a match is found
-#' @noRd
-resolve_columns <- function(df, alias_map) {
-  current_names <- names(df)
-  for (canonical in names(alias_map)) {
-    if (canonical %in% current_names) {
-      next
-    }
-    matched <- intersect(alias_map[[canonical]], current_names)
-    if (length(matched) > 1) {
-      warning(
-        "Multiple columns match canonical '",
-        canonical,
-        "': ",
-        paste(matched, collapse = ", "),
-        ". Using '",
-        matched[[1]],
-        "'."
-      )
-    }
-    if (length(matched) >= 1) {
-      df <- dplyr::rename(df, !!canonical := !!matched[[1]])
-    }
-  }
-  df
-}

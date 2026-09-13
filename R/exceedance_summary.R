@@ -73,7 +73,7 @@
 #'   exceedances, [join_action_levels()] for the comparison this reads, and
 #'   [create_gt()] to format the result.
 #' @importFrom dplyr relocate any_of
-#' @importFrom rlang enquo quo_name quo_is_null
+#' @importFrom rlang enquo as_label abort caller_env
 exceedance_summary <- function(
   data,
   round_col = NULL,
@@ -87,53 +87,30 @@ exceedance_summary <- function(
     return(NULL)
   }
 
-  value_name <- rlang::quo_name(rlang::enquo(criteria_col))
+  value_name <- quo_column_name(rlang::enquo(criteria_col))
   cmp <- comparison_columns(value_name)
 
-  required <- c("chem_name", "location_code", "concentration", "detect_flag")
-  missing <- setdiff(required, names(data))
-  if (length(missing) > 0) {
-    stop(
-      "`data` is missing required columns: ",
-      paste(missing, collapse = ", "),
-      ". Pass a table from data_processor()."
-    )
-  }
-  if (!value_name %in% names(data)) {
-    stop(
-      "`data` has no '",
-      value_name,
-      "' column, so nothing can be said to have exceeded anything. Join a ",
-      "guideline set onto it with join_action_levels(), or name the column it ",
-      "was joined into with `criteria_col`."
-    )
-  }
-
-  round_q <- rlang::enquo(round_col)
-  round_name <- if (rlang::quo_is_null(round_q)) {
-    NULL
-  } else {
-    rlang::quo_name(round_q)
-  }
-  picked <- resolve_round(data, round_name, round, quiet = quiet)
+  prepared <- prepare_round_summary(
+    data,
+    required = c(
+      "chem_name",
+      "location_code",
+      "concentration",
+      "detect_flag"
+    ),
+    round_col = quo_column_name(rlang::enquo(round_col)),
+    round = round,
+    value_name = value_name,
+    criteria_required = TRUE,
+    quiet = quiet
+  )
+  picked <- prepared$picked
 
   current <- data[picked$is_current, , drop = FALSE]
   crit <- suppressWarnings(as.numeric(current[[value_name]]))
-  conc <- suppressWarnings(as.numeric(current$concentration))
-  detected <- !is.na(current$detect_flag) & current$detect_flag == "Y"
 
-  # join_action_levels()'s verdict, read as it stands. The fallbacks only
-  # apply to a criteria column added by hand, which carries no verdict.
-  exceed <- if (cmp[["exceedance"]] %in% names(current)) {
-    as.logical(current[[cmp[["exceedance"]]]])
-  } else {
-    detected & !is.na(crit) & conc > crit
-  }
-  lor <- if (cmp[["lor"]] %in% names(current)) {
-    as.logical(current[[cmp[["lor"]]]])
-  } else {
-    !detected & !is.na(crit) & conc > crit
-  }
+  exceed <- exceedance_verdict(current, value_name, cmp)
+  lor <- lor_verdict(current, value_name, cmp)
 
   hit <- !is.na(exceed) & exceed
   if (include_lor) {
@@ -211,9 +188,7 @@ report_exceedances <- function(out, picked, include_lor) {
   if (nrow(out) == 0) {
     message(
       "exceedance_summary(): nothing in ",
-      picked$col,
-      " = ",
-      format(picked$value),
+      round_label(picked),
       " exceeded its guideline."
     )
     return(invisible(NULL))
@@ -226,9 +201,7 @@ report_exceedances <- function(out, picked, include_lor) {
       " results exceeded their guideline"
     },
     " in ",
-    picked$col,
-    " = ",
-    format(picked$value),
+    round_label(picked),
     ", across ",
     length(unique(out$location_code)),
     " locations and ",
