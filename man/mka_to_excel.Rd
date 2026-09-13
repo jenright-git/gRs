@@ -60,7 +60,11 @@ Default \code{"NC"}, for not calculated.}
 \item{location_label}{heading for the first column. Default
 \code{"Monitoring Well"}.}
 
-\item{sheet_name}{name of the summary worksheet.}
+\item{sheet_name}{name for the summary worksheet. Default
+\code{"Trend Summary"}. Excel's own limits apply, and are checked before
+anything is written: at most 31 characters, no colon, slash, backslash,
+question mark, asterisk or square brackets, and - unless
+\code{legend = FALSE} - not \code{"Legend"}, which the legend sheet takes.}
 
 \item{legend}{include the second sheet explaining the trend categories.}
 
@@ -158,6 +162,9 @@ mka_to_excel(trends, trend_colours = c(Increasing = "#E06666"))
 
 # No legend sheet, blank cells instead of "NC"
 mka_to_excel(trends, legend = FALSE, na_label = "")
+
+# Name the summary sheet for the round it covers
+mka_to_excel(trends, sheet_name = "MKA Sep 2026")
 
 # Zones down the side, but a value in every row so the sheet still filters
 mka_to_excel(trends, include_zone = TRUE, merge_zones = FALSE)

@@ -28,6 +28,12 @@
   favourable, built from whatever palette was used, so a recoloured workbook
   stays self-documenting. `legend = FALSE` omits it.
 
+  `sheet_name` names the summary worksheet, `"Trend Summary"` unless set, so a
+  workbook can carry the round it covers. The name is checked against Excel's
+  own limits before anything is written - 31 characters, no reserved
+  characters, and no clash with the legend sheet - so a name Excel would refuse
+  is an error naming the argument rather than a file that will not open.
+
   `include_zone = TRUE` writes the monitoring zone as a further column ahead of
   the well names, sorts the rows by zone and then well, and merges each zone's
   repeated cells into one block, so a suite reads zone by zone. Because

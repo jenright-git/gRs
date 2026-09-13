@@ -49,7 +49,11 @@
 #'   Default `"NC"`, for not calculated.
 #' @param location_label heading for the first column. Default
 #'   `"Monitoring Well"`.
-#' @param sheet_name name of the summary worksheet.
+#' @param sheet_name name for the summary worksheet. Default
+#'   `"Trend Summary"`. Excel's own limits apply, and are checked before
+#'   anything is written: at most 31 characters, no colon, slash, backslash,
+#'   question mark, asterisk or square brackets, and - unless
+#'   `legend = FALSE` - not `"Legend"`, which the legend sheet takes.
 #' @param legend include the second sheet explaining the trend categories.
 #' @param overwrite overwrite `save_path` if it already exists.
 #' @param location_col Name of the column containing location codes.
@@ -112,6 +116,9 @@
 #' # No legend sheet, blank cells instead of "NC"
 #' mka_to_excel(trends, legend = FALSE, na_label = "")
 #'
+#' # Name the summary sheet for the round it covers
+#' mka_to_excel(trends, sheet_name = "MKA Sep 2026")
+#'
 #' # Zones down the side, but a value in every row so the sheet still filters
 #' mka_to_excel(trends, include_zone = TRUE, merge_zones = FALSE)
 #'
@@ -173,6 +180,7 @@ mka_to_excel <- function(
   if (!is.character(na_label) || length(na_label) != 1) {
     stop("`na_label` must be a single string.")
   }
+  check_sheet_name(sheet_name, legend)
   if (
     !is.logical(include_zone) ||
       length(include_zone) != 1 ||
@@ -356,6 +364,9 @@ mka_to_excel <- function(
 }
 
 
+# The legend sheet's name, which the summary sheet may not also take.
+LEGEND_SHEET <- "Legend"
+
 # Cell fills, running from decreasing (favourable, green) through neutral grey
 # to increasing (unfavourable, orange), in the order the legend sheet lists
 # them. Keyed by the categories mann_kendall_test() assigns, plus the
@@ -399,6 +410,59 @@ TREND_INTERPRETATION_DEFAULT <- c(
   "Increasing" = "Unfavourable",
   "NC" = "-"
 )
+
+#' Stop if a worksheet name is one Excel will not take
+#'
+#' openxlsx passes most of these straight through, so a sheet named with a
+#' bracket, or a second sheet called Legend, is only found to be wrong when
+#' Excel refuses to open the finished workbook. Cheaper to catch here, where
+#' the message can name the argument at fault.
+#'
+#' @param sheet_name what was passed for the summary sheet
+#' @param legend whether the legend sheet is being written alongside it
+#' @returns `sheet_name`, invisibly
+#' @noRd
+check_sheet_name <- function(sheet_name, legend) {
+  if (
+    !is.character(sheet_name) ||
+      length(sheet_name) != 1 ||
+      is.na(sheet_name)
+  ) {
+    stop("`sheet_name` must be a single string.")
+  }
+  if (!nzchar(sheet_name)) {
+    stop("`sheet_name` must not be empty.")
+  }
+  if (nchar(sheet_name) > 31) {
+    stop(glue::glue(
+      "`sheet_name` is {nchar(sheet_name)} characters long; Excel allows 31."
+    ))
+  }
+
+  reserved <- c("\\", "/", "*", "?", ":", "[", "]")
+  found <- reserved[vapply(
+    reserved,
+    function(ch) grepl(ch, sheet_name, fixed = TRUE),
+    logical(1)
+  )]
+  if (length(found) > 0) {
+    stop(glue::glue(
+      "`sheet_name` must not contain {toString(found)}; Excel reserves ",
+      "those characters in worksheet names."
+    ))
+  }
+
+  # The legend is added after the summary sheet, so a clash would otherwise
+  # surface as an error about the legend rather than about `sheet_name`.
+  if (isTRUE(legend) && tolower(sheet_name) == tolower(LEGEND_SHEET)) {
+    stop(glue::glue(
+      "`sheet_name` is {sheet_name}, which is the name of the legend sheet. ",
+      "Rename the summary sheet, or drop the legend with `legend = FALSE`."
+    ))
+  }
+
+  invisible(sheet_name)
+}
 
 #' Rename the not-calculated level in a default lookup
 #'
@@ -671,10 +735,10 @@ add_legend_sheet <- function(
   legend$Meaning[is.na(legend$Meaning)] <- ""
   legend$Interpretation[is.na(legend$Interpretation)] <- ""
 
-  openxlsx::addWorksheet(wb, "Legend", gridLines = FALSE)
+  openxlsx::addWorksheet(wb, LEGEND_SHEET, gridLines = FALSE)
   openxlsx::writeData(
     wb,
-    "Legend",
+    LEGEND_SHEET,
     legend,
     headerStyle = openxlsx::createStyle(
       fgFill = header_fill,
@@ -689,21 +753,21 @@ add_legend_sheet <- function(
   for (i in seq_len(nrow(legend))) {
     openxlsx::addStyle(
       wb,
-      "Legend",
+      LEGEND_SHEET,
       trend_cell_style(legend$Trend[i], fills, fonts, na_label),
       rows = i + 1,
       cols = 1
     )
     openxlsx::addStyle(
       wb,
-      "Legend",
+      LEGEND_SHEET,
       openxlsx::createStyle(fontSize = 10, valign = "center"),
       rows = i + 1,
       cols = 2:3,
       gridExpand = TRUE
     )
   }
-  openxlsx::setColWidths(wb, "Legend", cols = 1:3, widths = c(22, 62, 16))
+  openxlsx::setColWidths(wb, LEGEND_SHEET, cols = 1:3, widths = c(22, 62, 16))
 
   invisible(wb)
 }

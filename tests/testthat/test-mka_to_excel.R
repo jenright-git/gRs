@@ -33,6 +33,56 @@ test_that("legend = FALSE drops the second sheet", {
   expect_equal(openxlsx::getSheetNames(path), "Trend Summary")
 })
 
+test_that("sheet_name names the summary worksheet", {
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  mka_to_excel(mka_fixture(), save_path = path, sheet_name = "MKA Sep 2026")
+
+  expect_equal(openxlsx::getSheetNames(path), c("MKA Sep 2026", "Legend"))
+})
+
+test_that("a sheet name Excel would refuse is caught before writing", {
+  path <- file.path(withr::local_tempdir(), "trends.xlsx")
+  data <- mka_fixture()
+
+  expect_error(
+    mka_to_excel(data, save_path = path, sheet_name = c("One", "Two")),
+    "single string"
+  )
+  expect_error(
+    mka_to_excel(data, save_path = path, sheet_name = ""),
+    "must not be empty"
+  )
+  expect_error(
+    mka_to_excel(data, save_path = path, sheet_name = strrep("Trend", 7)),
+    "Excel allows 31"
+  )
+  expect_error(
+    mka_to_excel(data, save_path = path, sheet_name = "Trends [2026]"),
+    "must not contain"
+  )
+  expect_false(file.exists(path))
+})
+
+test_that("the summary sheet may not take the legend's name", {
+  path <- file.path(withr::local_tempdir(), "trends.xlsx")
+
+  # Case-insensitively: Excel will not hold two sheets whose names differ only
+  # in case either.
+  expect_error(
+    mka_to_excel(mka_fixture(), save_path = path, sheet_name = "legend"),
+    "legend sheet"
+  )
+  expect_false(file.exists(path))
+
+  mka_to_excel(
+    mka_fixture(),
+    save_path = path,
+    sheet_name = "Legend",
+    legend = FALSE
+  )
+  expect_equal(openxlsx::getSheetNames(path), "Legend")
+})
+
 test_that("untested location/analyte pairs are labelled, not left blank", {
   data <- mka_fixture()[1:3, ]
   out <- mka_to_excel(data, save_path = withr::local_tempfile(
