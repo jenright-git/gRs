@@ -2,6 +2,15 @@
 
 ## New features
 
+* `data_processor()` and `action_level_processor()` accept a data frame as
+  well as a file path, so the ESdat OData feeds read with esdatr
+  (`esdatr::get_esdat_odata_chemistry()` and friends) go straight in. The
+  feeds are the views the Excel exports are made from, so a feed gives the
+  same table as its export: the report family is detected from the columns,
+  and date-times sent as text are converted. `action_level_processor()` needs
+  `name` for a data frame, since there is no file name to fall back on.
+  `Water_Depth_bgl`, from `ESdat_Water_Depths`, is read as `water_depth`.
+
 * `mka_to_excel()` writes the output of `mann_kendall_test()` to a formatted
   Excel workbook: one row per location, one column per analyte, the trend in
   each cell, and the cell filled by trend direction - green for decreasing

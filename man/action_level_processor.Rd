@@ -8,7 +8,9 @@ action_level_processor(myfile_path, name = NULL, sheet = NULL)
 }
 \arguments{
 \item{myfile_path}{file path to an action level export. More than one path
-may be given, in which case the results are stacked.}
+may be given, in which case the results are stacked. May instead be a
+data frame holding the same table, such as one read from ESdat with
+\code{esdatr}, in which case \code{name} is required.}
 
 \item{name}{name for the guideline set, written to \code{criteria_name}, e.g.
 \code{"ANZG 95\% Marine"}. Defaults to the file name without its extension.

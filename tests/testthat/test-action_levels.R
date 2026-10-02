@@ -210,3 +210,35 @@ test_that("the guideline set name defaults to the file name", {
     "ANZG Marine Water Toxicant DGVs LOSP 95_ (March 2026)"
   )
 })
+
+test_that("a data frame of action levels reads like the file it came from", {
+  path <- example_report(
+    "ANZG Marine Water Toxicant DGVs LOSP 95_ (March 2026).xlsx"
+  )
+  from_file <- suppressWarnings(
+    action_level_processor(path, name = "ANZG 95% Marine")
+  )
+  raw <- suppressMessages(readxl::read_excel(path))
+  from_df <- suppressWarnings(
+    action_level_processor(raw, name = "ANZG 95% Marine")
+  )
+
+  expect_equal(from_df, from_file)
+})
+
+test_that("a data frame of action levels needs a name", {
+  raw <- dplyr::tibble(ChemCode = "7440-50-8", Action_Level = "1.3 ug/L")
+
+  expect_error(action_level_processor(raw), "`name` is required")
+  expect_equal(
+    action_level_processor(raw, name = "Test")$criteria_unit,
+    "ug/L"
+  )
+})
+
+test_that("a data frame that is not action levels is an error", {
+  expect_error(
+    action_level_processor(dplyr::tibble(Location_Code = "MW01"), name = "x"),
+    "not a table of action levels"
+  )
+})

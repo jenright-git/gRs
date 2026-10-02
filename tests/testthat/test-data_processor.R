@@ -75,6 +75,84 @@ test_that("a missing file is named in the error", {
   expect_error(data_processor("no-such-file.xlsx"), "File does not exist")
 })
 
+# --- data frames: the ESdat OData feeds ------------------------------------
+
+# The OData feeds are the views the Excel exports are made from: the same
+# columns, spelt with underscores, and date-times sent as text.
+as_odata_feed <- function(path) {
+  raw <- suppressMessages(readxl::read_excel(path, skip = 1, guess_max = 1e6))
+  names(raw) <- gsub(" ", "_", names(raw))
+  dplyr::mutate(
+    raw,
+    dplyr::across(
+      dplyr::where(~ inherits(.x, "POSIXct")),
+      ~ format(.x, "%Y-%m-%dT%H:%M:%S")
+    )
+  )
+}
+
+test_that("an OData chemistry feed gives the same table as its Excel export", {
+  for (file in c("davLChem1_Chemistry (28).xlsx", "davSChem1_Chemistry.xlsx")) {
+    path <- example_report(file)
+    from_file <- suppressMessages(data_processor(path, result_type = "all"))
+    from_feed <- suppressMessages(
+      data_processor(as_odata_feed(path), result_type = "all")
+    )
+
+    expect_equal(from_feed, from_file, info = file)
+  }
+})
+
+test_that("a data frame is detected as chemistry or water level", {
+  chem <- dplyr::tibble(
+    Site = "SITE",
+    Location_Code = "MW01",
+    Sampled_Date_Time = "2024-03-01T14:30:00",
+    Chem_Name = "Copper",
+    Chem_Code = "7440-50-8",
+    Chem_Group = "Metals",
+    Total_or_Filtered = "T",
+    Prefix = NA_character_,
+    Result = 1.5,
+    Result_Unit = "mg/L"
+  )
+  depths <- dplyr::tibble(
+    Site = "SITE",
+    Location_Code = "MW01",
+    Date_Time = "2024-03-01T09:00:00",
+    Water_Depth_bgl = 2.99,
+    Dry = c(FALSE, TRUE)
+  )
+
+  chem_out <- data_processor(chem)
+  depth_out <- data_processor(depths)
+
+  expect_equal(attr(chem_out, "report_type"), "chemistry")
+  expect_equal(
+    chem_out$sampled_date_time,
+    as.POSIXct("2024-03-01 14:30:00", tz = "UTC")
+  )
+  expect_equal(chem_out$detect_flag, "Y")
+
+  expect_equal(attr(depth_out, "report_type"), "water_level")
+  expect_equal(depth_out$water_depth, c(2.99, 2.99))
+  expect_equal(depth_out$dry_indicator_yn, c("N", "Y"))
+  expect_true(all(names(WATER_LEVEL_SCHEMA) %in% names(depth_out)))
+})
+
+test_that("a data frame matching no report family warns and returns NULL", {
+  expect_warning(
+    out <- data_processor(dplyr::tibble(Location_Code = "MW01")),
+    "matches no report family"
+  )
+  expect_null(out)
+
+  expect_warning(
+    data_processor(dplyr::tibble(Chem_Code = "7440-50-8", Action_Level = 1)),
+    "action_level_processor"
+  )
+})
+
 # --- normalisation, tested without touching a file -------------------------
 
 test_that("aliases resolve to canonical names", {

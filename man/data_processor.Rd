@@ -13,7 +13,8 @@ data_processor(
 )
 }
 \arguments{
-\item{myfile_path}{file path to data}
+\item{myfile_path}{file path to data, or a data frame of the same data; see
+Data frames and the ESdat OData feeds.}
 
 \item{sheet_pattern}{pattern matching the excel sheet name for new or old
 esdat chemistry formats. Only used when locating a chemistry sheet.}
@@ -77,6 +78,17 @@ families. ESDAT-only fields that have no EQuIS equivalent (for example
 
 Water level reports are returned with the full EQuIS field set present, so
 ESDAT and EQuIS gauging data can be combined with \code{\link[dplyr:bind_rows]{dplyr::bind_rows()}}.
+\subsection{Data frames and the ESdat OData feeds}{
+
+\code{myfile_path} may instead be a data frame holding the same data, such as an
+ESdat OData feed read with \code{esdatr::get_esdat_odata_chemistry()}. The OData
+feeds are the data views the Excel exports are made from, and their columns
+differ only in spelling (\code{Sampled_Date_Time} against \verb{Sampled Date Time}),
+which cleaning the names removes. The report family is detected from the
+columns as it is for a sheet, and date-times sent as text
+(\code{"2024-03-01T14:30:00"}) are converted, so a feed and its Excel export
+give the same table.
+}
 }
 \examples{
 \dontrun{
@@ -96,5 +108,15 @@ equis_gw <- data_processor('Water Levels II_equis.xlsx')
 
 # both share a schema, so they bind cleanly
 dplyr::bind_rows(esdat_gw, equis_gw)
+
+# the same data read straight from ESdat's OData feeds
+water <- esdatr::get_esdat_odata_chemistry(project_id = "60653655 - Contam")
+data_processor(water)
+
+soil <- esdatr::get_esdat_odata_chemistry(
+  project_id = "60653655 - Contam",
+  matrix = "soil"
+)
+data_processor(soil, result_type = "LEACHED_REG")
 }
 }

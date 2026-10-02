@@ -18,7 +18,9 @@
 #' `LEACHED_REG` in an ESDAT soil export) only against `leached = TRUE`.
 #'
 #' @param myfile_path file path to an action level export. More than one path
-#'   may be given, in which case the results are stacked.
+#'   may be given, in which case the results are stacked. May instead be a
+#'   data frame holding the same table, such as one read from ESdat with
+#'   `esdatr`, in which case `name` is required.
 #' @param name name for the guideline set, written to `criteria_name`, e.g.
 #'   `"ANZG 95% Marine"`. Defaults to the file name without its extension.
 #'   Recycled against `myfile_path`.
@@ -48,6 +50,10 @@
 #' @importFrom readxl excel_sheets read_excel
 #' @importFrom janitor clean_names
 action_level_processor <- function(myfile_path, name = NULL, sheet = NULL) {
+  if (is.data.frame(myfile_path)) {
+    return(action_level_data_frame(myfile_path, name = name))
+  }
+
   if (length(myfile_path) > 1) {
     if (is.null(name)) {
       name <- rep(list(NULL), length(myfile_path))
@@ -103,6 +109,38 @@ action_level_processor <- function(myfile_path, name = NULL, sheet = NULL) {
     skip = target$skip,
     guess_max = EXCEL_GUESS_MAX
   ))
+
+  out <- process_action_levels(raw, name = name)
+  attr(out, "report_type") <- "action_level"
+  out
+}
+
+#' Normalise an action level table that did not come from a workbook
+#'
+#' A data frame carries no file name to fall back on, and the guideline set's
+#' name is what every join report and `criteria_name` column is labelled
+#' with, so it must be given.
+#'
+#' @param raw data frame of action levels
+#' @param name name for the guideline set
+#' @returns normalised tibble carrying a `"report_type"` attribute
+#' @noRd
+action_level_data_frame <- function(raw, name) {
+  if (length(name) != 1 || is.na(name) || !nzchar(name)) {
+    stop(
+      "`name` is required when `myfile_path` is a data frame, e.g. ",
+      "name = \"ANZG 95% Marine\"."
+    )
+  }
+
+  if (!is_action_level_header(header_names(raw))) {
+    stop(
+      "The data frame is not a table of action levels: it needs a chemical ",
+      "column and an action level column (or a recognised alias of each).",
+      "\nColumns present: ",
+      paste(names(raw), collapse = ", ")
+    )
+  }
 
   out <- process_action_levels(raw, name = name)
   attr(out, "report_type") <- "action_level"
@@ -586,14 +624,20 @@ locate_action_level_sheet <- function(myfile_path, all_sheets) {
       if (is.null(peek)) {
         next
       }
-      canonical <- canonical_names(peek, ACTION_LEVEL_ALIASES)
-      has_chem <- any(c("chem_code", "chem_name") %in% canonical)
-      if (has_chem && "criteria" %in% canonical) {
+      if (is_action_level_header(peek)) {
         return(list(sheet = s, skip = skip))
       }
     }
   }
   list(sheet = NULL, skip = NULL)
+}
+
+#' Does a header identify an action level table?
+#' @param nms column names from `header_names()`
+#' @noRd
+is_action_level_header <- function(nms) {
+  canonical <- canonical_names(nms, ACTION_LEVEL_ALIASES)
+  any(c("chem_code", "chem_name") %in% canonical) && "criteria" %in% canonical
 }
 
 #' Normalise a raw action level export

@@ -35,7 +35,19 @@
 #' Water level reports are returned with the full EQuIS field set present, so
 #' ESDAT and EQuIS gauging data can be combined with [dplyr::bind_rows()].
 #'
-#' @param myfile_path file path to data
+#' ## Data frames and the ESdat OData feeds
+#'
+#' `myfile_path` may instead be a data frame holding the same data, such as an
+#' ESdat OData feed read with `esdatr::get_esdat_odata_chemistry()`. The OData
+#' feeds are the data views the Excel exports are made from, and their columns
+#' differ only in spelling (`Sampled_Date_Time` against `Sampled Date Time`),
+#' which cleaning the names removes. The report family is detected from the
+#' columns as it is for a sheet, and date-times sent as text
+#' (`"2024-03-01T14:30:00"`) are converted, so a feed and its Excel export
+#' give the same table.
+#'
+#' @param myfile_path file path to data, or a data frame of the same data; see
+#'   Data frames and the ESdat OData feeds.
 #' @param sheet_pattern pattern matching the excel sheet name for new or old
 #'   esdat chemistry formats. Only used when locating a chemistry sheet.
 #' @param report_type one of `"auto"` (default), `"chemistry"` or
@@ -74,6 +86,16 @@
 #'
 #' # both share a schema, so they bind cleanly
 #' dplyr::bind_rows(esdat_gw, equis_gw)
+#'
+#' # the same data read straight from ESdat's OData feeds
+#' water <- esdatr::get_esdat_odata_chemistry(project_id = "60653655 - Contam")
+#' data_processor(water)
+#'
+#' soil <- esdatr::get_esdat_odata_chemistry(
+#'   project_id = "60653655 - Contam",
+#'   matrix = "soil"
+#' )
+#' data_processor(soil, result_type = "LEACHED_REG")
 #' }
 #' @importFrom dplyr bind_rows filter mutate case_when rename across all_of
 #'   any_of relocate
@@ -90,6 +112,15 @@ data_processor <- function(
   default_depth_unit = "m"
 ) {
   report_type <- match.arg(report_type)
+
+  if (is.data.frame(myfile_path)) {
+    return(process_data_frame(
+      myfile_path,
+      report_type = report_type,
+      result_type = result_type,
+      default_depth_unit = default_depth_unit
+    ))
+  }
 
   if (!file.exists(myfile_path)) {
     stop("File does not exist: ", myfile_path)
@@ -151,13 +182,86 @@ data_processor <- function(
     guess_max = EXCEL_GUESS_MAX
   ))
 
-  out <- if (target$type == "water_level") {
+  normalise_report(
+    raw_data,
+    type = target$type,
+    result_type = result_type,
+    default_depth_unit = default_depth_unit
+  )
+}
+
+#' Normalise a data frame that did not come from a workbook
+#'
+#' The ESdat OData feeds are the views the Excel exports are made from, so
+#' once their names are cleaned they carry the same columns, and the report
+#' family is detected from them exactly as it is for a sheet.
+#'
+#' @param raw_data data frame, such as an ESdat OData feed
+#' @param report_type,result_type,default_depth_unit see [data_processor()]
+#' @returns normalised tibble, or `NULL` with a warning if the columns match
+#'   neither report family
+#' @noRd
+process_data_frame <- function(
+  raw_data,
+  report_type,
+  result_type,
+  default_depth_unit
+) {
+  nms <- header_names(raw_data)
+
+  type <- if (
+    report_type %in% c("auto", "chemistry") && is_chemistry_header(nms)
+  ) {
+    "chemistry"
+  } else if (
+    report_type %in% c("auto", "water_level") && is_water_level_header(nms)
+  ) {
+    "water_level"
+  }
+
+  if (is.null(type)) {
+    notes <- c(
+      if (report_type %in% c("auto", "chemistry")) CHEMISTRY_NOTE,
+      if (report_type %in% c("auto", "water_level")) WATER_LEVEL_NOTE
+    )
+    hint <- if (is_action_level_header(nms)) {
+      "\nThis looks like a table of action levels - read it with action_level_processor()."
+    } else {
+      ""
+    }
+    warning(
+      "The data frame matches no report family.\n",
+      paste(notes, collapse = "\n"),
+      "\nColumns present: ",
+      paste(names(raw_data), collapse = ", "),
+      hint
+    )
+    return(NULL)
+  }
+
+  normalise_report(
+    raw_data,
+    type = type,
+    result_type = result_type,
+    default_depth_unit = default_depth_unit
+  )
+}
+
+#' Run the normaliser for a report family
+#'
+#' @param raw_data data frame straight from readxl or the caller
+#' @param type `"chemistry"` or `"water_level"`
+#' @param result_type,default_depth_unit see [data_processor()]
+#' @returns normalised tibble carrying a `"report_type"` attribute
+#' @noRd
+normalise_report <- function(raw_data, type, result_type, default_depth_unit) {
+  out <- if (type == "water_level") {
     process_water_level(raw_data, default_depth_unit = default_depth_unit)
   } else {
     process_chemistry(raw_data, result_type = result_type)
   }
 
-  attr(out, "report_type") <- target$type
+  attr(out, "report_type") <- type
   out
 }
 
@@ -195,23 +299,13 @@ locate_chemistry_sheet <- function(myfile_path, all_sheets, sheet_pattern) {
       if (is.null(peek)) {
         next
       }
-      canonical <- canonical_names(peek, COLUMN_ALIASES)
-      if (all(CHEMISTRY_SIGNATURE_COLS %in% canonical)) {
+      if (is_chemistry_header(peek)) {
         return(list(sheet = s, skip = skip, type = "chemistry", note = NA))
       }
     }
   }
 
-  list(
-    sheet = NULL,
-    skip = NULL,
-    type = "chemistry",
-    note = paste0(
-      "- chemistry: no sheet carrying all of: ",
-      paste(CHEMISTRY_SIGNATURE_COLS, collapse = ", "),
-      " (or a recognised alias of each)."
-    )
-  )
+  list(sheet = NULL, skip = NULL, type = "chemistry", note = CHEMISTRY_NOTE)
 }
 
 #' Locate a water level (gauging) sheet within a workbook
@@ -230,27 +324,12 @@ locate_water_level_sheet <- function(myfile_path, all_sheets) {
       if (is.null(peek)) {
         next
       }
-      canonical <- canonical_names(peek, WATER_LEVEL_ALIASES)
-      has_keys <- all(
-        c("location_code", "sampled_date_time") %in% canonical
-      )
-      has_measure <- any(WATER_LEVEL_SIGNATURE_COLS %in% canonical)
-      if (has_keys && has_measure) {
+      if (is_water_level_header(peek)) {
         return(list(sheet = s, skip = skip, type = "water_level", note = NA))
       }
     }
   }
-  list(
-    sheet = NULL,
-    skip = NULL,
-    type = "water_level",
-    note = paste0(
-      "- water level: no sheet carrying a location column, a date column and ",
-      "one of: ",
-      paste(WATER_LEVEL_SIGNATURE_COLS, collapse = ", "),
-      "."
-    )
-  )
+  list(sheet = NULL, skip = NULL, type = "water_level", note = WATER_LEVEL_NOTE)
 }
 
 #' Read only the header row of a worksheet
@@ -270,11 +349,40 @@ peek_names <- function(myfile_path, sheet, skip = 0) {
   if (is.null(peek) || ncol(peek) == 0) {
     return(NULL)
   }
-  # AR2 detection matches on the raw uppercase names, so return both forms.
-  # Peeking with an offset of 1 can turn a row of data into the header, so
-  # janitor is silenced here - it has nothing useful to say about a candidate
-  # that is about to be rejected anyway.
-  c(names(peek), names(suppressWarnings(janitor::clean_names(peek))))
+  header_names(peek)
+}
+
+#' Column names of a data frame in raw and cleaned form
+#'
+#' AR2 detection matches on the raw uppercase names, so both forms are
+#' returned. Peeking at a sheet with an offset of 1 can turn a row of data
+#' into the header, so janitor is silenced here - it has nothing useful to say
+#' about a candidate that is about to be rejected anyway.
+#'
+#' @param df data frame
+#' @returns character vector of column names
+#' @noRd
+header_names <- function(df) {
+  c(
+    names(df),
+    names(suppressWarnings(janitor::clean_names(df[0, , drop = FALSE])))
+  )
+}
+
+#' Does a header identify a chemistry report?
+#' @param nms column names from [header_names()]
+#' @noRd
+is_chemistry_header <- function(nms) {
+  all(CHEMISTRY_SIGNATURE_COLS %in% canonical_names(nms, COLUMN_ALIASES))
+}
+
+#' Does a header identify a water level (gauging) report?
+#' @param nms column names from [header_names()]
+#' @noRd
+is_water_level_header <- function(nms) {
+  canonical <- canonical_names(nms, WATER_LEVEL_ALIASES)
+  all(c("location_code", "sampled_date_time") %in% canonical) &&
+    any(WATER_LEVEL_SIGNATURE_COLS %in% canonical)
 }
 
 #' Resolve a vector of column names to their canonical equivalents
@@ -345,6 +453,11 @@ process_chemistry <- function(raw_sw_data, result_type = "primary") {
       paste(names(sw_data), collapse = ", ")
     )
   }
+
+  # readxl hands back a date-time; the ESdat OData feeds send the same field
+  # as text ("2024-03-01T14:30:00"), which floor_date() below cannot use.
+  sw_data <- sw_data %>%
+    dplyr::mutate(sampled_date_time = coerce_datetime(sampled_date_time))
 
   if (!"chem_group" %in% names(sw_data)) {
     warning(
@@ -619,6 +732,12 @@ CHEMISTRY_SIGNATURE_COLS <- c(
   "concentration"
 )
 
+CHEMISTRY_NOTE <- paste0(
+  "- chemistry: no sheet or table carrying all of: ",
+  paste(CHEMISTRY_SIGNATURE_COLS, collapse = ", "),
+  " (or a recognised alias of each)."
+)
+
 # Result types kept by result_type = "primary": the ordinary reported result
 # in ESDAT exports ("REG") and in EQuIS exports ("TRG", target analyte).
 # Anything else - leachate results ("LEACHED_REG"), surrogates, internal
@@ -631,6 +750,13 @@ WATER_LEVEL_SIGNATURE_COLS <- c(
   "water_depth",
   "water_level_depth",
   "reference_elev"
+)
+
+WATER_LEVEL_NOTE <- paste0(
+  "- water level: no sheet or table carrying a location column, a date ",
+  "column and one of: ",
+  paste(WATER_LEVEL_SIGNATURE_COLS, collapse = ", "),
+  "."
 )
 
 # Concepts shared by chemistry and water level exports. These keep the names
@@ -756,6 +882,8 @@ WATER_LEVEL_ALIASES <- c(
     ),
     exact_elev = c("exact_elevation"),
     water_depth = c(
+      # ESdat OData ESdat_Water_Depths
+      "water_depth_bgl",
       "depth_to_water",
       "dtw",
       "water_depth_m",
