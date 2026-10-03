@@ -242,3 +242,154 @@ test_that("a data frame that is not action levels is an error", {
     "not a table of action levels"
   )
 })
+
+# --- guideline tables read from ESdat and EQuIS ----------------------------
+
+# ESdat_Environmental_Standards as esdatr::get_esdat_odata() returns it: the
+# value a number, its unit, bound and flags in columns of their own, and the
+# set named on every row.
+esdat_standards <- function(...) {
+  out <- dplyr::tibble(
+    Chem_Code = c("7440-50-8", "688-73-3_as_Sn", "PH", "7440-66-6"),
+    Chem_Name = c("Copper", "Tributyltin", "pH", "Zinc"),
+    Matrix_Type = "Water",
+    Action_Level_Source = "ANZG 95% Marine",
+    Action_Level = c(1.3, 0.006, 8.5, NA),
+    Action_Level_Min = c(NA, NA, 6.5, NA),
+    Units = c("\u00b5g/L", "\u00b5g Sn/L", "pH units", "\u00b5g/L"),
+    Leached = FALSE,
+    Applies_To_Total_Result = TRUE,
+    Applies_To_Filtered_Result = c(TRUE, FALSE, TRUE, TRUE),
+    Action_Level_Prefix = c(NA, NA, NA, "NL"),
+    Comments = NA_character_
+  )
+  args <- list(...)
+  for (nm in names(args)) out[[nm]] <- args[[nm]]
+  out
+}
+
+# EQuIS DT_ACTION_LEVEL_PARAMETER as AEQuIS::get_equis_odata_all() returns
+# it: the value as text, and one fraction per guideline.
+equis_action_levels <- function() {
+  dplyr::tibble(
+    PARAM_CODE = c("7440-50-8", "7440-50-8", "7440-66-6", "PH"),
+    ACTION_LEVEL_CODE = "ANZG MW 95",
+    ACTION_LEVEL = c("1.3", "5", "8", "8.5"),
+    ACTION_LEVEL_MIN = c(NA, NA, NA, "6.5"),
+    UNIT = c("ug/l", "ug/l", "ug/l", "pH units"),
+    MATRIX = c("WATER", "WATER", NA, "WATER"),
+    FRACTION = c("D", "T", "N", NA),
+    REMARK = NA_character_
+  )
+}
+
+test_that("an ESdat feed reads like the export it came from", {
+  path <- example_report(
+    "ANZG Marine Water Toxicant DGVs LOSP 95_ (March 2026).xlsx"
+  )
+  raw <- suppressMessages(readxl::read_excel(path))
+  cell <- raw$`Action Level`
+  feed <- dplyr::tibble(
+    Chem_Code = raw$ChemCode,
+    Chem_Name = raw$ChemName,
+    Matrix_Type = raw$MatrixType,
+    Action_Level_Source = "ANZG 95% Marine",
+    Action_Level = as.numeric(sub(" .*$", "", cell)),
+    Units = sub("^[^ ]+ ", "", cell),
+    Leached = normalise_logical(raw$Leached),
+    Applies_To_Total_Result = normalise_logical(raw$Total),
+    Applies_To_Filtered_Result = normalise_logical(raw$Filtered),
+    Comments = raw$Comments
+  )
+
+  from_file <- suppressWarnings(
+    action_level_processor(path, name = "ANZG 95% Marine")
+  )
+  from_feed <- suppressWarnings(action_level_processor(feed))
+
+  expect_equal(from_feed, from_file)
+})
+
+test_that("an ESdat feed's value, unit, basis and flags are read", {
+  levels <- suppressMessages(action_level_processor(esdat_standards()))
+
+  expect_equal(levels$chem_code, c("7440-50-8", "688-73-3_as_Sn"))
+  expect_equal(levels$criteria, c(1.3, 0.006))
+  expect_equal(levels$criteria_unit, c("\u00b5g/L", "\u00b5g/L"))
+  expect_equal(levels$criteria_basis, c(NA, "Sn"))
+  expect_equal(levels$criteria_text, c("1.3 \u00b5g/L", "0.006 \u00b5g Sn/L"))
+  expect_equal(levels$total, c(TRUE, TRUE))
+  expect_equal(levels$filtered, c(TRUE, FALSE))
+  expect_equal(unique(levels$criteria_name), "ANZG 95% Marine")
+})
+
+test_that("a range is dropped rather than read as one of its bounds", {
+  expect_message(
+    levels <- action_level_processor(esdat_standards()),
+    "Dropped 2 action level rows.*6.5 - 8.5 pH units, NL"
+  )
+  expect_false(any(levels$chem_name %in% c("pH", "Zinc")))
+  expect_false("criteria_min" %in% names(levels))
+})
+
+test_that("a feed holding several sets keeps each set's own name", {
+  two <- dplyr::bind_rows(
+    esdat_standards(Action_Level_Source = "NEMP 95%"),
+    esdat_standards(Action_Level_Source = "NEMP 99%")
+  )
+  levels <- suppressMessages(action_level_processor(two))
+
+  expect_equal(sort(unique(levels$criteria_name)), c("NEMP 95%", "NEMP 99%"))
+  expect_error(
+    suppressMessages(action_level_processor(two, name = "NEMP")),
+    "holds 2 guideline sets: NEMP 95%, NEMP 99%"
+  )
+})
+
+test_that("`name` relabels a feed's one set", {
+  levels <- suppressMessages(
+    action_level_processor(esdat_standards(), name = "ANZG 95")
+  )
+
+  expect_equal(unique(levels$criteria_name), "ANZG 95")
+})
+
+test_that("an EQuIS action level table is read by its parameter code", {
+  levels <- suppressMessages(action_level_processor(equis_action_levels()))
+
+  expect_equal(levels$chem_code, c("7440-50-8", "7440-50-8", "7440-66-6"))
+  expect_true(all(is.na(levels$chem_name)))
+  expect_equal(unique(levels$criteria_name), "ANZG MW 95")
+  expect_equal(levels$criteria, c(1.3, 5, 8))
+  expect_equal(levels$criteria_unit, rep("ug/l", 3))
+  expect_equal(levels$criteria_text, c("1.3 ug/l", "5 ug/l", "8 ug/l"))
+  # One fraction per guideline: D is filtered alone, T total alone, N either.
+  expect_equal(levels$filtered, c(TRUE, FALSE, NA))
+  expect_equal(levels$total, c(FALSE, TRUE, NA))
+})
+
+test_that("an EQuIS guideline applies only to its own fraction", {
+  levels <- suppressMessages(action_level_processor(equis_action_levels()))
+  chem <- chem_fixture(
+    fraction = rep(c("D", "T"), 3),
+    output_unit = "ug/L",
+    matrix_code = "WQ"
+  )
+  out <- join_action_levels(chem, levels, quiet = TRUE)
+
+  expect_equal(out$criteria, rep(c(1.3, 5), 3))
+})
+
+test_that("EQuIS's QA/QC matrix codes fold into water and soil", {
+  expect_equal(
+    normalise_matrix(c("WQ", "WG", "SQ", "SO")),
+    c("WATER", "WATER", "SOIL", "SOIL")
+  )
+})
+
+test_that("a guideline value is written back as the number it is", {
+  expect_equal(
+    format_action_level(c(80, 0.006, 1900, 1e-4, 0.1 + 0.2, NA)),
+    c("80", "0.006", "1900", "0.0001", "0.3", NA)
+  )
+})

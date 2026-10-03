@@ -17,12 +17,42 @@
 #' against a guideline with `filtered = TRUE`, a leachate result (`REG` vs
 #' `LEACHED_REG` in an ESDAT soil export) only against `leached = TRUE`.
 #'
+#' ## Guidelines from ESdat and EQuIS
+#'
+#' `myfile_path` may instead be a data frame of guidelines read straight from
+#' either database, which gives the same table as the export:
+#'
+#' * **ESdat** - the `ESdat_Environmental_Standards` OData feed, read with
+#'   `esdatr::get_esdat_odata_action_levels()` (find the sources with
+#'   `esdatr::get_esdat_odata_action_level_sources()`). The value arrives as
+#'   a number with its unit
+#'   in `Units`, and `Applies_To_Total_Result` and
+#'   `Applies_To_Filtered_Result` become `total` and `filtered`.
+#' * **EQuIS** - the `DT_ACTION_LEVEL_PARAMETER` table, read with
+#'   `AEQuIS::get_equis_odata_all()`. `PARAM_CODE` is the analyte's CAS
+#'   number, matched against `chem_code` as an ESdat code is. EQuIS records
+#'   one `FRACTION` per guideline rather than a flag per fraction: `T` sets
+#'   `total` alone, `D` sets `filtered` alone, and `N` or blank leaves both
+#'   unset, so the guideline applies to either. The table holds no chemical
+#'   name, so these guidelines match on code alone.
+#'
+#' Both tables name the guideline set on every row - `Action_Level_Source` in
+#' ESdat, `ACTION_LEVEL_CODE` in EQuIS - and that becomes `criteria_name`, so
+#' a table holding several sets keeps them apart. Filter to one before
+#' passing it to [join_action_levels()]. Both also record a lower bound
+#' (`Action_Level_Min`, `ACTION_LEVEL_MIN`) for guidelines that are ranges,
+#' such as pH. A range has no single value to compare a result against, so
+#' those rows are dropped and reported, as a `"6.5 - 8.5"` cell in an export
+#' is.
+#'
 #' @param myfile_path file path to an action level export. More than one path
 #'   may be given, in which case the results are stacked. May instead be a
-#'   data frame holding the same table, such as one read from ESdat with
-#'   `esdatr`, in which case `name` is required.
+#'   data frame holding the same table; see Guidelines from ESdat and EQuIS.
 #' @param name name for the guideline set, written to `criteria_name`, e.g.
-#'   `"ANZG 95% Marine"`. Defaults to the file name without its extension.
+#'   `"ANZG 95% Marine"`. Defaults to the set named in the table itself
+#'   (`Action_Level_Source`, `ACTION_LEVEL_CODE`) and otherwise, for a file,
+#'   to the file name without its extension. Required for a data frame that
+#'   names no set. A table holding several sets cannot be given one name.
 #'   Recycled against `myfile_path`.
 #' @param sheet optional sheet name. By default the sheet is found from its
 #'   contents, with and without a leading banner row.
@@ -45,6 +75,21 @@
 #'   c("ANZG 95.xlsx", "ANZG 99.xlsx"),
 #'   name = c("ANZG 95%", "ANZG 99%")
 #' )
+#'
+#' # the same guidelines read straight from ESdat ...
+#' std <- esdatr::get_esdat_odata_action_levels(
+#'   "ANZG Marine Water Toxicant DGVs LOSP 95% (March 2026)"
+#' )
+#' anzg <- action_level_processor(std, name = "ANZG 95% Marine")
+#'
+#' # ... or from EQuIS, several sets at once, labelled by ACTION_LEVEL_CODE
+#' al <- AEQuIS::get_equis_odata_all(
+#'   "DT_ACTION_LEVEL_PARAMETER",
+#'   filter = "startswith(ACTION_LEVEL_CODE, 'ANZG')",
+#'   orderby = "ACTION_LEVEL_CODE,PARAM_CODE"
+#' )
+#' levels <- action_level_processor(al)
+#' table(levels$criteria_name)
 #' }
 #' @importFrom dplyr filter relocate bind_rows any_of
 #' @importFrom readxl excel_sheets read_excel
@@ -80,10 +125,6 @@ action_level_processor <- function(myfile_path, name = NULL, sheet = NULL) {
     )
   }
 
-  if (is.null(name) || is.na(name) || !nzchar(name)) {
-    name <- sub("\\.[^.]*$", "", basename(myfile_path))
-  }
-
   all_sheets <- readxl::excel_sheets(myfile_path)
   target <- if (is.null(sheet)) {
     locate_action_level_sheet(myfile_path, all_sheets)
@@ -110,7 +151,11 @@ action_level_processor <- function(myfile_path, name = NULL, sheet = NULL) {
     guess_max = EXCEL_GUESS_MAX
   ))
 
-  out <- process_action_levels(raw, name = name)
+  out <- process_action_levels(
+    raw,
+    name = name,
+    default_name = sub("\\.[^.]*$", "", basename(myfile_path))
+  )
   attr(out, "report_type") <- "action_level"
   out
 }
@@ -119,17 +164,17 @@ action_level_processor <- function(myfile_path, name = NULL, sheet = NULL) {
 #'
 #' A data frame carries no file name to fall back on, and the guideline set's
 #' name is what every join report and `criteria_name` column is labelled
-#' with, so it must be given.
+#' with, so it must come from the table itself or from `name`.
 #'
 #' @param raw data frame of action levels
-#' @param name name for the guideline set
+#' @param name name for the guideline set, or `NULL`
 #' @returns normalised tibble carrying a `"report_type"` attribute
 #' @noRd
 action_level_data_frame <- function(raw, name) {
-  if (length(name) != 1 || is.na(name) || !nzchar(name)) {
+  if (length(name) > 1) {
     stop(
-      "`name` is required when `myfile_path` is a data frame, e.g. ",
-      "name = \"ANZG 95% Marine\"."
+      "`name` holds ", length(name), " names but `myfile_path` is one table. ",
+      "Give one name, or none to use the sets the table names."
     )
   }
 
@@ -642,11 +687,14 @@ is_action_level_header <- function(nms) {
 
 #' Normalise a raw action level export
 #'
-#' @param raw data frame straight from readxl
-#' @param name name for the guideline set
+#' @param raw data frame straight from readxl, or a guideline table read from
+#'   ESdat or EQuIS
+#' @param name name for the guideline set, or `NULL` to use the sets the table
+#'   names
+#' @param default_name name used where neither `name` nor the table gives one
 #' @returns normalised tibble
 #' @noRd
-process_action_levels <- function(raw, name) {
+process_action_levels <- function(raw, name, default_name = NULL) {
   al <- raw %>%
     janitor::clean_names() %>%
     resolve_columns(ACTION_LEVEL_ALIASES)
@@ -660,11 +708,44 @@ process_action_levels <- function(raw, name) {
     )
   }
 
-  # The value and its unit share a cell ("0.006 ug Sn/L") unless the export
-  # carries a separate unit column, in which case that one wins.
-  parsed <- parse_action_level(al$criteria)
-  al$criteria_text <- as.character(al$criteria)
-  al$criteria <- parsed$value
+  al$criteria_name <- guideline_set_names(al, name, default_name)
+
+  # The ESDAT export writes the value and its unit into one cell ("0.006 ug
+  # Sn/L"). ESdat's own feed sends the value as a number, and EQuIS as text,
+  # each with the unit in a column of its own.
+  cell <- if (is.numeric(al$criteria)) {
+    format_action_level(al$criteria)
+  } else {
+    as.character(al$criteria)
+  }
+  parsed <- parse_action_level(cell)
+  unit_text <- if ("criteria_unit" %in% names(al)) {
+    as.character(al$criteria_unit)
+  } else {
+    rep(NA_character_, nrow(al))
+  }
+
+  # A lower bound makes the guideline a range, which has no single value to
+  # compare a result against - the same reason a "6.5 - 8.5" cell is left
+  # unread. The ESdat and EQuIS tables keep the bound in a column of its own.
+  lower <- if ("criteria_min" %in% names(al)) {
+    coerce_numeric(al$criteria_min)
+  } else {
+    rep(NA_real_, nrow(al))
+  }
+  al$criteria_min <- NULL
+
+  al$criteria_text <- action_level_text(
+    cell,
+    lower,
+    prefix = column_or_na(al, "action_level_prefix"),
+    suffix = column_or_na(al, "action_level_suffix"),
+    cell_unit = parsed$unit,
+    unit_text = unit_text
+  )
+  al$criteria <- ifelse(is.na(lower), parsed$value, NA_real_)
+
+  # The unit column, where there is one, wins over a unit in the cell.
   if ("criteria_unit" %in% names(al)) {
     supplied <- parse_unit_basis(al$criteria_unit)
     al$criteria_unit <- ifelse(
@@ -680,6 +761,16 @@ process_action_levels <- function(raw, name) {
   } else {
     al$criteria_unit <- parsed$unit
     al$criteria_basis <- parsed$basis
+  }
+
+  # EQuIS records the one fraction a guideline applies to - T, D, or N for
+  # either - rather than a flag per fraction.
+  if (
+    !any(c("total", "filtered") %in% names(al)) && "fraction" %in% names(al)
+  ) {
+    fraction <- normalise_fraction(al$fraction)
+    al$total <- ifelse(is.na(fraction), NA, fraction == "T")
+    al$filtered <- ifelse(is.na(fraction), NA, fraction == "F")
   }
 
   for (flag in c("leached", "total", "filtered")) {
@@ -698,8 +789,6 @@ process_action_levels <- function(raw, name) {
       al[[nm]] <- as.character(al[[nm]])
     }
   }
-
-  al$criteria_name <- as.character(name)
 
   dropped <- is.na(al$criteria)
   if (any(dropped)) {
@@ -754,6 +843,62 @@ process_action_levels <- function(raw, name) {
   }
 
   al %>% dplyr::relocate(dplyr::any_of(ACTION_LEVEL_SCHEMA))
+}
+
+#' Label each action level with the guideline set it belongs to
+#'
+#' The ESDAT export holds one set and names none, so the name comes from
+#' `name` or the file. The ESdat and EQuIS tables name the set on every row,
+#' and can hold several, so the table's own names are used unless `name`
+#' relabels its one set. One name across several sets would merge them, and
+#' the join would then take the lowest guideline across all of them without
+#' saying so - so that is an error.
+#'
+#' @param al action level table with canonical column names
+#' @param name name given by the caller, or `NULL`
+#' @param default_name name used where neither `name` nor the table gives one
+#' @returns character vector, one set name per row
+#' @noRd
+guideline_set_names <- function(al, name, default_name) {
+  recorded <- if ("criteria_name" %in% names(al)) {
+    as.character(al$criteria_name)
+  } else {
+    rep(NA_character_, nrow(al))
+  }
+  sets <- unique(stats::na.omit(recorded))
+
+  if (!is_blank_name(name)) {
+    if (length(sets) > 1) {
+      stop(
+        "`name` gives one name, but the table holds ",
+        length(sets),
+        " guideline sets: ",
+        paste(utils::head(sets, 5), collapse = ", "),
+        if (length(sets) > 5) ", ..." else "",
+        ".\nLeave `name` out to label each set with its own name, or filter ",
+        "the table to one set first."
+      )
+    }
+    return(rep(as.character(name), nrow(al)))
+  }
+  if (length(sets) > 0) {
+    return(recorded)
+  }
+  if (!is_blank_name(default_name)) {
+    return(rep(as.character(default_name), nrow(al)))
+  }
+  stop(
+    "`name` is required: the table does not name its guideline set (no ",
+    "Action_Level_Source or ACTION_LEVEL_CODE column). Give one, e.g. ",
+    "name = \"ANZG 95% Marine\"."
+  )
+}
+
+#' Is a guideline set name missing?
+#' @param x candidate name
+#' @noRd
+is_blank_name <- function(x) {
+  length(x) == 0 || is.na(x[[1]]) || !nzchar(trimws(x[[1]]))
 }
 
 
@@ -1109,6 +1254,68 @@ parse_action_level <- function(x) {
   list(value = value, unit = parsed$unit, basis = parsed$basis)
 }
 
+#' Write a guideline value the way a cell would show it
+#'
+#' Every digit the number carries and none it does not: `80`, not `80.000`
+#' or `8e+01`, so the text parses back to the same value.
+#'
+#' @param x numeric vector
+#' @returns character vector, `NA` where `x` is
+#' @noRd
+format_action_level <- function(x) {
+  x <- as.numeric(x)
+  out <- trimws(formatC(x, digits = 15, format = "fg"))
+  out[is.na(x)] <- NA_character_
+  out
+}
+
+#' Put an action level's text back together from its parts
+#'
+#' `criteria_text` is what the guideline read as in its source, quoted when a
+#' row is dropped. The ESDAT export already writes it as one cell; the ESdat
+#' and EQuIS tables split it into a value, a unit, a lower bound and
+#' ESdat's prefix (`"<"`, `"NL"`) and suffix, so it is reassembled the way
+#' the export writes it: `"80 ug/L"`, `"6.5 - 8.5 pH units"`, `"NL"`.
+#'
+#' @param cell character vector of action level cells
+#' @param lower numeric vector of lower bounds
+#' @param prefix,suffix character vectors written either side of the value
+#' @param cell_unit the unit already written in the cell, if any
+#' @param unit_text the unit column, written after a value with no unit
+#' @returns character vector
+#' @noRd
+action_level_text <- function(cell, lower, prefix, suffix, cell_unit,
+                              unit_text) {
+  value <- cell
+  ranged <- !is.na(lower)
+  value[ranged] <- ifelse(
+    is.na(cell[ranged]),
+    format_action_level(lower[ranged]),
+    paste(format_action_level(lower[ranged]), "-", cell[ranged])
+  )
+
+  blank_if_na <- function(x) ifelse(is.na(x), "", as.character(x))
+  text <- paste0(blank_if_na(prefix), blank_if_na(value), blank_if_na(suffix))
+
+  add_unit <- !is.na(value) & is.na(cell_unit) & !is.na(unit_text) &
+    nzchar(trimws(unit_text))
+  text[add_unit] <- paste(text[add_unit], trimws(unit_text[add_unit]))
+  text[!nzchar(text)] <- NA_character_
+  text
+}
+
+#' A column of a table, or NA where the table has none
+#' @param df data frame
+#' @param col column name
+#' @noRd
+column_or_na <- function(df, col) {
+  if (col %in% names(df)) {
+    as.character(df[[col]])
+  } else {
+    rep(NA_character_, nrow(df))
+  }
+}
+
 #' Split a unit string into the unit and its basis of measurement
 #'
 #' ESDAT records the basis inside the unit - `"ug Sn/L"` for tributyltin
@@ -1323,7 +1530,12 @@ normalise_chem_name <- function(x) {
 # Canonical names follow the columns the rest of the package already uses -
 # `criteria` is the guideline value because that is what summary_stats() and
 # timeseries_plot() read.
+#
+# The ESdat and EQuIS guideline tables name the set on every row, and record
+# a range's lower bound in a column of its own; see action_level_processor().
 ACTION_LEVEL_ALIASES <- list(
+  # ESdat_Environmental_Standards, then EQuIS DT_ACTION_LEVEL_PARAMETER.
+  criteria_name = c("action_level_source", "action_level_code"),
   chem_code = c(
     "chemcode",
     "cas_rn",
@@ -1331,7 +1543,9 @@ ACTION_LEVEL_ALIASES <- list(
     "casrn",
     "cas",
     "chemical_code",
-    "analyte_code"
+    "analyte_code",
+    # EQuIS: the RT_ANALYTE code, the same code set as a result's CAS_RN.
+    "param_code"
   ),
   chem_name = c(
     "chemname",
@@ -1359,9 +1573,10 @@ ACTION_LEVEL_ALIASES <- list(
     "unit",
     "units"
   ),
+  criteria_min = c("action_level_min"),
   leached = c("leachable", "is_leached"),
-  total = c("is_total"),
-  filtered = c("is_filtered", "dissolved"),
+  total = c("is_total", "applies_to_total_result"),
+  filtered = c("is_filtered", "dissolved", "applies_to_filtered_result"),
   conditions = c("condition", "conditional", "qualifier"),
   comments = c("comment", "remark", "remarks", "notes", "note")
 )
@@ -1387,11 +1602,17 @@ ACTION_LEVEL_SCHEMA <- c(
 # match is only ever used where the code found nothing.
 MATCH_TIERS <- c("code", "name")
 
-# Matrix spellings folded together by normalise_matrix().
+# Matrix spellings folded together by normalise_matrix(). The two-letter
+# codes are EQuIS's RT_MATRIX: WQ and SQ are its water and soil QA/QC
+# samples, which are still water and soil.
 MATRIX_WATER <- c(
   "WATER",
   "WG",
   "WS",
+  "WQ",
+  "WL",
+  "WM",
+  "WF",
   "GROUNDWATER",
   "SURFACE WATER",
   "SURFACEWATER",
@@ -1399,7 +1620,7 @@ MATRIX_WATER <- c(
   "LEACHATE",
   "AQUEOUS"
 )
-MATRIX_SOLID <- c("SOIL", "SO", "SD", "SEDIMENT", "SOLID", "SLUDGE")
+MATRIX_SOLID <- c("SOIL", "SO", "SQ", "SD", "SEDIMENT", "SOLID", "SLUDGE")
 
 # Unit conversion factors, per dimension, to that dimension's base unit
 # (mg/L for a concentration in a liquid, mg/kg for one in a solid). Units

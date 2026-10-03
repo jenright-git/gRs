@@ -14,7 +14,7 @@ data_processor(
 }
 \arguments{
 \item{myfile_path}{file path to data, or a data frame of the same data; see
-Data frames and the ESdat OData feeds.}
+Data frames from esdatr and AEQuIS.}
 
 \item{sheet_pattern}{pattern matching the excel sheet name for new or old
 esdat chemistry formats. Only used when locating a chemistry sheet.}
@@ -78,7 +78,7 @@ families. ESDAT-only fields that have no EQuIS equivalent (for example
 
 Water level reports are returned with the full EQuIS field set present, so
 ESDAT and EQuIS gauging data can be combined with \code{\link[dplyr:bind_rows]{dplyr::bind_rows()}}.
-\subsection{Data frames and the ESdat OData feeds}{
+\subsection{Data frames from esdatr and AEQuIS}{
 
 \code{myfile_path} may instead be a data frame holding the same data, such as an
 ESdat OData feed read with \code{esdatr::get_esdat_odata_chemistry()}. The OData
@@ -88,6 +88,10 @@ which cleaning the names removes. The report family is detected from the
 columns as it is for a sheet, and date-times sent as text
 (\code{"2024-03-01T14:30:00"}) are converted, so a feed and its Excel export
 give the same table.
+
+EQuIS chemistry read with \code{AEQuIS::get_equis_chemistry()} is read the same
+way. Those tables carry the facility's numeric \code{FACILITY_ID} rather than a
+facility code, so that is what \code{site_id} holds, as text.
 }
 }
 \examples{
@@ -118,5 +122,9 @@ soil <- esdatr::get_esdat_odata_chemistry(
   matrix = "soil"
 )
 data_processor(soil, result_type = "LEACHED_REG")
+
+# and from EQuIS's tables
+equis <- AEQuIS::get_equis_chemistry(facility_code = "SITE001")
+data_processor(equis)
 }
 }

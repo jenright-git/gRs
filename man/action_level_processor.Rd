@@ -9,11 +9,13 @@ action_level_processor(myfile_path, name = NULL, sheet = NULL)
 \arguments{
 \item{myfile_path}{file path to an action level export. More than one path
 may be given, in which case the results are stacked. May instead be a
-data frame holding the same table, such as one read from ESdat with
-\code{esdatr}, in which case \code{name} is required.}
+data frame holding the same table; see Guidelines from ESdat and EQuIS.}
 
 \item{name}{name for the guideline set, written to \code{criteria_name}, e.g.
-\code{"ANZG 95\% Marine"}. Defaults to the file name without its extension.
+\code{"ANZG 95\% Marine"}. Defaults to the set named in the table itself
+(\code{Action_Level_Source}, \code{ACTION_LEVEL_CODE}) and otherwise, for a file,
+to the file name without its extension. Required for a data frame that
+names no set. A table holding several sets cannot be given one name.
 Recycled against \code{myfile_path}.}
 
 \item{sheet}{optional sheet name. By default the sheet is found from its
@@ -44,6 +46,35 @@ applies to, and \code{\link[=join_action_levels]{join_action_levels()}} uses the
 result is comparable: a filtered (dissolved) result is only compared
 against a guideline with \code{filtered = TRUE}, a leachate result (\code{REG} vs
 \code{LEACHED_REG} in an ESDAT soil export) only against \code{leached = TRUE}.
+\subsection{Guidelines from ESdat and EQuIS}{
+
+\code{myfile_path} may instead be a data frame of guidelines read straight from
+either database, which gives the same table as the export:
+\itemize{
+\item \strong{ESdat} - the \code{ESdat_Environmental_Standards} OData feed, read with
+\code{esdatr::get_esdat_odata_action_levels()} (find the sources with
+\code{esdatr::get_esdat_odata_action_level_sources()}). The value arrives as
+a number with its unit
+in \code{Units}, and \code{Applies_To_Total_Result} and
+\code{Applies_To_Filtered_Result} become \code{total} and \code{filtered}.
+\item \strong{EQuIS} - the \code{DT_ACTION_LEVEL_PARAMETER} table, read with
+\code{AEQuIS::get_equis_odata_all()}. \code{PARAM_CODE} is the analyte's CAS
+number, matched against \code{chem_code} as an ESdat code is. EQuIS records
+one \code{FRACTION} per guideline rather than a flag per fraction: \code{T} sets
+\code{total} alone, \code{D} sets \code{filtered} alone, and \code{N} or blank leaves both
+unset, so the guideline applies to either. The table holds no chemical
+name, so these guidelines match on code alone.
+}
+
+Both tables name the guideline set on every row - \code{Action_Level_Source} in
+ESdat, \code{ACTION_LEVEL_CODE} in EQuIS - and that becomes \code{criteria_name}, so
+a table holding several sets keeps them apart. Filter to one before
+passing it to \code{\link[=join_action_levels]{join_action_levels()}}. Both also record a lower bound
+(\code{Action_Level_Min}, \code{ACTION_LEVEL_MIN}) for guidelines that are ranges,
+such as pH. A range has no single value to compare a result against, so
+those rows are dropped and reported, as a \code{"6.5 - 8.5"} cell in an export
+is.
+}
 }
 \examples{
 \dontrun{
@@ -57,5 +88,20 @@ levels <- action_level_processor(
   c("ANZG 95.xlsx", "ANZG 99.xlsx"),
   name = c("ANZG 95\%", "ANZG 99\%")
 )
+
+# the same guidelines read straight from ESdat ...
+std <- esdatr::get_esdat_odata_action_levels(
+  "ANZG Marine Water Toxicant DGVs LOSP 95\% (March 2026)"
+)
+anzg <- action_level_processor(std, name = "ANZG 95\% Marine")
+
+# ... or from EQuIS, several sets at once, labelled by ACTION_LEVEL_CODE
+al <- AEQuIS::get_equis_odata_all(
+  "DT_ACTION_LEVEL_PARAMETER",
+  filter = "startswith(ACTION_LEVEL_CODE, 'ANZG')",
+  orderby = "ACTION_LEVEL_CODE,PARAM_CODE"
+)
+levels <- action_level_processor(al)
+table(levels$criteria_name)
 }
 }

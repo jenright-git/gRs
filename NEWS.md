@@ -7,9 +7,36 @@
   (`esdatr::get_esdat_odata_chemistry()` and friends) go straight in. The
   feeds are the views the Excel exports are made from, so a feed gives the
   same table as its export: the report family is detected from the columns,
-  and date-times sent as text are converted. `action_level_processor()` needs
-  `name` for a data frame, since there is no file name to fall back on.
-  `Water_Depth_bgl`, from `ESdat_Water_Depths`, is read as `water_depth`.
+  and date-times sent as text are converted. `Water_Depth_bgl`, from
+  `ESdat_Water_Depths`, is read as `water_depth`. EQuIS chemistry read with
+  `AEQuIS::get_equis_chemistry()` goes in the same way; those tables carry
+  only the numeric `FACILITY_ID`, which becomes `site_id` (as text) where no
+  facility code is present.
+
+* `action_level_processor()` reads guidelines straight from either database,
+  giving the same table as the export: ESdat's
+  `ESdat_Environmental_Standards` feed
+  (`esdatr::get_esdat_odata_action_levels()`) and
+  EQuIS's `DT_ACTION_LEVEL_PARAMETER` table
+  (`AEQuIS::get_equis_odata_all()`). Each row's set - `Action_Level_Source`
+  or `ACTION_LEVEL_CODE` - becomes `criteria_name`, so one read can hold
+  several sets; `name` relabels a table holding one, and is an error against
+  several rather than merging them. ESdat's `Applies_To_Total_Result` and
+  `Applies_To_Filtered_Result` become `total` and `filtered`; EQuIS's single
+  `FRACTION` sets one or the other. A guideline with a lower bound
+  (`Action_Level_Min`, `ACTION_LEVEL_MIN`) is a range and is dropped and
+  reported, as a `"6.5 - 8.5"` cell in an export is. `name` is only required
+  for a data frame that names no set.
+
+## Bug fixes
+
+* `data_processor()` now prefixes `Dissolved` onto EQuIS dissolved results
+  (fraction `D`) as it does ESDAT filtered ones (`F`), so the two fractions
+  of an analyte are no longer pooled under one `chem_name`.
+
+* `join_action_levels()` folds EQuIS's QA/QC matrix codes `WQ` and `SQ`, and
+  `WL`, `WM` and `WF`, into water and soil, so their results meet water and
+  soil guidelines rather than none.
 
 * `mka_to_excel()` writes the output of `mann_kendall_test()` to a formatted
   Excel workbook: one row per location, one column per analyte, the trend in

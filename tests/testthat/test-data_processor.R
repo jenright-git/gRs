@@ -140,6 +140,37 @@ test_that("a data frame is detected as chemistry or water level", {
   expect_true(all(names(WATER_LEVEL_SCHEMA) %in% names(depth_out)))
 })
 
+test_that("EQuIS chemistry read with AEQuIS is read as chemistry", {
+  # AEQuIS::get_equis_chemistry() joins DT_SAMPLE, DT_TEST and DT_RESULT,
+  # which carry the facility's numeric ID rather than its code.
+  equis <- dplyr::tibble(
+    FACILITY_ID = 19784298,
+    SYS_LOC_CODE = "MW01",
+    SAMPLE_DATE = "2025-09-29T11:50:00Z",
+    MATRIX_CODE = "WQ",
+    SAMPLE_TYPE_CODE = "N",
+    CAS_RN = "7440-50-8",
+    CHEMICAL_NAME = "Copper",
+    FRACTION = c("T", "D"),
+    RESULT_NUMERIC = c(2, 1),
+    RESULT_UNIT = "ug/l",
+    DETECT_FLAG = c("Y", "N"),
+    RESULT_TYPE_CODE = "TRG"
+  )
+
+  expect_warning(out <- data_processor(equis), "chem_group")
+
+  expect_equal(attr(out, "report_type"), "chemistry")
+  expect_equal(out$site_id, c("19784298", "19784298"))
+  expect_equal(
+    out$sampled_date_time,
+    rep(as.POSIXct("2025-09-29 11:50:00", tz = "UTC"), 2)
+  )
+  # EQuIS files a dissolved result as "D", ESDAT as "F".
+  expect_equal(out$chem_name, c("Copper", "Dissolved Copper"))
+  expect_equal(out$prefix, c("=", "<"))
+})
+
 test_that("a data frame matching no report family warns and returns NULL", {
   expect_warning(
     out <- data_processor(dplyr::tibble(Location_Code = "MW01")),

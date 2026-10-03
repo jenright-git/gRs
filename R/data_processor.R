@@ -35,7 +35,7 @@
 #' Water level reports are returned with the full EQuIS field set present, so
 #' ESDAT and EQuIS gauging data can be combined with [dplyr::bind_rows()].
 #'
-#' ## Data frames and the ESdat OData feeds
+#' ## Data frames from esdatr and AEQuIS
 #'
 #' `myfile_path` may instead be a data frame holding the same data, such as an
 #' ESdat OData feed read with `esdatr::get_esdat_odata_chemistry()`. The OData
@@ -46,8 +46,12 @@
 #' (`"2024-03-01T14:30:00"`) are converted, so a feed and its Excel export
 #' give the same table.
 #'
+#' EQuIS chemistry read with `AEQuIS::get_equis_chemistry()` is read the same
+#' way. Those tables carry the facility's numeric `FACILITY_ID` rather than a
+#' facility code, so that is what `site_id` holds, as text.
+#'
 #' @param myfile_path file path to data, or a data frame of the same data; see
-#'   Data frames and the ESdat OData feeds.
+#'   Data frames from esdatr and AEQuIS.
 #' @param sheet_pattern pattern matching the excel sheet name for new or old
 #'   esdat chemistry formats. Only used when locating a chemistry sheet.
 #' @param report_type one of `"auto"` (default), `"chemistry"` or
@@ -96,6 +100,10 @@
 #'   matrix = "soil"
 #' )
 #' data_processor(soil, result_type = "LEACHED_REG")
+#'
+#' # and from EQuIS's tables
+#' equis <- AEQuIS::get_equis_chemistry(facility_code = "SITE001")
+#' data_processor(equis)
 #' }
 #' @importFrom dplyr bind_rows filter mutate case_when rename across all_of
 #'   any_of relocate
@@ -419,6 +427,7 @@ process_chemistry <- function(raw_sw_data, result_type = "primary") {
   sw_data <- raw_sw_data %>%
     janitor::clean_names() %>%
     resolve_columns(COLUMN_ALIASES) %>%
+    site_id_from_facility_id() %>%
     filter_result_type(result_type)
 
   if ("fraction" %in% names(sw_data) && is.logical(sw_data$fraction)) {
@@ -456,8 +465,13 @@ process_chemistry <- function(raw_sw_data, result_type = "primary") {
 
   # readxl hands back a date-time; the ESdat OData feeds send the same field
   # as text ("2024-03-01T14:30:00"), which floor_date() below cannot use.
+  # site_id is text everywhere but EQuIS's tables, where it is the facility's
+  # numeric ID - kept as text so the two bind.
   sw_data <- sw_data %>%
-    dplyr::mutate(sampled_date_time = coerce_datetime(sampled_date_time))
+    dplyr::mutate(
+      sampled_date_time = coerce_datetime(sampled_date_time),
+      site_id = as.character(site_id)
+    )
 
   if (!"chem_group" %in% names(sw_data)) {
     warning(
@@ -478,8 +492,8 @@ process_chemistry <- function(raw_sw_data, result_type = "primary") {
   ) {
     sw_data <- sw_data %>%
       dplyr::mutate(
-        # Tested against NA explicitly: an export where only some rows record
-        # a fraction reaches here, and a bare `fraction == "F"` returns NA for
+        # Tested with %in%, which is never NA: an export where only some rows
+        # record a fraction reaches here, and a bare `== "F"` returns NA for
         # the rest - which ifelse() would write into chem_name, losing the
         # analyte's name altogether rather than leaving it unprefixed.
         #
@@ -487,9 +501,10 @@ process_chemistry <- function(raw_sw_data, result_type = "primary") {
         # file it as filtered as well. Prefixing that unconditionally gives
         # "Dissolved Dissolved Total Phosphorus", which then reaches every
         # plot title and summary row, and matches no guideline.
+        #
+        # ESDAT files a filtered result as "F", EQuIS as "D".
         chem_name = ifelse(
-          !is.na(fraction) &
-            fraction == "F" &
+          normalise_fraction(fraction) %in% "F" &
             !grepl("^dissolved\\b", chem_name, ignore.case = TRUE),
           yes = glue::glue("Dissolved {chem_name}"),
           no = chem_name
@@ -575,7 +590,8 @@ filter_result_type <- function(sw_data, result_type) {
 process_water_level <- function(raw_wl_data, default_depth_unit = "m") {
   wl <- raw_wl_data %>%
     janitor::clean_names() %>%
-    resolve_columns(WATER_LEVEL_ALIASES)
+    resolve_columns(WATER_LEVEL_ALIASES) %>%
+    site_id_from_facility_id()
 
   num_cols <- intersect(WATER_LEVEL_NUMERIC_COLS, names(wl))
   if (length(num_cols) > 0) {
@@ -586,6 +602,9 @@ process_water_level <- function(raw_wl_data, default_depth_unit = "m") {
   if ("sampled_date_time" %in% names(wl)) {
     wl <- wl %>%
       dplyr::mutate(sampled_date_time = coerce_datetime(sampled_date_time))
+  }
+  if ("site_id" %in% names(wl)) {
+    wl$site_id <- as.character(wl$site_id)
   }
 
   missing <- setdiff(WATER_LEVEL_REQUIRED_COLUMNS, names(wl))
@@ -772,6 +791,7 @@ SHARED_ALIASES <- list(
     "sampled_date",
     "gauging_date"
   ),
+  # See also site_id_from_facility_id().
   site_id = c("facility_code", "site", "site_code"),
   location_code = c(
     "sys_loc_code",
@@ -996,6 +1016,23 @@ WATER_LEVEL_SCHEMA <- list(
   lnapl_elevation = NA_real_,
   product_corrected_water_level = NA_real_
 )
+
+#' Take site_id from EQuIS's numeric facility ID where nothing else names it
+#'
+#' EQuIS's own tables, as read by `AEQuIS::get_equis_chemistry()`, carry only
+#' `FACILITY_ID`. Its reports carry `FACILITY_CODE` beside it, which is the
+#' better name, so the ID is a fallback rather than an alias - as an alias it
+#' would be reported as a second match on every EQuIS report.
+#'
+#' @param df data frame with canonical column names
+#' @returns `df` with `facility_id` renamed to `site_id` where there was none
+#' @noRd
+site_id_from_facility_id <- function(df) {
+  if (!"site_id" %in% names(df) && "facility_id" %in% names(df)) {
+    df <- dplyr::rename(df, site_id = "facility_id")
+  }
+  df
+}
 
 #' Rename columns to canonical names based on an alias map
 #'
