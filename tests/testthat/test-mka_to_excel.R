@@ -49,6 +49,7 @@ test_that("untested location/analyte pairs are labelled, not left blank", {
   expect_equal(out$Copper, c("not tested", "Stable"))
 })
 
+
 test_that("the directory is created when it does not exist", {
   dir <- file.path(withr::local_tempdir(), "nested", "output")
   path <- file.path(dir, "trends.xlsx")
@@ -523,6 +524,19 @@ test_that("a pair with no trend reads as na_label on the statistics sheet", {
   expect_true(any(nc[, "row"] == 5 & nc[, "col"] == 3))
 })
 
+test_that("na_label can be blank", {
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  out <- mka_to_excel(mka_fixture()[1:3, ], save_path = path, na_label = "")
+
+  expect_equal(out$Copper, c("", "Stable"))
+
+  # MW01 / Copper, still styled as not calculated, and still explained
+  nc <- cells_filled(path, "FFFFFFFF", sheet = "Trend Summary")
+  expect_true(any(nc[, "row"] == 2 & nc[, "col"] == 2))
+  legend <- openxlsx::read.xlsx(path, sheet = "Legend")
+  expect_match(legend$Meaning[nrow(legend)], "^Not calculated")
+})
+
 test_that("the statistics sheet carries the zone, merged unless told not to", {
   path <- withr::local_tempfile(fileext = ".xlsx")
   mka_to_excel(
@@ -578,6 +592,26 @@ test_that("the summary sheet cannot take the statistics sheet's name", {
     ),
     "statistics sheet takes that name"
   )
+})
+
+test_that("the summary sheet cannot take the legend sheet's name", {
+  expect_error(
+    mka_to_excel(
+      mka_fixture(),
+      save_path = withr::local_tempfile(fileext = ".xlsx"),
+      sheet_name = "legend"
+    ),
+    "legend sheet takes that name"
+  )
+
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  mka_to_excel(
+    mka_fixture(),
+    save_path = path,
+    sheet_name = "Legend",
+    legend = FALSE
+  )
+  expect_equal(openxlsx::getSheetNames(path), "Legend")
 })
 
 test_that("a statistic the test could not compute is written as a dash", {

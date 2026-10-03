@@ -114,6 +114,20 @@
   being silently ignored. The zone and well columns follow
   `include_zone`, `merge_zones` and `location_fill` as the summary does.
 
+* `mka_to_excel(na_label = "")` no longer fails with "subscript out of
+  bounds"; the blank cells are styled and explained in the legend as `"NC"`
+  is. `sheet_name = "Legend"` alongside the legend sheet is now an error that
+  says so, rather than openxlsx's duplicate sheet error.
+
+* `timeseries_plot()` draws each analyte's own guideline. Faceted by analyte,
+  each panel used to get the lowest guideline of every analyte plotted, with
+  a warning blaming mixed units; where analytes share a panel, each now gets
+  a line in its own colour.
+
+* `timeseries_plot()` keeps results outside `ymin` and `ymax`, running them
+  off the edge of the panel, rather than dropping them from the plot - which
+  hid exactly the high results an exceedance plot is drawn to show.
+
 # gRs 0.1.0
 
 ## New features

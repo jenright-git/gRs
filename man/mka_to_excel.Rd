@@ -64,7 +64,8 @@ Default \code{"NC"}, for not calculated.}
 \item{location_label}{heading for the first column. Default
 \code{"Monitoring Well"}.}
 
-\item{sheet_name}{name of the summary worksheet.}
+\item{sheet_name}{name of the summary worksheet. It cannot be \code{"Legend"}
+or \code{"Statistics"} where those sheets are written too.}
 
 \item{legend}{include the second sheet explaining the trend categories.}
 

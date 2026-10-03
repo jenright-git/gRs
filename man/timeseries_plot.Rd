@@ -77,17 +77,21 @@ uses the full range of dates in the data}
 \item{ymin}{Numeric. Minimum value on y-axis. Default is 0}
 
 \item{ymax}{Numeric or NULL. Maximum value on y-axis. If NULL (default),
-ggplot2 automatically calculates the upper limit based on the data}
+ggplot2 automatically calculates the upper limit based on the data.
+Results outside \code{ymin} and \code{ymax} are kept, running off the edge of the
+panel, rather than dropped from the plot}
 
 \item{location_colours}{Named vector of colors for each location. If NULL (default),
 automatically generates colors. Names should match location codes}
 
 \item{criteria_col}{Optional. Name of column containing criteria/limit values to plot
-as horizontal dashed lines. Default is NULL (no criteria line). Where the
-column holds more than one value the lowest is drawn - the same one
-\code{\link[=summary_stats]{summary_stats()}} counts exceedances against - and the rest are warned
-about. Several values for one guideline usually means the results are
-reported in more than one unit, in which case filter to a single unit
+as horizontal dashed lines. Default is NULL (no criteria line). Each panel
+gets the guideline of the analyte drawn in it, and where several analytes
+share a panel each gets its own line, in its own colour. Where one
+analyte's column holds more than one value the lowest is drawn - the same
+one \code{\link[=summary_stats]{summary_stats()}} counts exceedances against - and the rest are
+warned about. Several values for one guideline usually means the results
+are reported in more than one unit, in which case filter to a single unit
 before plotting: no single line is right for both}
 
 \item{criteria_colour}{Character. Colour for criteria line. Default is "black"}

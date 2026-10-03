@@ -28,15 +28,19 @@
 #' @param y_unit Character. Unit to display on y-axis heading. Default is "mg/L"
 #' @param ymin Numeric. Minimum value on y-axis. Default is 0
 #' @param ymax Numeric or NULL. Maximum value on y-axis. If NULL (default),
-#'   ggplot2 automatically calculates the upper limit based on the data
+#'   ggplot2 automatically calculates the upper limit based on the data.
+#'   Results outside `ymin` and `ymax` are kept, running off the edge of the
+#'   panel, rather than dropped from the plot
 #' @param location_colours Named vector of colors for each location. If NULL (default),
 #'   automatically generates colors. Names should match location codes
 #' @param criteria_col Optional. Name of column containing criteria/limit values to plot
-#'   as horizontal dashed lines. Default is NULL (no criteria line). Where the
-#'   column holds more than one value the lowest is drawn - the same one
-#'   [summary_stats()] counts exceedances against - and the rest are warned
-#'   about. Several values for one guideline usually means the results are
-#'   reported in more than one unit, in which case filter to a single unit
+#'   as horizontal dashed lines. Default is NULL (no criteria line). Each panel
+#'   gets the guideline of the analyte drawn in it, and where several analytes
+#'   share a panel each gets its own line, in its own colour. Where one
+#'   analyte's column holds more than one value the lowest is drawn - the same
+#'   one [summary_stats()] counts exceedances against - and the rest are
+#'   warned about. Several values for one guideline usually means the results
+#'   are reported in more than one unit, in which case filter to a single unit
 #'   before plotting: no single line is right for both
 #' @param criteria_colour Character. Colour for criteria line. Default is "black"
 #' @param criteria_linetype Numeric or character. Line type for criteria line. Default is "dashed"
@@ -86,7 +90,7 @@
 #'   element_rect scale_y_continuous geom_hline ggtitle facet_wrap
 #' @importFrom openair quickText
 #' @importFrom glue glue
-#' @importFrom rlang enquo quo_name quo_is_null !! sym
+#' @importFrom rlang enquo quo_name quo_is_null !! sym .data
 #' @importFrom dplyr pull filter
 
 timeseries_plot <- function(
@@ -282,7 +286,11 @@ timeseries_plot <- function(
     stop("'ymax' must be numeric and greater than ymin")
   }
 
-  # Set y-axis limits (NULL means use data range)
+  # Set y-axis limits (NULL means use data range). They zoom rather than
+  # filter: a scale's default is to drop whatever falls outside its limits,
+  # which would take a result above `ymax` - the exceedance the plot is often
+  # drawn to show - out of the figure altogether. Kept, it runs off the edge
+  # of the panel instead, and the line to it still shows.
   y_limits <- if (is.null(ymax)) {
     c(ymin, NA) # NA allows ggplot2 to calculate upper limit
   } else {
@@ -328,7 +336,8 @@ timeseries_plot <- function(
       limits = dates_range
     ) +
     ggplot2::scale_y_continuous(
-      limits = y_limits
+      limits = y_limits,
+      oob = function(x, range) x
     ) +
     ggplot2::theme(
       legend.position = "bottom",
@@ -363,54 +372,47 @@ timeseries_plot <- function(
       )
   }
 
-  # Add criteria line if specified
+  # Add criteria lines if specified. A guideline belongs to an analyte, so
+  # each panel draws the guideline of the analyte in it, and where analytes
+  # share a panel each draws its own, in the analyte's colour. One line for
+  # the whole plot would put one analyte's guideline on every other's panel.
   if (criteria_given) {
-    criteria_value <- unique(dplyr::pull(data, !!criteria_col_q))
-    criteria_value <- criteria_value[!is.na(criteria_value)]
+    line_by <- c(
+      if (do_facet_analyte || color_by_analyte) analyte_name,
+      if (do_facet_location) location_name
+    )
+    guideline <- criteria_lines(
+      data,
+      suppressWarnings(as.numeric(dplyr::pull(data, !!criteria_col_q))),
+      line_by
+    )
 
-    if (length(criteria_value) > 0) {
-      # The lowest, not the first. join_action_levels() converts each guideline
-      # into the unit its own result was reported in, so one chemical reported
-      # in both ug/L and mg/L carries two numbers for a single guideline - 180
-      # and 0.18. Taking the first would take whichever way the rows happened
-      # to be sorted, and an arrange() upstream would move the line by three
-      # orders of magnitude without the data changing. The lowest is at least
-      # the same line every time, and is the one summary_stats() counts
-      # exceedances against, so the plot and the table agree.
-      if (length(criteria_value) > 1) {
-        units <- if ("output_unit" %in% names(data)) {
-          unique(stats::na.omit(as.character(data$output_unit)))
-        } else {
-          character(0)
-        }
-        warning(
-          "Multiple criteria values found: ",
-          paste(sort(criteria_value), collapse = ", "),
-          ". Using the lowest: ",
-          min(criteria_value),
-          ".",
-          if (length(units) > 1) {
-            paste0(
-              " These results are reported in more than one unit (",
-              paste(units, collapse = ", "),
-              "), so one guideline has become several numbers and the line ",
-              "is only right for one of them - and the plotted ",
-              "concentrations are mixed units too. Filter to a single unit ",
-              "before plotting."
-            )
-          } else {
-            ""
-          }
-        )
-      }
+    if (!is.null(guideline$warning)) {
+      warning(guideline$warning)
+    }
 
+    if (nrow(guideline$lines) > 0) {
       plot <- plot +
-        ggplot2::geom_hline(
-          yintercept = min(criteria_value),
-          linetype = criteria_linetype,
-          colour = criteria_colour,
-          linewidth = 0.7
-        )
+        if (color_by_analyte) {
+          ggplot2::geom_hline(
+            data = guideline$lines,
+            mapping = ggplot2::aes(
+              yintercept = .data$yintercept,
+              colour = .data[[analyte_name]]
+            ),
+            linetype = criteria_linetype,
+            linewidth = 0.7,
+            show.legend = FALSE
+          )
+        } else {
+          ggplot2::geom_hline(
+            data = guideline$lines,
+            mapping = ggplot2::aes(yintercept = .data$yintercept),
+            linetype = criteria_linetype,
+            colour = criteria_colour,
+            linewidth = 0.7
+          )
+        }
     }
   }
 
@@ -421,4 +423,82 @@ timeseries_plot <- function(
   }
 
   return(plot)
+}
+
+#' The guideline lines to draw on a timeseries plot
+#'
+#' One line per value of `line_by`: the panel, and the analyte where analytes
+#' share a panel. Where one line has several values to choose from, the lowest
+#' is drawn, not the first. join_action_levels() converts each guideline into
+#' the unit its own result was reported in, so one chemical reported in both
+#' ug/L and mg/L carries two numbers for a single guideline - 180 and 0.18.
+#' Taking the first would take whichever way the rows happened to be sorted,
+#' and an arrange() upstream would move the line by three orders of magnitude
+#' without the data changing. The lowest is at least the same line every time,
+#' and is the one summary_stats() counts exceedances against, so the plot and
+#' the table agree.
+#'
+#' @param data the data being plotted
+#' @param values the guideline value of each row of `data`, as numbers
+#' @param line_by names of the columns to draw a line per; empty for one line
+#' @returns a list of `lines`, a data frame of the `line_by` columns and the
+#'   `yintercept` of each line, and `warning`, the text to warn with where a
+#'   line had several values to choose from, or `NULL`
+#' @noRd
+criteria_lines <- function(data, values, line_by) {
+  keep <- !is.na(values)
+  keys <- as.data.frame(data[keep, line_by, drop = FALSE])
+  values <- values[keep]
+  units <- if ("output_unit" %in% names(data)) {
+    as.character(data$output_unit[keep])
+  } else {
+    rep(NA_character_, length(values))
+  }
+
+  group <- if (length(line_by) == 0) {
+    rep("", length(values))
+  } else {
+    do.call(paste, c(lapply(keys, as.character), sep = " / "))
+  }
+  first <- !duplicated(group)
+
+  # Split on a factor in first-seen order, so the pieces line up with `first`
+  # without being looked up by name - which never finds the one line's "".
+  by_line <- split(values, factor(group, levels = group[first]))
+  lines <- keys[first, , drop = FALSE]
+  lines$yintercept <- vapply(by_line, min, numeric(1), USE.NAMES = FALSE)
+
+  several <- lapply(by_line, function(v) sort(unique(v)))
+  ambiguous <- lengths(several) > 1
+  if (!any(ambiguous)) {
+    return(list(lines = lines, warning = NULL))
+  }
+
+  found <- paste0(
+    "Multiple criteria values found",
+    if (length(line_by) > 0) paste0(" for ", group[first][ambiguous]),
+    ": ",
+    vapply(several[ambiguous], paste, character(1), collapse = ", "),
+    ". Using the lowest: ",
+    lines$yintercept[ambiguous],
+    "."
+  )
+  mixed <- unique(stats::na.omit(units[group %in% group[first][ambiguous]]))
+  unit_note <- if (length(mixed) > 1) {
+    paste0(
+      " These results are reported in more than one unit (",
+      paste(mixed, collapse = ", "),
+      "), so one guideline has become several numbers and the line ",
+      "is only right for one of them - and the plotted ",
+      "concentrations are mixed units too. Filter to a single unit ",
+      "before plotting."
+    )
+  } else {
+    ""
+  }
+
+  list(
+    lines = lines,
+    warning = paste0(paste(found, collapse = "\n"), unit_note)
+  )
 }

@@ -78,7 +78,8 @@
 #'   Default `"NC"`, for not calculated.
 #' @param location_label heading for the first column. Default
 #'   `"Monitoring Well"`.
-#' @param sheet_name name of the summary worksheet.
+#' @param sheet_name name of the summary worksheet. It cannot be `"Legend"`
+#'   or `"Statistics"` where those sheets are written too.
 #' @param legend include the second sheet explaining the trend categories.
 #' @param overwrite overwrite `save_path` if it already exists.
 #' @param location_col Name of the column containing location codes.
@@ -310,6 +311,12 @@ mka_to_excel <- function(
     stop(glue::glue(
       "`sheet_name` cannot be \"{sheet_name}\" with `include_stats = TRUE`; ",
       "the statistics sheet takes that name."
+    ))
+  }
+  if (legend && identical(tolower(sheet_name), tolower(LEGEND_SHEET))) {
+    stop(glue::glue(
+      "`sheet_name` cannot be \"{sheet_name}\" with `legend = TRUE`; ",
+      "the legend sheet takes that name."
     ))
   }
   if (include_zone && zone_name %in% c(loc_name, chem_name_str, trend_name)) {
@@ -566,8 +573,10 @@ TREND_INTERPRETATION_DEFAULT <- c(
   "NC" = "-"
 )
 
-# The statistics sheet's name, which the summary sheet may not also take.
+# The statistics and legend sheets' names, which the summary sheet may not
+# also take.
 STATS_SHEET <- "Statistics"
+LEGEND_SHEET <- "Legend"
 
 # What the statistics sheet writes for a statistic the test could not compute.
 STATS_NA <- "-"
@@ -854,9 +863,14 @@ stats_body_style <- function(num_fmt = "GENERAL", halign = NULL) {
 #' @returns an openxlsx style object
 #' @noRd
 trend_cell_style <- function(lvl, fills, fonts, na_label) {
-  font <- if (lvl %in% names(fonts)) fonts[[lvl]] else "#3F3F3F"
+  # Looked up with match() rather than [[, which cannot find a level named ""
+  # - and na_label = "" names the not-calculated level exactly that.
+  font <- unname(fonts[match(lvl, names(fonts))])
+  if (is.na(font)) {
+    font <- "#3F3F3F"
+  }
   openxlsx::createStyle(
-    fgFill = fills[[lvl]],
+    fgFill = unname(fills[match(lvl, names(fills))]),
     fontColour = font,
     fontSize = 9,
     halign = "center",
@@ -893,18 +907,19 @@ add_legend_sheet <- function(
   meanings <- rename_na_level(TREND_MEANING_DEFAULT, na_label)
   interpretations <- rename_na_level(TREND_INTERPRETATION_DEFAULT, na_label)
 
+  # match() rather than indexing by name, which never finds a level named "".
   legend <- dplyr::tibble(
     Trend = lvls,
-    Meaning = unname(meanings[lvls]),
-    Interpretation = unname(interpretations[lvls])
+    Meaning = unname(meanings[match(lvls, names(meanings))]),
+    Interpretation = unname(interpretations[match(lvls, names(interpretations))])
   )
   legend$Meaning[is.na(legend$Meaning)] <- ""
   legend$Interpretation[is.na(legend$Interpretation)] <- ""
 
-  openxlsx::addWorksheet(wb, "Legend", gridLines = FALSE)
+  openxlsx::addWorksheet(wb, LEGEND_SHEET, gridLines = FALSE)
   openxlsx::writeData(
     wb,
-    "Legend",
+    LEGEND_SHEET,
     legend,
     headerStyle = openxlsx::createStyle(
       fgFill = header_fill,
@@ -919,21 +934,21 @@ add_legend_sheet <- function(
   for (i in seq_len(nrow(legend))) {
     openxlsx::addStyle(
       wb,
-      "Legend",
+      LEGEND_SHEET,
       trend_cell_style(legend$Trend[i], fills, fonts, na_label),
       rows = i + 1,
       cols = 1
     )
     openxlsx::addStyle(
       wb,
-      "Legend",
+      LEGEND_SHEET,
       openxlsx::createStyle(fontSize = 10, valign = "center"),
       rows = i + 1,
       cols = 2:3,
       gridExpand = TRUE
     )
   }
-  openxlsx::setColWidths(wb, "Legend", cols = 1:3, widths = c(22, 62, 16))
+  openxlsx::setColWidths(wb, LEGEND_SHEET, cols = 1:3, widths = c(22, 62, 16))
 
   invisible(wb)
 }

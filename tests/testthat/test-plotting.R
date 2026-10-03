@@ -45,6 +45,49 @@ test_that("the lowest criteria value is drawn, and the rest warned about", {
   expect_equal(hlines[[1]]$data$yintercept, 1)
 })
 
+hline_layer <- function(p) {
+  which(vapply(p$layers, function(l) inherits(l$geom, "GeomHline"), logical(1)))
+}
+
+two_analyte_fixture <- function() {
+  dplyr::bind_rows(
+    chem_fixture(criteria = 2),
+    chem_fixture(chem_name = "Zinc", criteria = 500)
+  )
+}
+
+test_that("each faceted analyte gets its own guideline, not the lowest of all", {
+  expect_no_warning(
+    p <- timeseries_plot(two_analyte_fixture(), criteria_col = criteria)
+  )
+  lines <- ggplot2::layer_data(p, hline_layer(p))
+
+  # panels run Copper, Zinc
+  expect_equal(lines$yintercept[order(lines$PANEL)], c(2, 500))
+})
+
+test_that("analytes sharing a panel each get a line in their own colour", {
+  p <- timeseries_plot(
+    two_analyte_fixture(),
+    filter_location = "MW01",
+    facet_by = "location",
+    criteria_col = criteria
+  )
+  lines <- ggplot2::layer_data(p, hline_layer(p))
+
+  expect_equal(sort(lines$yintercept), c(2, 500))
+  expect_length(unique(lines$colour), 2)
+})
+
+test_that("results outside ymax are kept, not dropped from the plot", {
+  data <- chem_fixture()
+
+  expect_no_warning(
+    points <- ggplot2::layer_data(timeseries_plot(data, ymax = 3), 1)
+  )
+  expect_equal(sort(points$y), sort(data$concentration))
+})
+
 test_that("a criteria column that is not there is skipped, not fatal", {
   expect_warning(
     p <- timeseries_plot(chem_fixture(), criteria_col = not_a_column),

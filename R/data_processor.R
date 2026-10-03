@@ -378,14 +378,14 @@ header_names <- function(df) {
 }
 
 #' Does a header identify a chemistry report?
-#' @param nms column names from [header_names()]
+#' @param nms column names from `header_names()`
 #' @noRd
 is_chemistry_header <- function(nms) {
   all(CHEMISTRY_SIGNATURE_COLS %in% canonical_names(nms, COLUMN_ALIASES))
 }
 
 #' Does a header identify a water level (gauging) report?
-#' @param nms column names from [header_names()]
+#' @param nms column names from `header_names()`
 #' @noRd
 is_water_level_header <- function(nms) {
   canonical <- canonical_names(nms, WATER_LEVEL_ALIASES)
