@@ -24,14 +24,18 @@ mka_to_excel(
   zone_label = "Monitoring Zone",
   zone_col = monitoring_zone,
   location_fill = "#9BBEAF",
-  location_font = header_font
+  location_font = header_font,
+  include_stats = FALSE,
+  include_summary = FALSE,
+  criteria_col = criteria
 )
 }
 \arguments{
 \item{data}{tibble from \code{\link[=mann_kendall_test]{mann_kendall_test()}}. Only the location, analyte
-and trend columns are used; the nested \code{data} column and the test
-statistics are ignored, so there is no need to drop them first - though
-\code{include_zone = TRUE} reads the zone back out of that nested column.}
+and trend columns go into the summary sheet. The test statistics are
+written only with \code{include_stats = TRUE}, and the nested \code{data} column is
+read only for the zone, the sample count and \code{include_summary}, so there
+is no need to drop either first.}
 
 \item{save_path}{full file path, including filename, for the workbook. The
 directory is created if it does not exist. Defaults to
@@ -103,6 +107,35 @@ zone beside them the location names take \code{header_fill} too.}
 \code{header_font}, so white unless changed - note that white on the default
 \code{location_fill} is a contrast ratio of about 2:1, and a dark green such as
 \code{"#14401F"} reads better if the sheet is to be printed.}
+
+\item{include_stats}{add a \code{"Statistics"} sheet, between the summary and
+the legend, with the trend and test statistics for each location/analyte
+pair, sorted as the summary sheet is and filterable from its header row.
+Statistics \code{data} does not carry are left out, and the sample count
+needs the nested \code{data} column. Default \code{FALSE}.}
+
+\item{include_summary}{add the \code{\link[=summary_stats]{summary_stats()}} columns to the statistics
+sheet, after the test statistics. Needs \code{include_stats = TRUE}, and the
+nested \code{data} column with the \code{concentration} and \code{detect_flag} columns
+\code{\link[=data_processor]{data_processor()}} writes. Default \code{FALSE}.}
+
+\item{criteria_col}{the guideline column or columns to write, where
+guideline sets were joined on by \code{\link[=join_action_levels]{join_action_levels()}} before
+\code{\link[=mann_kendall_test]{mann_kendall_test()}} was run - one per set, each under the \code{value_col}
+it was joined with. One column, or several as
+\code{c(criteria_95, criteria_99)}, with or without quotes; \code{all_of()} and
+helpers such as \code{starts_with("criteria")} work too. With
+\code{include_summary = TRUE} each set adds two columns, in the order named:
+the guideline, and the number of results that exceeded it, counted from
+that set's own \code{exceedance} verdicts. Each pair is headed with the set's
+name - \code{"NEMP 99\% Guideline"} - where \code{\link[=join_action_levels]{join_action_levels()}} recorded
+one. A location/analyte pair with no guideline in a set reads \code{-} in
+both, rather than a count of 0. A column named here that the nested data
+lacks is an error. Default \code{criteria}, the column \code{\link[=join_action_levels]{join_action_levels()}}
+writes unless given another \code{value_col}, used where it is there; any
+other set joined alongside is named in a message rather than dropped
+unremarked. \code{NULL} leaves the guidelines out. Naming any without
+\code{include_summary = TRUE} warns, as they would otherwise be ignored.}
 }
 \value{
 The wide tibble that was written, invisibly - locations down,
@@ -134,6 +167,34 @@ location and analyte, so the zone is not a column of its output; where
 \code{data} has no zone column of its own it is recovered from that nested
 \code{data} column, and a location falling in more than one zone is an error
 rather than a silently duplicated row.
+
+With \code{include_stats = TRUE} a further sheet sets out the test behind each
+trend, one row per location and analyte: the trend, coloured and styled as
+it is on the summary sheet, then the number of samples tested, the S
+statistic, Kendall's tau, the p-value, and the mean, standard deviation
+and coefficient of variation of the concentrations tested - after any
+\code{lor_multiplier} substitution \code{\link[=mann_kendall_test]{mann_kendall_test()}} made. The values are
+written unrounded; number formats set only what is displayed. Where every
+value tested is the same - most often a series of non-detects all at one
+LOR - S and its variance are both zero, so the test cannot give Kendall's
+tau or a p-value. Those cells, and any other statistic the test could not
+compute, are written as \code{-} rather than as Excel's \verb{#NUM!} error.
+
+\code{include_summary = TRUE} adds the \code{\link[=summary_stats]{summary_stats()}} columns to that sheet -
+detect counts and percentages, the minimum, mean, maximum and standard
+deviation, and the 5th to 99th percentiles - calculated from the nested
+\code{data} column, so they describe exactly the samples each trend was tested
+on. They use concentrations as reported, with no LOR substitution, so the
+mean and standard deviation are labelled "as reported" beside the test's
+own "as tested" pair; the two agree when \code{\link[=mann_kendall_test]{mann_kendall_test()}} was run with
+its default \code{lor_multiplier = 1}. A minimum or maximum that is a non-detect
+is written with its \code{<}, as text: the minimum where any non-detect sits at
+the lowest value, the maximum only where every result at the highest value
+is one, since a detect outranks a non-detect at the same figure. The mean
+and percentiles are calculated rather than reported, and stay numbers.
+Where guideline sets were joined on with \code{\link[=join_action_levels]{join_action_levels()}} before the
+trend test, each set named in \code{criteria_col} follows with a guideline column
+and an exceedance count of its own, headed with the set's name.
 }
 \examples{
 trends <- mann_kendall_test(gRs_data)
@@ -148,6 +209,21 @@ zoned <- mka_to_excel(
   include_zone = TRUE
 )
 zoned[, 1:3]
+
+# Add a sheet of the statistics behind each trend
+mka_to_excel(
+  trends,
+  save_path = tempfile(fileext = ".xlsx"),
+  include_stats = TRUE
+)
+
+# ...with the summary statistics of the samples tested alongside
+mka_to_excel(
+  trends,
+  save_path = tempfile(fileext = ".xlsx"),
+  include_stats = TRUE,
+  include_summary = TRUE
+)
 
 \dontrun{
 # Default filename, in the working directory
@@ -164,6 +240,26 @@ mka_to_excel(trends, include_zone = TRUE, merge_zones = FALSE)
 
 # Darker text on the well names, for printing
 mka_to_excel(trends, include_zone = TRUE, location_font = "#14401F")
+
+# Guideline and exceedance count too, joined on before the trend test -
+# picked up from `criteria` without being asked for
+compared <- join_action_levels(gRs_data, anzg)
+mka_to_excel(
+  mann_kendall_test(compared),
+  include_stats = TRUE,
+  include_summary = TRUE
+)
+
+# Several sets, each joined under its own name and counted separately
+sets <- gRs_data \%>\%
+  join_action_levels(nemp_95, value_col = "criteria_95") \%>\%
+  join_action_levels(nemp_99, value_col = "criteria_99")
+mka_to_excel(
+  mann_kendall_test(sets),
+  include_stats = TRUE,
+  include_summary = TRUE,
+  criteria_col = c(criteria_95, criteria_99)
+)
 }
 
 }

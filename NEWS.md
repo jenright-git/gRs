@@ -80,6 +80,40 @@
   those names. Without a zone column the well names keep the deep green they
   always had.
 
+  `include_stats = TRUE` adds a `Statistics` sheet between the summary and the
+  legend, setting out the test behind each trend: one row per location and
+  analyte, sorted as the summary is, with the trend cell coloured and styled
+  exactly as it is there, followed by the number of samples tested, the S
+  statistic, Kendall's tau, the p-value, and the mean, standard deviation and
+  coefficient of variation of the concentrations. Values are written
+  unrounded, with number formats setting only what is displayed, and the
+  header row carries a filter. Where every value tested is the same - most
+  often non-detects all at one LOR - the test cannot give tau or a p-value,
+  and those cells read `-` rather than Excel's `#NUM!`.
+
+  `include_summary = TRUE` adds the `summary_stats()` columns to that sheet -
+  detect counts and percentages, minimum, mean, maximum, standard deviation and
+  every percentile - calculated from the nested series, so they describe
+  exactly the samples each trend was tested on. They use concentrations as
+  reported, so the two means and standard deviations are labelled "as tested"
+  and "as reported"; they agree at the default `lor_multiplier = 1`. A minimum
+  or maximum that is a non-detect is written with its `<`, as text, while
+  detected values stay numbers.
+
+  Guideline sets joined on with `join_action_levels()` before the trend test
+  follow, each as a guideline column and an exceedance count of its own:
+  `criteria_col = c(criteria_95, criteria_99)` writes both sets side by side,
+  in that order, each counted from its own exceedance verdicts and headed with
+  the set's name ("NEMP 99% Guideline"). Quoted names, `all_of()` and helpers
+  such as `starts_with("criteria")` work too, without catching the name, unit
+  and verdict columns that sit beside each set. Left at its default,
+  `criteria` is written where it is there, and any other set joined alongside
+  is named in a message rather than dropped unremarked. A pair with no
+  guideline in a set reads `-` in both columns rather than a count of 0, and
+  naming `criteria_col` without `include_summary = TRUE` warns rather than
+  being silently ignored. The zone and well columns follow
+  `include_zone`, `merge_zones` and `location_fill` as the summary does.
+
 # gRs 0.1.0
 
 ## New features

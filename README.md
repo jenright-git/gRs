@@ -276,6 +276,12 @@ mka_to_excel(trends, trend_colours = c(Increasing = "#E06666"))
 
 # Group the wells by monitoring zone, read out of the nested data
 mka_to_excel(trends, include_zone = TRUE)
+
+# Add a sheet of the p-value, tau and other statistics behind each trend
+mka_to_excel(trends, include_stats = TRUE)
+
+# ...with summary_stats() for the same samples alongside
+mka_to_excel(trends, include_stats = TRUE, include_summary = TRUE)
 ```
 
 ## Plotting

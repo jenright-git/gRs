@@ -25,10 +25,39 @@
 #' `data` column, and a location falling in more than one zone is an error
 #' rather than a silently duplicated row.
 #'
+#' With `include_stats = TRUE` a further sheet sets out the test behind each
+#' trend, one row per location and analyte: the trend, coloured and styled as
+#' it is on the summary sheet, then the number of samples tested, the S
+#' statistic, Kendall's tau, the p-value, and the mean, standard deviation
+#' and coefficient of variation of the concentrations tested - after any
+#' `lor_multiplier` substitution [mann_kendall_test()] made. The values are
+#' written unrounded; number formats set only what is displayed. Where every
+#' value tested is the same - most often a series of non-detects all at one
+#' LOR - S and its variance are both zero, so the test cannot give Kendall's
+#' tau or a p-value. Those cells, and any other statistic the test could not
+#' compute, are written as `-` rather than as Excel's `#NUM!` error.
+#'
+#' `include_summary = TRUE` adds the [summary_stats()] columns to that sheet -
+#' detect counts and percentages, the minimum, mean, maximum and standard
+#' deviation, and the 5th to 99th percentiles - calculated from the nested
+#' `data` column, so they describe exactly the samples each trend was tested
+#' on. They use concentrations as reported, with no LOR substitution, so the
+#' mean and standard deviation are labelled "as reported" beside the test's
+#' own "as tested" pair; the two agree when [mann_kendall_test()] was run with
+#' its default `lor_multiplier = 1`. A minimum or maximum that is a non-detect
+#' is written with its `<`, as text: the minimum where any non-detect sits at
+#' the lowest value, the maximum only where every result at the highest value
+#' is one, since a detect outranks a non-detect at the same figure. The mean
+#' and percentiles are calculated rather than reported, and stay numbers.
+#' Where guideline sets were joined on with [join_action_levels()] before the
+#' trend test, each set named in `criteria_col` follows with a guideline column
+#' and an exceedance count of its own, headed with the set's name.
+#'
 #' @param data tibble from [mann_kendall_test()]. Only the location, analyte
-#'   and trend columns are used; the nested `data` column and the test
-#'   statistics are ignored, so there is no need to drop them first - though
-#'   `include_zone = TRUE` reads the zone back out of that nested column.
+#'   and trend columns go into the summary sheet. The test statistics are
+#'   written only with `include_stats = TRUE`, and the nested `data` column is
+#'   read only for the zone, the sample count and `include_summary`, so there
+#'   is no need to drop either first.
 #' @param save_path full file path, including filename, for the workbook. The
 #'   directory is created if it does not exist. Defaults to
 #'   `"MKA Trend Summary_<yyyymmdd>.xlsx"` in the working directory.
@@ -81,6 +110,32 @@
 #'   `header_font`, so white unless changed - note that white on the default
 #'   `location_fill` is a contrast ratio of about 2:1, and a dark green such as
 #'   `"#14401F"` reads better if the sheet is to be printed.
+#' @param include_stats add a `"Statistics"` sheet, between the summary and
+#'   the legend, with the trend and test statistics for each location/analyte
+#'   pair, sorted as the summary sheet is and filterable from its header row.
+#'   Statistics `data` does not carry are left out, and the sample count
+#'   needs the nested `data` column. Default `FALSE`.
+#' @param include_summary add the [summary_stats()] columns to the statistics
+#'   sheet, after the test statistics. Needs `include_stats = TRUE`, and the
+#'   nested `data` column with the `concentration` and `detect_flag` columns
+#'   [data_processor()] writes. Default `FALSE`.
+#' @param criteria_col the guideline column or columns to write, where
+#'   guideline sets were joined on by [join_action_levels()] before
+#'   [mann_kendall_test()] was run - one per set, each under the `value_col`
+#'   it was joined with. One column, or several as
+#'   `c(criteria_95, criteria_99)`, with or without quotes; `all_of()` and
+#'   helpers such as `starts_with("criteria")` work too. With
+#'   `include_summary = TRUE` each set adds two columns, in the order named:
+#'   the guideline, and the number of results that exceeded it, counted from
+#'   that set's own `exceedance` verdicts. Each pair is headed with the set's
+#'   name - `"NEMP 99% Guideline"` - where [join_action_levels()] recorded
+#'   one. A location/analyte pair with no guideline in a set reads `-` in
+#'   both, rather than a count of 0. A column named here that the nested data
+#'   lacks is an error. Default `criteria`, the column [join_action_levels()]
+#'   writes unless given another `value_col`, used where it is there; any
+#'   other set joined alongside is named in a message rather than dropped
+#'   unremarked. `NULL` leaves the guidelines out. Naming any without
+#'   `include_summary = TRUE` warns, as they would otherwise be ignored.
 #'
 #' @returns The wide tibble that was written, invisibly - locations down,
 #'   analytes across, trends in the cells.
@@ -102,6 +157,21 @@
 #' )
 #' zoned[, 1:3]
 #'
+#' # Add a sheet of the statistics behind each trend
+#' mka_to_excel(
+#'   trends,
+#'   save_path = tempfile(fileext = ".xlsx"),
+#'   include_stats = TRUE
+#' )
+#'
+#' # ...with the summary statistics of the samples tested alongside
+#' mka_to_excel(
+#'   trends,
+#'   save_path = tempfile(fileext = ".xlsx"),
+#'   include_stats = TRUE,
+#'   include_summary = TRUE
+#' )
+#'
 #' \dontrun{
 #' # Default filename, in the working directory
 #' mka_to_excel(trends)
@@ -117,15 +187,37 @@
 #'
 #' # Darker text on the well names, for printing
 #' mka_to_excel(trends, include_zone = TRUE, location_font = "#14401F")
+#'
+#' # Guideline and exceedance count too, joined on before the trend test -
+#' # picked up from `criteria` without being asked for
+#' compared <- join_action_levels(gRs_data, anzg)
+#' mka_to_excel(
+#'   mann_kendall_test(compared),
+#'   include_stats = TRUE,
+#'   include_summary = TRUE
+#' )
+#'
+#' # Several sets, each joined under its own name and counted separately
+#' sets <- gRs_data %>%
+#'   join_action_levels(nemp_95, value_col = "criteria_95") %>%
+#'   join_action_levels(nemp_99, value_col = "criteria_99")
+#' mka_to_excel(
+#'   mann_kendall_test(sets),
+#'   include_stats = TRUE,
+#'   include_summary = TRUE,
+#'   criteria_col = c(criteria_95, criteria_99)
+#' )
 #' }
 #'
 #' @importFrom dplyr select arrange mutate across all_of tibble
 #' @importFrom tidyr pivot_wider replace_na
-#' @importFrom rlang enquo quo_name sym !!
+#' @importFrom rlang enquo quo_name quo_is_null sym syms !! !!!
+#' @importFrom dplyr bind_rows bind_cols
 #' @importFrom glue glue
 #' @importFrom utils head
 #' @importFrom openxlsx createWorkbook addWorksheet writeData createStyle
 #'   addStyle setColWidths setRowHeights freezePane mergeCells saveWorkbook
+#'   addFilter
 mka_to_excel <- function(
   data,
   save_path = paste0(
@@ -150,12 +242,20 @@ mka_to_excel <- function(
   zone_label = "Monitoring Zone",
   zone_col = monitoring_zone,
   location_fill = "#9BBEAF",
-  location_font = header_font
+  location_font = header_font,
+  include_stats = FALSE,
+  include_summary = FALSE,
+  criteria_col = criteria
 ) {
+  # Named outright, the guideline columns have to be there. Left at its
+  # default, `criteria` is picked up only where join_action_levels() put one.
+  criteria_named <- !missing(criteria_col)
+
   loc_col <- rlang::enquo(location_col)
   chem_col <- rlang::enquo(chem_name_col)
   trd_col <- rlang::enquo(trend_col)
   zn_col <- rlang::enquo(zone_col)
+  crit_col <- rlang::enquo(criteria_col)
 
   loc_name <- rlang::quo_name(loc_col)
   chem_name_str <- rlang::quo_name(chem_col)
@@ -179,6 +279,38 @@ mka_to_excel <- function(
       is.na(include_zone)
   ) {
     stop("`include_zone` must be TRUE or FALSE.")
+  }
+  if (
+    !is.logical(include_stats) ||
+      length(include_stats) != 1 ||
+      is.na(include_stats)
+  ) {
+    stop("`include_stats` must be TRUE or FALSE.")
+  }
+  if (
+    !is.logical(include_summary) ||
+      length(include_summary) != 1 ||
+      is.na(include_summary)
+  ) {
+    stop("`include_summary` must be TRUE or FALSE.")
+  }
+  if (include_summary && !include_stats) {
+    stop(
+      "`include_summary = TRUE` adds to the Statistics sheet, so needs ",
+      "`include_stats = TRUE` as well."
+    )
+  }
+  if (criteria_named && !rlang::quo_is_null(crit_col) && !include_summary) {
+    warning(
+      "`criteria_col` is only used with `include_summary = TRUE`, so no ",
+      "guideline or exceedance count was written."
+    )
+  }
+  if (include_stats && identical(tolower(sheet_name), tolower(STATS_SHEET))) {
+    stop(glue::glue(
+      "`sheet_name` cannot be \"{sheet_name}\" with `include_stats = TRUE`; ",
+      "the statistics sheet takes that name."
+    ))
   }
   if (include_zone && zone_name %in% c(loc_name, chem_name_str, trend_name)) {
     stop(glue::glue(
@@ -210,6 +342,21 @@ mka_to_excel <- function(
       },
       ". Each location/analyte pair needs a single trend."
     ))
+  }
+
+  # Built before anything is written, so a call with no statistics to show
+  # fails without leaving half a workbook behind.
+  stats <- if (include_stats) {
+    stats_table(
+      data,
+      long,
+      key_names = c(if (include_zone) zone_name, loc_name, chem_name_str),
+      trend_name = trend_name,
+      na_label = na_label,
+      include_summary = include_summary,
+      criteria_col = crit_col,
+      criteria_named = criteria_named
+    )
   }
 
   wide <- long %>%
@@ -340,6 +487,25 @@ mka_to_excel <- function(
     firstActiveCol = n_id + 1
   )
 
+  if (include_stats) {
+    add_stats_sheet(
+      wb,
+      stats$table,
+      id_labels = names(wide)[seq_len(n_id)],
+      labels = stats$labels,
+      formats = stats$formats,
+      fills = fills,
+      fonts = fonts,
+      na_label = na_label,
+      header_fill = header_fill,
+      header_font = header_font,
+      include_zone = include_zone,
+      merge_zones = merge_zones,
+      location_fill = location_fill,
+      location_font = location_font
+    )
+  }
+
   if (legend) {
     add_legend_sheet(wb, fills, fonts, na_label, header_fill, header_font)
   }
@@ -400,6 +566,38 @@ TREND_INTERPRETATION_DEFAULT <- c(
   "NC" = "-"
 )
 
+# The statistics sheet's name, which the summary sheet may not also take.
+STATS_SHEET <- "Statistics"
+
+# What the statistics sheet writes for a statistic the test could not compute.
+STATS_NA <- "-"
+
+# The columns the statistics sheet writes after the trend, in order, with the
+# heading each is written under. All but n_samples come from
+# mann_kendall_test(); n_samples is counted from its nested data.
+STATS_LABELS <- c(
+  "n_samples" = "Samples",
+  "S_statistic" = "S Statistic",
+  "tau_statistic" = "Kendall's Tau",
+  "p_value" = "p-value",
+  "sample_mean" = "Mean",
+  "SD" = "Standard Deviation",
+  "COV" = "Coefficient of Variation"
+)
+
+# Excel number formats for those columns. The mean and standard deviation are
+# in whatever units the concentrations were, and left in General so a trace
+# metal at 0.0001 mg/L does not display as zero.
+STATS_FORMATS <- c(
+  "n_samples" = "0",
+  "S_statistic" = "0",
+  "tau_statistic" = "0.000",
+  "p_value" = "0.0000",
+  "sample_mean" = "GENERAL",
+  "SD" = "GENERAL",
+  "COV" = "0.00"
+)
+
 #' Rename the not-calculated level in a default lookup
 #'
 #' @param x named vector keyed by trend category
@@ -427,15 +625,9 @@ zone_values <- function(data, zone_name) {
     return(as.character(data[[zone_name]]))
   }
 
-  nested <- data[["data"]]
-  nested_has_zone <- is.list(nested) &&
-    !is.data.frame(nested) &&
-    length(nested) == nrow(data) &&
-    all(vapply(
-      nested,
-      function(d) is.data.frame(d) && zone_name %in% names(d),
-      logical(1)
-    ))
+  nested <- nested_frames(data)
+  nested_has_zone <- !is.null(nested) &&
+    all(vapply(nested, function(d) zone_name %in% names(d), logical(1)))
 
   if (nested_has_zone) {
     return(vapply(
@@ -450,6 +642,22 @@ zone_values <- function(data, zone_name) {
     "column either. Join the zone on before calling, or name the column ",
     "with `zone_col`."
   ))
+}
+
+#' The nested series behind each row of a Mann-Kendall result
+#'
+#' @param data the tibble passed to [mka_to_excel()]
+#' @returns the nested `data` column, a list of data frames with one per row
+#'   of `data`, or `NULL` where `data` has no such column
+#' @noRd
+nested_frames <- function(data) {
+  nested <- data[["data"]]
+  is_nested <- is.list(nested) &&
+    !is.data.frame(nested) &&
+    length(nested) == nrow(data) &&
+    all(vapply(nested, is.data.frame, logical(1)))
+
+  if (is_nested) nested else NULL
 }
 
 #' The one zone in a nested location/analyte frame
@@ -574,19 +782,22 @@ resolve_trend_colours <- function(colours, defaults, arg) {
 
 #' Style for the header row across the top
 #'
-#' Rotated upright, so a wide analyte suite stays narrow on the page.
+#' Rotated upright by default, so a wide analyte suite stays narrow on the
+#' page.
 #'
 #' @param fill background colour
 #' @param font text colour
+#' @param rotate set the text upright; otherwise it reads across and wraps
 #' @returns an openxlsx style object
 #' @noRd
-header_row_style <- function(fill, font) {
+header_row_style <- function(fill, font, rotate = TRUE) {
   openxlsx::createStyle(
     fgFill = fill,
     fontColour = font,
-    textRotation = 90,
+    textRotation = if (rotate) 90 else NULL,
+    wrapText = !rotate,
     halign = "center",
-    valign = "bottom",
+    valign = if (rotate) "bottom" else "center",
     textDecoration = "bold",
     fontSize = 9,
     border = "TopBottomLeftRight",
@@ -609,6 +820,25 @@ id_body_style <- function(fill, font) {
     textDecoration = "bold",
     halign = "left",
     valign = "center",
+    border = "TopBottomLeftRight",
+    borderColour = "#D9D9D9",
+    borderStyle = "thin"
+  )
+}
+
+#' Style for a plain body cell on the statistics sheet
+#'
+#' @param num_fmt Excel number format
+#' @param halign horizontal alignment, or `NULL` for Excel's own - text to
+#'   the left, numbers to the right
+#' @returns an openxlsx style object
+#' @noRd
+stats_body_style <- function(num_fmt = "GENERAL", halign = NULL) {
+  openxlsx::createStyle(
+    fontSize = 9,
+    halign = halign,
+    valign = "center",
+    numFmt = num_fmt,
     border = "TopBottomLeftRight",
     borderColour = "#D9D9D9",
     borderStyle = "thin"
@@ -704,6 +934,558 @@ add_legend_sheet <- function(
     )
   }
   openxlsx::setColWidths(wb, "Legend", cols = 1:3, widths = c(22, 62, 16))
+
+  invisible(wb)
+}
+
+#' The long table of statistics behind each trend
+#'
+#' @param data the tibble passed to [mka_to_excel()]
+#' @param long the identifier and trend columns already taken from `data`,
+#'   in the same row order, with any zone filled in
+#' @param key_names the identifier columns to sort by: the zone where there is
+#'   one, then location, then analyte
+#' @param trend_name name of the trend column
+#' @param na_label what to write where the test returned no trend
+#' @param include_summary add the `summary_columns()` after the statistics
+#' @param criteria_col,criteria_named passed on to `summary_columns()`
+#' @returns a list of `table`, a tibble of the keys, the trend, then the
+#'   statistics in `STATS_LABELS` order under their original column names,
+#'   then any summary columns; and `labels` and `formats`, the heading and
+#'   Excel number format of each statistic, named by column
+#' @noRd
+stats_table <- function(
+  data,
+  long,
+  key_names,
+  trend_name,
+  na_label,
+  include_summary = FALSE,
+  criteria_col = rlang::quo(NULL),
+  criteria_named = TRUE
+) {
+  from_data <- intersect(names(STATS_LABELS), names(data))
+  if (length(from_data) == 0) {
+    stop(glue::glue(
+      "`include_stats = TRUE`, but `data` has none of the statistics ",
+      "mann_kendall_test() returns ",
+      "({toString(setdiff(names(STATS_LABELS), 'n_samples'))})."
+    ))
+  }
+
+  stats <- long[, c(key_names, trend_name)]
+  stats[[trend_name]] <- tidyr::replace_na(
+    as.character(stats[[trend_name]]),
+    na_label
+  )
+
+  nested <- nested_frames(data)
+  if (!is.null(nested)) {
+    stats$n_samples <- vapply(nested, nrow, integer(1))
+  }
+  # mk.test() hands back named estimates, which would otherwise ride along.
+  # Where every value tested is the same - all non-detects at one LOR, say -
+  # S and its variance are both zero, and tau and the p-value come back NaN.
+  # openxlsx writes NaN and Inf as #NUM!, so they go in as NA, which
+  # add_stats_sheet() writes as STATS_NA.
+  for (col in from_data) {
+    stats[[col]] <- finite_or_na(unname(data[[col]]))
+  }
+
+  stats <- stats[, c(
+    key_names,
+    trend_name,
+    intersect(names(STATS_LABELS), names(stats))
+  )]
+
+  labels <- STATS_LABELS
+  formats <- STATS_FORMATS
+
+  if (include_summary) {
+    analytes <- long[[key_names[length(key_names)]]]
+    summ <- summary_columns(data, analytes, criteria_col, criteria_named)
+    stats <- dplyr::bind_cols(stats, summ$table)
+
+    # The test's mean and standard deviation are of the values after any LOR
+    # substitution; summary_stats()'s are of the values as reported.
+    labels[c("sample_mean", "SD")] <- c(
+      "Mean (as tested)",
+      "Standard Deviation (as tested)"
+    )
+    spec <- summary_column_spec()
+    labels <- c(labels, spec$labels, summ$labels)
+    formats <- c(formats, spec$formats, summ$formats)
+  }
+
+  list(
+    table = dplyr::arrange(stats, !!!rlang::syms(key_names)),
+    labels = labels,
+    formats = formats
+  )
+}
+
+#' NaN and Inf as NA
+#'
+#' @param x a column bound for the statistics sheet
+#' @returns `x`, with any non-finite number made `NA`, which
+#'   `add_stats_sheet()` writes as `STATS_NA` rather than as #NUM!
+#' @noRd
+finite_or_na <- function(x) {
+  if (is.numeric(x)) {
+    x[!is.finite(x)] <- NA
+  }
+  x
+}
+
+#' The summary_stats() columns for each row of a Mann-Kendall result
+#'
+#' Runs [summary_stats()] over the nested series, so the figures describe the
+#' samples each trend was tested on rather than everything the original data
+#' held. summary_stats() groups by location_code and chem_name, so each series
+#' goes in under its row number as its location_code: that holds whatever the
+#' caller's own columns are called, and lines the result back up with `data`.
+#'
+#' Each guideline set named in `criteria_col` adds a guideline column and an
+#' exceedance count of its own, from a run of summary_stats() against that set
+#' alone - so every count reads the verdicts join_action_levels() wrote for
+#' that set, and no other.
+#'
+#' @param data the tibble passed to [mka_to_excel()]
+#' @param analytes the analyte of each row, for summary_stats()'s warnings
+#' @param criteria_col what was passed as `criteria_col`, as a quosure
+#' @param criteria_named whether `criteria_col` was passed at all
+#' @returns a list of `table`, a tibble with one row per row of `data` - the
+#'   summary_stats() columns bar `n_samples`, a `guideline__<set>` and
+#'   `exceedances__<set>` pair for each guideline set, then `.min_nd` and
+#'   `.max_nd`, flagging a minimum or maximum that is a non-detect - and the
+#'   `labels` and `formats` of the guideline columns
+#' @noRd
+summary_columns <- function(
+  data,
+  analytes,
+  criteria_col = rlang::quo(NULL),
+  criteria_named = TRUE
+) {
+  nested <- nested_frames(data)
+  if (is.null(nested)) {
+    stop(
+      "`include_summary = TRUE` needs the nested `data` column ",
+      "mann_kendall_test() returns, to summarise the samples behind each ",
+      "trend."
+    )
+  }
+
+  shared <- Reduce(intersect, lapply(nested, names))
+  absent <- setdiff(c("concentration", "detect_flag"), shared)
+  if (length(absent) > 0) {
+    stop(glue::glue(
+      "`include_summary = TRUE` needs {toString(absent)} in the nested ",
+      "`data` column. Run mann_kendall_test() on a table from ",
+      "data_processor()."
+    ))
+  }
+
+  sets <- criteria_columns(
+    criteria_col,
+    criteria_named,
+    template = nested[[1]][0, shared, drop = FALSE]
+  )
+
+  samples <- dplyr::bind_rows(lapply(seq_along(nested), function(i) {
+    d <- nested[[i]]
+    d$location_code <- as.character(i)
+    d$chem_name <- as.character(analytes[i])
+    d
+  }))
+  in_order <- function(summ) {
+    summ[match(as.character(seq_along(nested)), summ$location_code), ]
+  }
+
+  summ <- in_order(summary_stats(samples))
+
+  # The sample count is on the sheet already, counted from the same series.
+  summ$location_code <- NULL
+  summ$chem_name <- NULL
+  summ$n_samples <- NULL
+  summ[] <- lapply(summ, finite_or_na)
+
+  prefixes <- vapply(
+    sets,
+    function(set) criteria_set_label(nested, set, several = length(sets) > 1),
+    character(1)
+  )
+  # Two sets joined under one name are told apart by their columns.
+  clash <- duplicated(prefixes) | duplicated(prefixes, fromLast = TRUE)
+  prefixes[clash] <- paste0(prefixes[clash], " (", sets[clash], ")")
+
+  labels <- character(0)
+  formats <- character(0)
+  for (set in sets) {
+    against <- in_order(summary_stats(
+      samples,
+      include_criteria = TRUE,
+      criteria_col = !!rlang::sym(set)
+    ))
+    guideline <- finite_or_na(against[[set]])
+    exceedances <- against[[paste0(
+      comparison_columns(set)[["exceedance"]],
+      "_count"
+    )]]
+    # summary_stats() counts no exceedances where there was nothing to exceed,
+    # but a 0 there would read as compliance.
+    exceedances[is.na(guideline)] <- NA
+
+    cols <- paste0(c("guideline__", "exceedances__"), set)
+    summ[[cols[1]]] <- guideline
+    summ[[cols[2]]] <- exceedances
+
+    labels[cols] <- trimws(paste(prefixes[[set]], c("Guideline", "Exceedances")))
+    formats[cols] <- c("GENERAL", "0")
+  }
+
+  extremes <- vapply(nested, nd_extremes, logical(2))
+  summ$.min_nd <- extremes[1, ]
+  summ$.max_nd <- extremes[2, ]
+
+  list(table = summ, labels = labels, formats = formats)
+}
+
+#' The guideline columns `criteria_col` asks for
+#'
+#' Resolved against the nested data, where the guidelines ride once
+#' [join_action_levels()] has run ahead of [mann_kendall_test()], with
+#' [dplyr::select()], so `c(criteria_95, criteria_99)`, quoted names and
+#' helpers such as `starts_with()` all work.
+#'
+#' @param criteria_col what was passed as `criteria_col`, as a quosure
+#' @param criteria_named whether it was passed at all. Left at its default,
+#'   `criteria` is used where it is there and skipped where it is not, and
+#'   any other set joined alongside is named in a message rather than
+#'   dropped unremarked.
+#' @param template a zero-row frame with the nested data's columns
+#' @returns column names, in the order asked for; empty for none
+#' @noRd
+criteria_columns <- function(criteria_col, criteria_named, template) {
+  if (rlang::quo_is_null(criteria_col)) {
+    return(character(0))
+  }
+
+  if (!criteria_named) {
+    picked <- intersect("criteria", names(template))
+    others <- setdiff(criteria_sets(template), picked)
+    if (length(others) > 0) {
+      message(glue::glue(
+        "Guideline set(s) {toString(others)} joined but not written. Name ",
+        "every set wanted in `criteria_col`, e.g. ",
+        "criteria_col = c({toString(c(picked, others))})."
+      ))
+    }
+    return(picked)
+  }
+
+  picked <- tryCatch(
+    names(dplyr::select(template, !!criteria_col)),
+    error = function(e) {
+      stop(
+        "`criteria_col` names a column the nested `data` column does not ",
+        "hold. Join each guideline set on with join_action_levels() before ",
+        "running mann_kendall_test().\n",
+        conditionMessage(e),
+        call. = FALSE
+      )
+    }
+  )
+
+  # A helper such as starts_with("criteria") also catches the columns
+  # join_action_levels() writes beside each guideline - its name, unit and
+  # exceedance verdicts - which are not guidelines themselves.
+  companions <- unlist(
+    lapply(criteria_sets(template), function(s) setdiff(set_columns(s), s)),
+    use.names = FALSE
+  )
+  sets <- setdiff(picked, companions)
+
+  if (length(picked) > 0 && length(sets) == 0) {
+    stop(glue::glue(
+      "`criteria_col` picked only columns that sit beside a guideline ",
+      "({toString(picked)}), not a guideline value column itself."
+    ))
+  }
+  sets
+}
+
+#' The name a guideline set's columns are headed with
+#'
+#' [join_action_levels()] records each set's name - `"NEMP 99%"`, say -
+#' beside its value column, and that is what a reader will know it by. Failing
+#' a name, a lone set needs no prefix at all, and one of several is told
+#' apart by its column.
+#'
+#' @param nested the nested series
+#' @param set the guideline value column
+#' @param several whether other sets are being written beside it
+#' @returns a single string, possibly empty
+#' @noRd
+criteria_set_label <- function(nested, set, several) {
+  name_col <- paste0(set, "_name")
+  names_found <- unique(unlist(lapply(nested, function(d) {
+    as.character(d[[name_col]])
+  })))
+  names_found <- names_found[!is.na(names_found) & nzchar(names_found)]
+
+  if (length(names_found) == 1) {
+    names_found
+  } else if (several) {
+    set
+  } else {
+    ""
+  }
+}
+
+#' Whether a series' minimum and maximum are non-detects
+#'
+#' The minimum is one where any non-detect sits at the lowest value, since
+#' "<0.001" is below a detect of 0.001. The maximum is one only where every
+#' result at the highest value is, since a detect of 0.005 is above "<0.005".
+#'
+#' @param d one nested series, with `concentration` and `detect_flag`
+#' @returns two logicals, for the minimum then the maximum
+#' @noRd
+nd_extremes <- function(d) {
+  keep <- !is.na(d$concentration)
+  conc <- d$concentration[keep]
+  nd <- d$detect_flag[keep] %in% "N"
+
+  if (length(conc) == 0) {
+    return(c(FALSE, FALSE))
+  }
+  c(any(nd[conc == min(conc)]), all(nd[conc == max(conc)]))
+}
+
+#' A reported concentration as text, for writing after a "<"
+#'
+#' Up to ten significant figures and never in scientific notation, so it
+#' reads as the number beside it in the column would.
+#'
+#' @param x numeric vector
+#' @returns character vector
+#' @noRd
+format_reported <- function(x) {
+  trimws(formatC(x, digits = 10, format = "fg"))
+}
+
+#' Headings and number formats for the summary_stats() columns
+#'
+#' A function rather than constants beside STATS_LABELS, since the percentiles
+#' come from PERCENTILES in summary_stats.R, which is collated after this file.
+#'
+#' @returns a list of `labels` and `formats`, each named by column
+#' @noRd
+summary_column_spec <- function() {
+  pct <- paste0("p", PERCENTILES)
+  general <- c("min", "mean", "max", "std_dev", pct)
+
+  list(
+    labels = c(
+      "n_detects" = "Detects",
+      "n_non_detects" = "Non-Detects",
+      "pct_detects" = "% Detects",
+      "pct_non_detects" = "% Non-Detects",
+      "min" = "Minimum",
+      "mean" = "Mean (as reported)",
+      "max" = "Maximum",
+      "std_dev" = "Standard Deviation (as reported)",
+      # Every percentile summary_stats() reports takes "th".
+      stats::setNames(paste0(PERCENTILES, "th Percentile"), pct)
+    ),
+    formats = c(
+      "n_detects" = "0",
+      "n_non_detects" = "0",
+      "pct_detects" = "0.0",
+      "pct_non_detects" = "0.0",
+      stats::setNames(rep("GENERAL", length(general)), general)
+    )
+  )
+}
+
+#' Add the sheet of statistics behind each trend
+#'
+#' Laid out to read alongside the summary sheet: the zone and well columns
+#' and the trend cells take the same styles they have there.
+#'
+#' @param wb the workbook to add to
+#' @param stats the table from `stats_table()`
+#' @param id_labels headings for the zone and location columns, as written on
+#'   the summary sheet
+#' @param labels,formats the heading and Excel number format of each
+#'   statistic, named by column, from `stats_table()`
+#' @param fills named fill colours
+#' @param fonts named font colours
+#' @param na_label the not-calculated level
+#' @param header_fill,header_font colours for the header row and the first
+#'   identifier column
+#' @param include_zone whether the first column is the zone
+#' @param merge_zones merge each zone's repeated cells
+#' @param location_fill,location_font colours for the well names beside a zone
+#' @returns `wb`, invisibly, modified in place
+#' @noRd
+add_stats_sheet <- function(
+  wb,
+  stats,
+  id_labels,
+  labels,
+  formats,
+  fills,
+  fonts,
+  na_label,
+  header_fill,
+  header_font,
+  include_zone,
+  merge_zones,
+  location_fill,
+  location_font
+) {
+  nd_flags <- stats[intersect(c(".min_nd", ".max_nd"), names(stats))]
+  stats <- stats[setdiff(names(stats), names(nd_flags))]
+
+  n_id <- length(id_labels)
+  analyte_col <- n_id + 1
+  trend_col <- n_id + 2
+  stat_names <- names(stats)[-seq_len(trend_col)]
+  trend <- stats[[trend_col]]
+
+  # A non-detect minimum or maximum goes over its number as text, with its
+  # "<", once the column has been written and styled.
+  nd_cells <- lapply(intersect(c("min", "max"), stat_names), function(col) {
+    flag <- nd_flags[[paste0(".", col, "_nd")]] & !is.na(stats[[col]])
+    list(
+      rows = which(flag) + 1,
+      col = trend_col + match(col, stat_names),
+      text = paste0("<", format_reported(stats[[col]][flag]))
+    )
+  })
+
+  names(stats) <- c(
+    id_labels,
+    "Analyte",
+    "Trend",
+    unname(labels[stat_names])
+  )
+
+  openxlsx::addWorksheet(wb, STATS_SHEET, gridLines = FALSE)
+  openxlsx::writeData(
+    wb,
+    STATS_SHEET,
+    stats,
+    headerStyle = header_row_style(header_fill, header_font, rotate = FALSE),
+    keepNA = TRUE,
+    na.string = STATS_NA
+  )
+
+  n_row <- nrow(stats)
+  n_col <- ncol(stats)
+
+  if (n_row > 0) {
+    rows <- 2:(n_row + 1)
+
+    openxlsx::addStyle(
+      wb,
+      STATS_SHEET,
+      id_body_style(header_fill, header_font),
+      rows = rows,
+      cols = 1,
+      gridExpand = TRUE
+    )
+    if (include_zone) {
+      openxlsx::addStyle(
+        wb,
+        STATS_SHEET,
+        id_body_style(location_fill, location_font),
+        rows = rows,
+        cols = 2,
+        gridExpand = TRUE
+      )
+
+      if (merge_zones) {
+        merge_column_runs(wb, STATS_SHEET, stats[[1]])
+      }
+    }
+
+    openxlsx::addStyle(
+      wb,
+      STATS_SHEET,
+      stats_body_style(),
+      rows = rows,
+      cols = analyte_col,
+      gridExpand = TRUE
+    )
+
+    # A trend the palette does not name is left unformatted, as it is on the
+    # summary sheet, which has already warned about it.
+    for (lvl in intersect(names(fills), trend)) {
+      openxlsx::addStyle(
+        wb,
+        STATS_SHEET,
+        trend_cell_style(lvl, fills, fonts, na_label),
+        rows = which(trend == lvl) + 1,
+        cols = trend_col,
+        gridExpand = TRUE
+      )
+    }
+
+    # Right-aligned, so a dash sits in line with the numbers around it.
+    for (i in seq_along(stat_names)) {
+      openxlsx::addStyle(
+        wb,
+        STATS_SHEET,
+        stats_body_style(formats[[stat_names[i]]], halign = "right"),
+        rows = rows,
+        cols = trend_col + i,
+        gridExpand = TRUE
+      )
+    }
+
+    for (cells in nd_cells) {
+      for (k in seq_along(cells$rows)) {
+        openxlsx::writeData(
+          wb,
+          STATS_SHEET,
+          cells$text[k],
+          startCol = cells$col,
+          startRow = cells$rows[k]
+        )
+      }
+    }
+  }
+
+  openxlsx::setColWidths(
+    wb,
+    STATS_SHEET,
+    cols = seq_len(n_col),
+    widths = c(
+      if (include_zone) 20,
+      16,
+      28,
+      21,
+      rep(14, length(stat_names))
+    )
+  )
+  # Tall enough for the longest heading to wrap within its column, at about a
+  # dozen characters a line - a long guideline set name included.
+  header_lines <- max(1, ceiling(nchar(labels[stat_names]) / 12))
+  openxlsx::setRowHeights(
+    wb,
+    STATS_SHEET,
+    rows = 1,
+    heights = max(30, 15 * header_lines)
+  )
+  openxlsx::freezePane(
+    wb,
+    STATS_SHEET,
+    firstActiveRow = 2,
+    firstActiveCol = analyte_col + 1
+  )
+  openxlsx::addFilter(wb, STATS_SHEET, rows = 1, cols = seq_len(n_col))
 
   invisible(wb)
 }
