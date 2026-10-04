@@ -106,11 +106,14 @@ test_that("counts of a named set are still counts", {
   out <- summary_fixture("criteria_99")
   numeric_cols <- names(out)[vapply(out, is.numeric, logical(1))]
 
-  expect_true("criteria_99_n_exceedances" %in% grep(
-    "(^|_)n_",
-    numeric_cols,
-    value = TRUE
-  ))
+  expect_true(
+    "criteria_99_n_exceedances" %in%
+      grep(
+        "(^|_)n_",
+        numeric_cols,
+        value = TRUE
+      )
+  )
   # and nothing that is not a count is swept in with them
   expect_false(any(
     c("min_conc", "max_conc", "criteria_99") %in%
@@ -415,6 +418,56 @@ test_that("a non-detect still carries its < through the merges", {
   expect_match(cells$current_prefix[[2]], "lt;", fixed = TRUE)
 })
 
+test_that("summary_stats()'s flagged ends carry their <, where min and max were", {
+  skip_if_not_installed("gt")
+  cells <- gt::extract_body(
+    create_gt(summary_stats(chem_fixture()), merge_range = FALSE)
+  )
+
+  expect_equal(cells$min_prefix, c("&lt;0.5", "&lt;0.5"))
+  expect_equal(cells$max_prefix, c("2.5", "8"))
+  expect_equal(
+    names(cells)[8:12],
+    c("pct_non_detects", "min_prefix", "mean", "max_prefix", "std_dev")
+  )
+  expect_equal(
+    intersect(c("min", "max", "min_nd", "max_nd"), names(cells)),
+    character(0)
+  )
+})
+
+test_that("summary_stats()'s minimum and maximum merge into a range", {
+  skip_if_not_installed("gt")
+  out <- summary_stats(chem_fixture())
+  cells <- gt::extract_body(create_gt(out))
+
+  expect_equal(cells$min_prefix, c("&lt;0.5 - 2.5", "&lt;0.5 - 8"))
+  expect_match(rendered(out), "concentration range", fixed = TRUE)
+})
+
+test_that("a label for summary_stats()'s min or max still applies", {
+  skip_if_not_installed("gt")
+  html <- rendered(
+    summary_stats(chem_fixture()),
+    merge_range = FALSE,
+    labels = c(min = "Lowest")
+  )
+
+  expect_match(html, "lowest", fixed = TRUE)
+  expect_match(html, "maximum concentration", fixed = TRUE)
+})
+
+test_that("only an end with its flag beside it is read as a pair", {
+  skip_if_not_installed("gt")
+  out <- summary_stats(chem_fixture())
+  out$min_nd <- NULL
+  cells <- gt::extract_body(create_gt(out))
+
+  # min is left a plain number, so there is no pair to make a range with
+  expect_equal(cells$min, c("0.5", "0.5"))
+  expect_equal(cells$max_prefix, c("2.5", "8"))
+})
+
 
 # A range with only one end to report: the separator has nothing to separate.
 range_cell <- function(concentration, detect_flag, prefix, ...) {
@@ -477,7 +530,9 @@ test_that("a range is formatted as the columns beside it are", {
     range_cell(c(1000, 2500, 9), rep("Y", 3), rep(NA, 3)),
     "1,000 - 2,500"
   )
-  expect_equal(format_concentration(c(5, 0.5, 1000, NA), 5),
-               c("5", "0.5", "1,000", NA))
+  expect_equal(
+    format_concentration(c(5, 0.5, 1000, NA), 5),
+    c("5", "0.5", "1,000", NA)
+  )
   expect_equal(format_concentration(0.000004, 5), "0")
 })

@@ -50,6 +50,12 @@
   set's `_name`, `_unit` and verdict columns is dropped. A single set gives
   the same columns as before.
 
+* `create_gt()` reads `summary_stats()`'s `min` and `max`, with their
+  `min_nd` and `max_nd` flags, as it reads `analyte_summary()`'s prefixed
+  minimum and maximum: a non-detect end is written `<0.5`, the two are merged
+  into a "Concentration Range" unless `merge_range = FALSE`, and the flag
+  columns are not shown.
+
 * `summary_stats()` gains `lor_multiplier`, as `half_lor()` and
   `mann_kendall_test()` take it: the mean, standard deviation and
   percentiles take non-detects at their LOR times the multiplier (0.5 for

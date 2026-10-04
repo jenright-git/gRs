@@ -26,7 +26,8 @@ trailing zeros dropped.}
 \item{labels}{named character vector of column labels, e.g.
 \code{c(max_location = "Where")}, merged over the built-in dictionary. Where a
 prefix/concentration pair has been merged, label the \verb{_prefix} column -
-that is the name the merged column keeps.}
+that is the name the merged column keeps. A label given for
+\code{\link[=summary_stats]{summary_stats()}}'s \code{min} or \code{max} is moved onto it.}
 
 \item{width}{table width passed to \code{gt::tab_options(table.width = )}, e.g.
 \code{1000} or \code{gt::pct(100)}. Default \code{NULL}, leaving it to \code{gt}.}
@@ -43,8 +44,8 @@ are present are applied, so this is safe on any table.}
 
 \item{merge_range}{read a \verb{<x>min_prefix} / \verb{<x>max_prefix} pair as the one
 range it describes, so \code{historical_range()}'s two history columns become
-\code{0.5 - 8} under "Historical Range" and \code{analyte_summary()}'s become
-"Concentration Range". Default \code{TRUE}. \code{FALSE} reports the two ends in
+\code{0.5 - 8} under "Historical Range" and \code{analyte_summary()}'s and
+\code{summary_stats()}'s become "Concentration Range". Default \code{TRUE}. \code{FALSE} reports the two ends in
 columns of their own. Name the merged column by labelling the minimum,
 which is the name it keeps. Where only one end has anything to report -
 a group holding a single result, or one whose only history is a
@@ -57,8 +58,7 @@ A \code{gt_tbl}.
 \description{
 Turns a table from \code{\link[=analyte_summary]{analyte_summary()}} - or any table sharing its column
 names - into a formatted \code{gt} table ready to print in a Quarto or R Markdown
-document. The counterpart of \code{\link[=create_dt]{create_dt()}}, which produces an interactive
-table for a web page.
+document.
 }
 \details{
 Everything is decided from the column names, so no arguments are needed for
@@ -66,7 +66,10 @@ the common case:
 \itemize{
 \item every \verb{<x>_prefix} / \verb{<x>_conc} pair is merged into a single cell, so a
 non-detect reads \verb{<0.05} rather than filling two columns, and a minimum
-and maximum are then merged into the range they span - see \code{merge_range};
+and maximum are then merged into the range they span - see \code{merge_range}.
+\code{\link[=summary_stats]{summary_stats()}}'s \code{min} and \code{max} are read as such a pair, carrying
+the \code{<} its \code{min_nd} and \code{max_nd} flags call for, and the flags are not
+shown;
 \item concentration columns are formatted to \code{decimals} places with trailing
 zeros dropped, count columns (\verb{n_*}) as integers, and percentage (\verb{pct_*})
 and ratio (\verb{*_ratio}) columns to one place;
@@ -133,6 +136,6 @@ dplyr::left_join(
 }
 }
 \seealso{
-\code{\link[=create_dt]{create_dt()}} for an interactive table, \code{\link[=analyte_summary]{analyte_summary()}} for the
-table this formats.
+\code{\link[=analyte_summary]{analyte_summary()}}, \code{\link[=historical_range]{historical_range()}} and \code{\link[=summary_stats]{summary_stats()}}
+for the tables this formats.
 }

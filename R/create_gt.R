@@ -2,15 +2,17 @@
 #'
 #' Turns a table from [analyte_summary()] - or any table sharing its column
 #' names - into a formatted `gt` table ready to print in a Quarto or R Markdown
-#' document. The counterpart of [create_dt()], which produces an interactive
-#' table for a web page.
+#' document.
 #'
 #' Everything is decided from the column names, so no arguments are needed for
 #' the common case:
 #'
 #' * every `<x>_prefix` / `<x>_conc` pair is merged into a single cell, so a
 #'   non-detect reads `<0.05` rather than filling two columns, and a minimum
-#'   and maximum are then merged into the range they span - see `merge_range`;
+#'   and maximum are then merged into the range they span - see `merge_range`.
+#'   [summary_stats()]'s `min` and `max` are read as such a pair, carrying
+#'   the `<` its `min_nd` and `max_nd` flags call for, and the flags are not
+#'   shown;
 #' * concentration columns are formatted to `decimals` places with trailing
 #'   zeros dropped, count columns (`n_*`) as integers, and percentage (`pct_*`)
 #'   and ratio (`*_ratio`) columns to one place;
@@ -53,13 +55,14 @@
 #' @param labels named character vector of column labels, e.g.
 #'   `c(max_location = "Where")`, merged over the built-in dictionary. Where a
 #'   prefix/concentration pair has been merged, label the `_prefix` column -
-#'   that is the name the merged column keeps.
+#'   that is the name the merged column keeps. A label given for
+#'   [summary_stats()]'s `min` or `max` is moved onto it.
 #' @param width table width passed to `gt::tab_options(table.width = )`, e.g.
 #'   `1000` or `gt::pct(100)`. Default `NULL`, leaving it to `gt`.
 #' @param merge_range read a `<x>min_prefix` / `<x>max_prefix` pair as the one
 #'   range it describes, so `historical_range()`'s two history columns become
-#'   `0.5 - 8` under "Historical Range" and `analyte_summary()`'s become
-#'   "Concentration Range". Default `TRUE`. `FALSE` reports the two ends in
+#'   `0.5 - 8` under "Historical Range" and `analyte_summary()`'s and
+#'   `summary_stats()`'s become "Concentration Range". Default `TRUE`. `FALSE` reports the two ends in
 #'   columns of their own. Name the merged column by labelling the minimum,
 #'   which is the name it keeps. Where only one end has anything to report -
 #'   a group holding a single result, or one whose only history is a
@@ -104,8 +107,8 @@
 #' ) %>%
 #'   create_gt(labels = c(criteria = "ANZG 95%", criteria_99 = "ANZG 99%"))
 #' }
-#' @seealso [create_dt()] for an interactive table, [analyte_summary()] for the
-#'   table this formats.
+#' @seealso [analyte_summary()], [historical_range()] and [summary_stats()]
+#'   for the tables this formats.
 #' @importFrom rlang check_installed
 create_gt <- function(
   data,
@@ -119,11 +122,20 @@ create_gt <- function(
 ) {
   rlang::check_installed("gt", reason = "to format a table with create_gt().")
 
+  # summary_stats() flags its non-detect extremes rather than prefixing them.
+  # Read as the prefix/concentration pairs analyte_summary() writes, they are
+  # merged and ranged as those are, and the flags are spent.
+  flagged <- flagged_ends(names(data))
+  body <- flags_as_prefixes(data, flagged)
+  if (!is.null(labels)) {
+    moved <- names(labels) %in% flagged
+    names(labels)[moved] <- paste0(names(labels)[moved], "_prefix")
+  }
+
   # A range is written into its own cell here rather than merged by gt, which
   # has no way to drop the separator on the rows that need no range: a single
   # result would read "5 - " or "5 - 5" instead of "5".
-  ranges <- if (isTRUE(merge_range)) range_pairs(names(data)) else list()
-  body <- data
+  ranges <- if (isTRUE(merge_range)) range_pairs(names(body)) else list()
   for (pair in ranges) {
     body <- collapse_range(body, pair, decimals)
   }
@@ -182,7 +194,6 @@ create_gt <- function(
   for (pair in pairs) {
     tbl <- gt::cols_merge(tbl, columns = pair, pattern = "{1}{2}")
   }
-
 
   stems <- criteria_stems(nms)
   spanned <- length(stems) > 1
@@ -243,6 +254,60 @@ prefix_value_pairs <- function(nms) {
   stems <- sub("_prefix$", "", grep("_prefix$", nms, value = TRUE))
   stems <- stems[paste0(stems, "_conc") %in% nms]
   lapply(stems, function(s) c(paste0(s, "_prefix"), paste0(s, "_conc")))
+}
+
+
+#' Find the ends of a range flagged as non-detects
+#'
+#' [summary_stats()] reports its minimum and maximum as plain numbers, `min`
+#' and `max`, with `min_nd` and `max_nd` saying which are non-detects. Only an
+#' end with its flag beside it, and no prefix/concentration pair of its own
+#' already, is read this way.
+#'
+#' @param nms column names
+#' @returns the ends found, of `"min"` and `"max"`
+#' @noRd
+flagged_ends <- function(nms) {
+  ends <- c("min", "max")
+  ends[
+    ends %in%
+      nms &
+      paste0(ends, "_nd") %in% nms &
+      !paste0(ends, "_prefix") %in% nms &
+      !paste0(ends, "_conc") %in% nms
+  ]
+}
+
+
+#' Rewrite flagged ends as prefix/concentration pairs
+#'
+#' `min` and `min_nd` become `min_prefix` - `"<"` where the flag is set - and
+#' `min_conc`, in the place `min` held, so the merges that follow treat them
+#' as they treat [analyte_summary()]'s.
+#'
+#' @param body the table being formatted
+#' @param ends the ends to rewrite, from `flagged_ends()`
+#' @returns `body`, with each end's flag spent
+#' @noRd
+flags_as_prefixes <- function(body, ends) {
+  for (end in ends) {
+    flag <- paste0(end, "_nd")
+    prefix <- paste0(end, "_prefix")
+    conc <- paste0(end, "_conc")
+    nd <- as.logical(body[[flag]])
+
+    # A "<" with no value after it would say nothing the blank cell does not.
+    body[[prefix]] <- ifelse(
+      !is.na(nd) & nd & !is.na(body[[end]]),
+      "<",
+      NA_character_
+    )
+    names(body)[names(body) == end] <- conc
+    kept <- setdiff(names(body), c(prefix, flag))
+    at <- match(conc, kept)
+    body <- body[c(kept[seq_len(at - 1)], prefix, kept[at:length(kept)])]
+  }
+  body
 }
 
 
