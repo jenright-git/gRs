@@ -1,5 +1,14 @@
 #' Mann Kendall Function to loop through entire dataset
 #'
+#' Tests one series per location and analyte - and per `output_unit`, where
+#' `data` carries one. A result in mg/L and one in ug/L are different numbers
+#' for the same amount, so a location whose analyte was reported in two units
+#' is tested as two series rather than one series of numbers that cannot be
+#' compared. The locations this happens at are named in a message; convert
+#' the results to a single unit beforehand to test them as one series. Each
+#' series still needs four samples of its own, so a split series can drop out
+#' where the whole would have been tested.
+#'
 #' @param data tibble processed with the data_processor function
 #' @param traditional perform the standard analysis and not analyse for "Probably" or "Stable" trends
 #' @param lor_multiplier Numeric value to multiply LOR concentrations by. Default is 1 (no change).
@@ -24,7 +33,11 @@
 #' @param prefix_col Name of the column containing prefix indicators (e.g., "<", "=").
 #'   Can be provided with or without quotes. Default is prefix
 #'
-#' @return A nested tibble of trends as well as the original nested data
+#' @return A nested tibble of trends as well as the original nested data, one
+#'   row per location, analyte and - where `data` carries it - `output_unit`.
+#'   The nested data is as reported; `lor_multiplier` is kept in the
+#'   `"lor_multiplier"` attribute, so [mka_to_excel()] can summarise the
+#'   series with the same substitution the test made.
 #' @export
 #'
 #' @examples
@@ -79,9 +92,18 @@ mann_kendall_test <- function(
   date_name <- rlang::quo_name(date_col)
   prefix_name <- rlang::quo_name(prefix_col)
 
+  loc_name <- rlang::quo_name(location_col)
+  ana_name <- rlang::quo_name(chem_name_col)
+
+  data <- tidyr::drop_na(data, !!conc_col)
+  report_mixed_units(data, loc_name, ana_name)
+
+  # Nested by unit as well, so a series never mixes numbers in mg/L with
+  # numbers in ug/L.
   df <- data %>%
-    tidyr::drop_na(!!conc_col) %>%
-    tidyr::nest(.by = c(!!location_col, !!chem_name_col)) %>%
+    tidyr::nest(
+      .by = c(!!location_col, !!chem_name_col, dplyr::any_of("output_unit"))
+    ) %>%
     dplyr::mutate(n_samples = purrr::map(data, nrow)) %>%
     tidyr::unnest(n_samples) %>%
     dplyr::filter(n_samples > 3) %>% # filter out entries with less than 4 data points
@@ -91,13 +113,29 @@ mann_kendall_test <- function(
   base::stopifnot("No data with more than 3 samples" = nrow(df) > 0)
 
   if (!is.null(nd_threshold) && !is.null(min_detects)) {
-    stop("Only one of `nd_threshold` or `min_detects` may be specified, not both.")
+    stop(
+      "Only one of `nd_threshold` or `min_detects` may be specified, not both."
+    )
   }
 
+  # How each series is named in the exclusion messages: with its unit where
+  # its analyte comes in more than one, so the two series can be told apart.
+  df$.series <- paste(
+    df[[loc_name]],
+    unit_labelled(df[[ana_name]], df[["output_unit"]]),
+    sep = " / "
+  )
+
   if (!is.null(nd_threshold)) {
-    if (!is.numeric(nd_threshold) || length(nd_threshold) != 1 ||
-        nd_threshold < 0 || nd_threshold > 1) {
-      stop("`nd_threshold` must be a single numeric value between 0 and 1 (e.g., 0.75 for 75%).")
+    if (
+      !is.numeric(nd_threshold) ||
+        length(nd_threshold) != 1 ||
+        nd_threshold < 0 ||
+        nd_threshold > 1
+    ) {
+      stop(
+        "`nd_threshold` must be a single numeric value between 0 and 1 (e.g., 0.75 for 75%)."
+      )
     }
 
     df <- df %>%
@@ -111,13 +149,10 @@ mann_kendall_test <- function(
     excluded <- df %>% dplyr::filter(nd_pct > nd_threshold)
 
     if (nrow(excluded) > 0) {
-      loc_name <- rlang::quo_name(location_col)
-      ana_name <- rlang::quo_name(chem_name_col)
       excl_lines <- paste(
         sprintf(
-          "  - %s / %s (%.1f%% non-detects)",
-          excluded[[loc_name]],
-          excluded[[ana_name]],
+          "  - %s (%.1f%% non-detects)",
+          excluded$.series,
           excluded$nd_pct * 100
         ),
         collapse = "\n"
@@ -143,13 +178,14 @@ mann_kendall_test <- function(
   }
 
   if (!is.null(min_detects)) {
-    if (!is.numeric(min_detects) || length(min_detects) != 1 ||
-        min_detects < 1 || min_detects != as.integer(min_detects)) {
+    if (
+      !is.numeric(min_detects) ||
+        length(min_detects) != 1 ||
+        min_detects < 1 ||
+        min_detects != as.integer(min_detects)
+    ) {
       stop("`min_detects` must be a single positive integer.")
     }
-
-    loc_name <- rlang::quo_name(location_col)
-    ana_name <- rlang::quo_name(chem_name_col)
 
     df <- df %>%
       dplyr::mutate(
@@ -164,9 +200,8 @@ mann_kendall_test <- function(
     if (nrow(excluded) > 0) {
       excl_lines <- paste(
         sprintf(
-          "  - %s / %s (%d detect(s) out of %d sample(s))",
-          excluded[[loc_name]],
-          excluded[[ana_name]],
+          "  - %s (%d detect(s) out of %d sample(s))",
+          excluded$.series,
           excluded$n_detects,
           excluded$n_samples
         ),
@@ -191,6 +226,8 @@ mann_kendall_test <- function(
       ))
     }
   }
+
+  df$.series <- NULL
 
   df <- df %>%
     dplyr::mutate(
@@ -239,7 +276,78 @@ mann_kendall_test <- function(
       ) # if all <LOR results then p_value comes back as NA..
   }
 
+  # mk_analysis() makes no substitution for NULL, which is the full LOR.
+  attr(nested_df, "lor_multiplier") <- if (is.null(lor_multiplier)) {
+    1
+  } else {
+    lor_multiplier
+  }
+
   return(nested_df)
+}
+
+
+#' Name the series whose analyte was reported in more than one unit
+#'
+#' Each unit is tested as a series of its own, which is right but easy to
+#' miss: a location that was one series is now two, and either may be too
+#' short to test. So the split is said out loud, with the way to avoid it.
+#'
+#' @param data the results being tested
+#' @param loc_name,ana_name names of the location and analyte columns
+#' @noRd
+report_mixed_units <- function(data, loc_name, ana_name) {
+  if (!"output_unit" %in% names(data) || nrow(data) == 0) {
+    return(invisible(NULL))
+  }
+  unit <- as.character(data$output_unit)
+  key <- paste(data[[loc_name]], data[[ana_name]], sep = " / ")
+  units <- tapply(unit, key, function(u) sort(unique(stats::na.omit(u))))
+  mixed <- units[lengths(units) > 1]
+  if (length(mixed) == 0) {
+    return(invisible(NULL))
+  }
+  lines <- paste0(
+    "  - ",
+    names(mixed),
+    " (",
+    vapply(mixed, paste, character(1), collapse = ", "),
+    ")"
+  )
+  message(
+    length(mixed),
+    " location/analyte series hold results in more than one unit, so each ",
+    "unit is tested as a separate trend:\n",
+    paste(utils::head(lines, 10), collapse = "\n"),
+    if (length(lines) > 10) paste0("\n  ... and ", length(lines) - 10, " more"),
+    "\nConvert the results to one unit first to test each as a single series."
+  )
+}
+
+
+#' Name an analyte with its unit where it is reported in more than one
+#'
+#' A trend is tested per unit, so an analyte reported in two units has two
+#' trends at a location, and laid out by analyte - the columns of
+#' [mka_to_excel()], the rows of the heatmaps - the two would land in one
+#' cell. Those analytes carry their unit in the name, e.g. `"Zinc (mg/L)"`.
+#' An analyte reported in a single unit keeps its name unchanged, so a table
+#' that never mixes units reads as it always has.
+#'
+#' @param chem analyte names
+#' @param unit the unit of each, or `NULL` where the table carries none
+#' @returns character vector of labels, one per element of `chem`
+#' @noRd
+unit_labelled <- function(chem, unit) {
+  chem <- as.character(chem)
+  if (is.null(unit) || length(chem) == 0) {
+    return(chem)
+  }
+  unit <- as.character(unit)
+  n_units <- tapply(unit, chem, function(u) length(unique(stats::na.omit(u))))
+  mixed <- chem %in% names(n_units)[n_units > 1] & !is.na(unit)
+  chem[mixed] <- paste0(chem[mixed], " (", unit[mixed], ")")
+  chem
 }
 
 

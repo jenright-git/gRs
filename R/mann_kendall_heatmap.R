@@ -1,6 +1,8 @@
 #' Heatmap of Mann-Kendall trends
 #'
-#' One tile per location and analyte, filled by trend direction.
+#' One tile per location and analyte, filled by trend direction. An analyte
+#' [mann_kendall_test()] tested in more than one unit gets a row per unit,
+#' named with its unit, e.g. `"Zinc (mg/L)"`.
 #'
 #' @param data tibble from [mann_kendall_test()].
 #' @param label_text_size size of the trend label inside each tile
@@ -40,6 +42,9 @@ mann_kendall_heatmap <- function(
       "#4D9221EE"
     )
   }
+
+  # An analyte tested in two units has a tile for each, told apart by unit.
+  data$chem_name <- unit_labelled(data$chem_name, data[["output_unit"]])
 
   data %>%
     dplyr::mutate(trend = factor(trend, levels = TREND_LEVELS)) %>%

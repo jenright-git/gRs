@@ -30,7 +30,9 @@ scale.}
 A ggplot2 object.
 }
 \description{
-One tile per location and analyte, filled by trend direction.
+One tile per location and analyte, filled by trend direction. An analyte
+\code{\link[=mann_kendall_test]{mann_kendall_test()}} tested in more than one unit gets a row per unit,
+named with its unit, e.g. \code{"Zinc (mg/L)"}.
 }
 \examples{
 mann_kendall_test(gRs_data) |>

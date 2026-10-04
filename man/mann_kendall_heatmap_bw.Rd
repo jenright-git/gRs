@@ -25,7 +25,8 @@ A ggplot2 object.
 }
 \description{
 The same grid as \code{\link[=mann_kendall_heatmap]{mann_kendall_heatmap()}} with no fill, for printing. A
-significant trend is emboldened in place of being coloured.
+significant trend is emboldened in place of being coloured. As there, an
+analyte tested in more than one unit gets a row per unit.
 }
 \details{
 Takes the three trend categories of \code{mann_kendall_test(traditional = TRUE)};

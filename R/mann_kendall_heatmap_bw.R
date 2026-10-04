@@ -1,7 +1,8 @@
 #' Black and white heatmap of Mann-Kendall trends
 #'
 #' The same grid as [mann_kendall_heatmap()] with no fill, for printing. A
-#' significant trend is emboldened in place of being coloured.
+#' significant trend is emboldened in place of being coloured. As there, an
+#' analyte tested in more than one unit gets a row per unit.
 #'
 #' Takes the three trend categories of `mann_kendall_test(traditional = TRUE)`;
 #' the six-category default has no unshaded equivalent for "Probably
@@ -32,6 +33,9 @@ mann_kendall_heatmap_bw <- function(
   plot_title = "Mann-Kendall Trend Analysis",
   width = 20
 ) {
+  # An analyte tested in two units has a tile for each, told apart by unit.
+  data$chem_name <- unit_labelled(data$chem_name, data[["output_unit"]])
+
   data %>%
     dplyr::mutate(
       trend = factor(trend, levels = TREND_LEVELS_TRADITIONAL),

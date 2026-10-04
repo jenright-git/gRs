@@ -80,6 +80,17 @@
   set's guideline was reported with a warning wrongly blaming units. The
   extra grouping columns appear in the output and in the `tidy_path` export.
 
+* `mann_kendall_test()` tests each `output_unit` as a separate series. A
+  location whose analyte was reported in mg/L and then ug/L was previously
+  tested as one series of numbers that could not be compared, giving a
+  spurious trend. Each trend row now carries `output_unit`, and the series
+  that were split are named in a message. Each part still needs four samples
+  to be tested. `mka_to_excel()`, `mann_kendall_heatmap()` and
+  `mann_kendall_heatmap_bw()` give such an analyte a column or row per unit,
+  named with the unit (`"Zinc (mg/L)"`); an analyte reported in one unit
+  keeps its plain name. A nested series that still mixes units is an error in
+  `mka_to_excel(include_summary = TRUE)` rather than being summarised as one.
+
 * `data_processor()` now prefixes `Dissolved` onto EQuIS dissolved results
   (fraction `D`) as it does ESDAT filtered ones (`F`), so the two fractions
   of an analyte are no longer pooled under one `chem_name`.

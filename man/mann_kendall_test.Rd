@@ -52,10 +52,21 @@ Can be provided with or without quotes. Default is date}
 Can be provided with or without quotes. Default is prefix}
 }
 \value{
-A nested tibble of trends as well as the original nested data
+A nested tibble of trends as well as the original nested data, one
+row per location, analyte and - where \code{data} carries it - \code{output_unit}.
+The nested data is as reported; \code{lor_multiplier} is kept in the
+\code{"lor_multiplier"} attribute, so \code{\link[=mka_to_excel]{mka_to_excel()}} can summarise the
+series with the same substitution the test made.
 }
 \description{
-Mann Kendall Function to loop through entire dataset
+Tests one series per location and analyte - and per \code{output_unit}, where
+\code{data} carries one. A result in mg/L and one in ug/L are different numbers
+for the same amount, so a location whose analyte was reported in two units
+is tested as two series rather than one series of numbers that cannot be
+compared. The locations this happens at are named in a message; convert
+the results to a single unit beforehand to test them as one series. Each
+series still needs four samples of its own, so a split series can drop out
+where the whole would have been tested.
 }
 \examples{
 # Six trend categories, LOR results left as reported
