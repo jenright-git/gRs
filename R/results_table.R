@@ -9,7 +9,15 @@
 #' then its name and its unit, then one row per guideline set giving the
 #' guideline value, shaded in that set's colour. Down the side, each row is
 #' named by its location and by the `id_cols` - by default the sample date,
-#' sample ID and lab report.
+#' sample ID and lab report. A value repeated down a side column is merged
+#' into one block (`merge_cells`), and the rows can be split into groups -
+#' by monitoring round, say - each under a banner naming it (`group_by`).
+#'
+#' Analytes are ordered by chemical group, then by name, read so that a
+#' dissolved analyte sits beside its total: where the table holds both,
+#' "Dissolved Copper" follows "Copper" rather than filing under D.
+#' `sort_analytes_by` orders them by another column instead, such as the
+#' `chem_code`, without showing it.
 #'
 #' In the body:
 #'
@@ -70,6 +78,28 @@
 #'   `c("date", "sample_code", "lab_report_number")`, any of the three `data`
 #'   lacks is left out with a message; a column named outright that `data`
 #'   lacks is an error. `NULL` gives the location alone.
+#' @param group_by column or columns to split the rows by, e.g.
+#'   `"monitoring_round"`. Each group is written under a banner across the
+#'   table - "Round: 2024 Q1" - with its rows below it. Name an element to
+#'   set the banner's heading, as for `id_cols`. Rounds (`monitoring_round`,
+#'   `task_code`) are ordered by the date they were sampled, so "2024 Q10"
+#'   follows "2024 Q9"; dates and numbers are ordered as such, and other
+#'   text alphabetically. A missing value reads "not recorded" and comes
+#'   last. A column named here and in `id_cols` is shown in both. Default
+#'   `NULL`, no groups.
+#' @param sort_analytes_by column or columns of `data` to order the analytes
+#'   by within each chemical group, without showing them - `"chem_code"` to
+#'   order by CAS number, say, or a lab report-order column. Each analyte
+#'   takes the smallest value among its results, numbers in numeric order and
+#'   text alphabetically. Ties fall back to the name, so a dissolved analyte
+#'   sharing its total's code still sits beside it. Default `NULL`, ordering
+#'   by name.
+#' @param merge_cells merge a value repeated down a side column into one
+#'   block, so a well is named once against all its samples. Each column's
+#'   blocks sit within those of the column to its left - a date shared by two
+#'   wells is not merged across them - and no block crosses a `group_by`
+#'   banner. Default `TRUE`. In gt, which cannot merge cells, the repeats are
+#'   left blank instead. `FALSE` writes the value on every row.
 #' @param highlight_lor shade a non-detect whose limit of reporting is above a
 #'   guideline, as an exceedance is - its LOR is too high to show the
 #'   guideline was met. Default `FALSE`, which writes it as any other
@@ -90,6 +120,11 @@
 #' @param zone_label heading for the zone column. Default `"Monitoring Zone"`.
 #' @param location_label heading for the location column. Default
 #'   `"Monitoring Well"`.
+#' @param paper_size,orientation the printed page: `"A3"` (default), `"A2"`,
+#'   `"A4"`, `"A5"`, `"letter"`, `"legal"` or `"tabloid"`, and `"landscape"`
+#'   (default) or `"portrait"`. A gt table takes them when saved as RTF with
+#'   `gt::gtsave()`; in a Quarto or Word document, the document sets the
+#'   page.
 #' @param header_fill background colour for the headings and the location
 #'   names. Default `"#008768"`, a deep green.
 #' @param header_font text colour for those same cells. Default white.
@@ -119,6 +154,10 @@
 #' # Non-detects with an LOR above a guideline shaded too
 #' compared %>% results_table(highlight_lor = TRUE)
 #'
+#' # A banner per monitoring round; metals ordered by CAS number
+#' compared %>%
+#'   results_table(group_by = "monitoring_round", sort_analytes_by = "chem_code")
+#'
 #' # Soil: depths beside the location, under headings of your own
 #' soil %>%
 #'   results_table(
@@ -134,12 +173,17 @@ results_table <- function(
   data,
   criteria_col = criteria,
   id_cols = c("date", "sample_code", "lab_report_number"),
+  group_by = NULL,
+  sort_analytes_by = NULL,
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  merge_cells = TRUE,
   include_zone = FALSE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
+  paper_size = "A3",
+  orientation = "landscape",
   header_fill = "#008768",
   header_font = "#FFFFFF",
   location_fill = "#9BBEAF",
@@ -149,6 +193,7 @@ results_table <- function(
     "gt",
     reason = "to build a table with results_table()."
   )
+  page <- page_spec(paper_size, orientation)
 
   xtab <- results_crosstab(
     data,
@@ -156,15 +201,25 @@ results_table <- function(
     criteria_named = !missing(criteria_col),
     id_cols = id_cols,
     id_named = !missing(id_cols),
+    group_by = group_by,
+    sort_analytes_by = sort_analytes_by,
     highlight_lor = highlight_lor,
     criteria_colours = criteria_colours,
+    merge_cells = merge_cells,
     include_zone = include_zone,
     zone_name = rlang::quo_name(rlang::enquo(zone_col)),
     zone_label = zone_label,
     location_label = location_label
   )
 
-  results_gt(xtab, header_fill, header_font, location_fill, location_font)
+  results_gt(
+    xtab,
+    page = page,
+    header_fill = header_fill,
+    header_font = header_font,
+    location_fill = location_fill,
+    location_font = location_font
+  )
 }
 
 
@@ -179,14 +234,19 @@ results_table <- function(
 #' @param criteria_named whether `criteria_col` was passed at all
 #' @param id_cols the `id_cols` argument
 #' @param id_named whether `id_cols` was passed at all
-#' @param highlight_lor,criteria_colours,include_zone,zone_label,location_label
+#' @param group_by,sort_analytes_by,highlight_lor,criteria_colours,merge_cells
 #'   as for [results_table()]
+#' @param include_zone,zone_label,location_label as for [results_table()]
 #' @param zone_name the zone column's name, as a string
 #' @returns a list:
 #'   * `ids`: one row per table row - the zone, the location and the
-#'     `id_cols` - as their own types, sorted;
+#'     `id_cols` - as their own types, sorted by group and then by these;
 #'   * `id_labels`: a heading for each of those columns;
 #'   * `include_zone`: whether the first of them is the zone;
+#'   * `group`: each row's banner, or `NULL` without `group_by`. A group's
+#'     rows are contiguous;
+#'   * `merge_cells`, `merge_keys`: whether to merge, and for each side
+#'     column a key per row that changes wherever a merged block must end;
 #'   * `analytes`: one row per analyte column, `chem_group`, `chem_name` and
 #'     `output_unit`;
 #'   * `conc`, `nd`: matrices of the result in each cell and whether it is a
@@ -206,15 +266,19 @@ results_crosstab <- function(
   criteria_named,
   id_cols,
   id_named,
-  highlight_lor,
-  criteria_colours,
-  include_zone,
-  zone_name,
-  zone_label,
-  location_label
+  group_by = NULL,
+  sort_analytes_by = NULL,
+  highlight_lor = FALSE,
+  criteria_colours = NULL,
+  merge_cells = TRUE,
+  include_zone = FALSE,
+  zone_name = "monitoring_zone",
+  zone_label = "Monitoring Zone",
+  location_label = "Monitoring Well"
 ) {
   check_flag(highlight_lor, "highlight_lor")
   check_flag(include_zone, "include_zone")
+  check_flag(merge_cells, "merge_cells")
 
   if (!is.data.frame(data)) {
     stop("`data` must be a data frame of results from data_processor().")
@@ -269,6 +333,8 @@ results_crosstab <- function(
     exclude = c("location_code", if (include_zone) zone_name)
   )
   lead <- c(if (include_zone) zone_name, "location_code", unname(ids))
+  groups <- resolve_named_columns(group_by, data, "group_by")
+  sort_cols <- unname(resolve_named_columns(sort_analytes_by, data, "sort_analytes_by"))
 
   sets <- criteria_columns(
     criteria_col,
@@ -296,7 +362,7 @@ results_crosstab <- function(
     as.character(data$prefix) %in% "<"
   }
 
-  # --- columns: one per analyte and unit, by group then name
+  # --- columns: one per analyte and unit, by chemical group then name
   analyte <- data.frame(
     chem_group = column_or_na(data, "chem_group"),
     chem_name = as.character(data$chem_name),
@@ -304,21 +370,18 @@ results_crosstab <- function(
     stringsAsFactors = FALSE
   )
   analytes <- unique(analyte)
+  rownames(analytes) <- NULL
   analytes <- analytes[
-    order(
-      is.na(analytes$chem_group),
-      analytes$chem_group,
-      analytes$chem_name,
-      analytes$output_unit
-    ),
+    analyte_order(analytes, analyte, data, sort_cols),
     ,
     drop = FALSE
   ]
   rownames(analytes) <- NULL
   col_id <- match(row_keys(analyte), row_keys(analytes))
 
-  # --- rows: one per location and id_cols combination
-  keys <- dplyr::as_tibble(as.data.frame(data)[lead])
+  # --- rows: one per group, location and id_cols combination
+  key_cols <- unique(c(unname(groups), lead))
+  keys <- dplyr::as_tibble(as.data.frame(data)[key_cols])
   if (include_zone) {
     keys[[zone_name]] <- tidyr::replace_na(as.character(keys[[zone_name]]), "")
     check_one_zone_per_location(
@@ -328,8 +391,16 @@ results_crosstab <- function(
     )
   }
   rows <- dplyr::distinct(keys)
-  rows <- rows[do.call(order, unname(as.list(rows))), , drop = FALSE]
+  rows <- rows[
+    do.call(
+      order,
+      c(group_order_keys(rows, groups, data), unname(as.list(rows[lead])))
+    ),
+    ,
+    drop = FALSE
+  ]
   row_id <- match(row_keys(keys), row_keys(rows))
+  group <- group_labels(rows, groups)
 
   # --- one result per cell: the highest detect, else the highest LOR
   n_row <- nrow(rows)
@@ -431,10 +502,14 @@ results_crosstab <- function(
     set_labels[clash] <- paste0(set_labels[clash], " (", sets[clash], ")")
   }
 
+  ids_out <- rows[lead]
   list(
-    ids = rows,
+    ids = ids_out,
     id_labels = c(if (include_zone) zone_label, location_label, names(ids)),
     include_zone = include_zone,
+    group = group,
+    merge_cells = merge_cells,
+    merge_keys = merge_keys(ids_out, group),
     analytes = analytes,
     conc = conc_m,
     nd = nd_m,
@@ -482,18 +557,7 @@ resolve_id_cols <- function(id_cols, named, data, exclude) {
   absent <- setdiff(cols, names(data))
   if (length(absent) > 0) {
     if (named) {
-      hints <- unique(unlist(lapply(absent, near_names, names(data))))
-      stop(
-        "`id_cols` names column(s) `data` does not have: ",
-        toString(absent),
-        ".",
-        if (length(hints) > 0) {
-          paste0(" Did you mean ", toString(hints), "?")
-        } else {
-          ""
-        },
-        call. = FALSE
-      )
+      stop_if_absent(cols, data, "id_cols")
     }
     message(
       "Not in `data`, so left out of the table: ",
@@ -508,6 +572,275 @@ resolve_id_cols <- function(id_cols, named, data, exclude) {
   auto <- !nzchar(headings)
   headings[auto] <- vapply(cols[auto], id_heading, character(1))
   stats::setNames(cols, headings)
+}
+
+
+#' Settle the columns an argument names, each with a heading
+#'
+#' For `group_by` and `sort_analytes_by`, which have no default to fall back
+#' on: every column named must be in `data`. A name on an element is its
+#' heading; an unnamed one takes its heading from `id_heading()`.
+#'
+#' @param cols the argument's value
+#' @param data the results
+#' @param arg the argument's name, for the errors
+#' @returns a character vector of column names, named by their headings
+#' @noRd
+resolve_named_columns <- function(cols, data, arg) {
+  if (is.null(cols) || length(cols) == 0) {
+    return(stats::setNames(character(0), character(0)))
+  }
+  if (!is.character(cols)) {
+    stop(
+      "`", arg, "` must be a character vector of column names, e.g. ",
+      "\"monitoring_round\".",
+      call. = FALSE
+    )
+  }
+
+  headings <- names(cols)
+  if (is.null(headings)) {
+    headings <- rep("", length(cols))
+  }
+  headings[is.na(headings)] <- ""
+  cols <- unname(cols)
+  keep <- !is.na(cols) & nzchar(cols) & !duplicated(cols)
+  cols <- cols[keep]
+  headings <- headings[keep]
+  stop_if_absent(cols, data, arg)
+
+  auto <- !nzchar(headings)
+  headings[auto] <- vapply(cols[auto], id_heading, character(1))
+  stats::setNames(cols, headings)
+}
+
+
+#' Stop where an argument names columns `data` does not have
+#'
+#' @param cols the columns named
+#' @param data the results
+#' @param arg the argument's name
+#' @returns `NULL`, invisibly, where every column is present
+#' @noRd
+stop_if_absent <- function(cols, data, arg) {
+  absent <- setdiff(cols, names(data))
+  if (length(absent) == 0) {
+    return(invisible(NULL))
+  }
+  hints <- unique(unlist(lapply(absent, near_names, names(data))))
+  stop(
+    "`", arg, "` names column(s) `data` does not have: ",
+    toString(absent),
+    ".",
+    if (length(hints) > 0) paste0(" Did you mean ", toString(hints), "?") else "",
+    call. = FALSE
+  )
+}
+
+
+#' The order analytes are written across the table
+#'
+#' By chemical group, blanks last; then by any `sort_analytes_by` columns;
+#' then by name, read so that a dissolved analyte sits beside its total; then
+#' by unit.
+#'
+#' @param analytes the distinct analyte columns: `chem_group`, `chem_name`
+#'   and `output_unit`
+#' @param analyte the same three columns, one row per result
+#' @param data the results
+#' @param sort_cols columns of `data` to order by ahead of the name
+#' @returns an integer ordering of the rows of `analytes`
+#' @noRd
+analyte_order <- function(analytes, analyte, data, sort_cols) {
+  keys <- list(is.na(analytes$chem_group), analytes$chem_group)
+  if (length(sort_cols) > 0) {
+    id <- match(row_keys(analyte), row_keys(analytes))
+    for (col in sort_cols) {
+      value <- analyte_sort_values(data[[col]], id, nrow(analytes))
+      keys <- c(keys, list(is.na(value), value))
+    }
+  }
+  pairs <- dissolved_pairs(analytes$chem_name)
+  keys <- c(
+    keys,
+    list(
+      tolower(pairs$key),
+      pairs$dissolved,
+      analytes$chem_name,
+      analytes$output_unit
+    )
+  )
+  do.call(order, unname(keys))
+}
+
+
+#' The value each analyte column is sorted by
+#'
+#' @param x the sort column, one value per result
+#' @param id the analyte column each result belongs to
+#' @param n the number of analyte columns
+#' @returns one value per analyte column, the smallest among its results:
+#'   numeric for a number or date column, text otherwise
+#' @noRd
+analyte_sort_values <- function(x, id, n) {
+  by_analyte <- split(x, factor(id, levels = seq_len(n)))
+  if (is.numeric(x) || inherits(x, c("Date", "POSIXt"))) {
+    vapply(
+      by_analyte,
+      function(v) {
+        v <- as.numeric(v[!is.na(v)])
+        if (length(v) == 0) NA_real_ else min(v)
+      },
+      numeric(1),
+      USE.NAMES = FALSE
+    )
+  } else {
+    vapply(
+      by_analyte,
+      function(v) {
+        v <- sort(as.character(v[!is.na(v)]))
+        if (length(v) == 0) NA_character_ else v[[1]]
+      },
+      character(1),
+      USE.NAMES = FALSE
+    )
+  }
+}
+
+
+#' Read a dissolved analyte as its total, for sorting
+#'
+#' [data_processor()] names a filtered result "Dissolved <name>". Where the
+#' table also holds the analyte without the prefix - its total - the two
+#' sort as one name, the total first, so they sit side by side. A name with
+#' no total beside it, such as "Dissolved Oxygen", keeps its own place.
+#'
+#' @param name the analyte names
+#' @returns list(key, dissolved): the name to sort by, and whether the
+#'   analyte is the dissolved half of a pair
+#' @noRd
+dissolved_pairs <- function(name) {
+  base <- sub("^dissolved\\s+", "", name, ignore.case = TRUE, perl = TRUE)
+  dissolved <- !is.na(name) & base != name & tolower(base) %in% tolower(name)
+  list(key = ifelse(dissolved, base, name), dissolved = dissolved)
+}
+
+
+#' Sort keys putting the table's rows in group order
+#'
+#' Dates and numbers order themselves. A round recorded as text does not -
+#' "2024 Q10" sorts before "2024 Q9" - so a round column is ordered by the
+#' earliest date sampled in each round, falling back to the text where
+#' `data` carries no date. Other text is alphabetical. A missing value comes
+#' last.
+#'
+#' @param rows the distinct rows of the table, holding the group columns
+#' @param groups the group columns
+#' @param data the results, for the dates a round is ordered by
+#' @returns a list of vectors to pass to order(), one group column after
+#'   another
+#' @noRd
+group_order_keys <- function(rows, groups, data) {
+  keys <- list()
+  for (col in unname(groups)) {
+    v <- rows[[col]]
+    keys <- c(keys, list(is.na(v)))
+    if (!(is.numeric(v) || inherits(v, c("Date", "POSIXt")))) {
+      v <- as.character(v)
+      dates <- if (col %in% ROUND_COLUMNS) round_ordering_dates(data, col)
+      if (!is.null(dates)) {
+        first <- suppressWarnings(tapply(
+          as.numeric(dates),
+          as.character(data[[col]]),
+          min,
+          na.rm = TRUE
+        ))
+        keys <- c(keys, list(unname(first[v])))
+      }
+    }
+    keys <- c(keys, list(v))
+  }
+  keys
+}
+
+
+#' The banner over each row's group
+#'
+#' @param rows the distinct rows of the table, holding the group columns
+#' @param groups the group columns, named by their headings
+#' @returns a character vector, one per row - "Round: 2024 Q1", several
+#'   columns joined by " | " - or `NULL` where there are no groups
+#' @noRd
+group_labels <- function(rows, groups) {
+  if (length(groups) == 0) {
+    return(NULL)
+  }
+  parts <- lapply(seq_along(groups), function(i) {
+    v <- rows[[groups[[i]]]]
+    shown <- format_id_values(v)
+    shown[is.na(v)] <- "not recorded"
+    paste0(names(groups)[[i]], ": ", shown)
+  })
+  do.call(paste, c(parts, sep = " | "))
+}
+
+
+#' Where each side column's merged blocks end
+#'
+#' A block in a column ends wherever that column's value changes, or the
+#' value of any column to its left, or the group - so blocks nest, and none
+#' crosses a banner. Values are compared as the table shows them.
+#'
+#' @param ids the side columns, in table order
+#' @param group each row's banner, or `NULL`
+#' @returns a list with one character vector per column: a row whose key
+#'   matches the row above's continues its block
+#' @noRd
+merge_keys <- function(ids, group) {
+  key <- if (is.null(group)) rep("", nrow(ids)) else group
+  out <- vector("list", length(ids))
+  for (j in seq_along(ids)) {
+    key <- paste(key, format_id_values(ids[[j]]), sep = "\r")
+    out[[j]] <- key
+  }
+  out
+}
+
+
+# Paper a results table can be printed on: the Excel paperSize code
+# (ECMA-376) and the portrait width and height in inches, as gt takes them.
+PAPER_SIZES <- list(
+  A2 = list(code = 66, width = 16.54, height = 23.39),
+  A3 = list(code = 8, width = 11.69, height = 16.54),
+  A4 = list(code = 9, width = 8.27, height = 11.69),
+  A5 = list(code = 11, width = 5.83, height = 8.27),
+  letter = list(code = 1, width = 8.5, height = 11),
+  legal = list(code = 5, width = 8.5, height = 14),
+  tabloid = list(code = 3, width = 11, height = 17)
+)
+
+
+#' Settle the printed page
+#'
+#' @param paper_size,orientation as for [results_table()]
+#' @returns a list: `code`, `width` and `height` from `PAPER_SIZES`, and
+#'   `orientation`
+#' @noRd
+page_spec <- function(paper_size, orientation) {
+  size <- match(tolower(paper_size), tolower(names(PAPER_SIZES)))
+  if (length(paper_size) != 1 || is.na(size)) {
+    stop(
+      "`paper_size` must be one of ",
+      toString(paste0("\"", names(PAPER_SIZES), "\"")),
+      ".",
+      call. = FALSE
+    )
+  }
+  orientation <- tolower(orientation)
+  if (length(orientation) != 1 || !orientation %in% c("landscape", "portrait")) {
+    stop("`orientation` must be \"landscape\" or \"portrait\".", call. = FALSE)
+  }
+  c(PAPER_SIZES[[size]], list(orientation = orientation))
 }
 
 
@@ -835,15 +1168,21 @@ escape_html <- function(x) {
 #'
 #' The guideline sets are the first rows of the body, shaded in their
 #' colours, since gt has no header row to hold a value per column. The
-#' analyte's unit goes under its name in the column label.
+#' analyte's unit goes under its name in the column label. With `group_by`,
+#' the guideline rows are a row group of their own ahead of the banners.
+#'
+#' gt cannot merge cells, so a merged block is drawn by blanking the repeats
+#' below its first row and hiding the lines between them.
 #'
 #' @param xtab a crosstab from `results_crosstab()`
+#' @param page the printed page, from `page_spec()`
 #' @param header_fill,header_font,location_fill,location_font as for
 #'   [results_table()]
 #' @returns a `gt_tbl`
 #' @noRd
 results_gt <- function(
   xtab,
+  page,
   header_fill,
   header_font,
   location_fill,
@@ -862,6 +1201,15 @@ results_gt <- function(
     unlist(lapply(xtab$ids, format_id_values), use.names = FALSE),
     nrow = n_row
   )
+  # A row continuing the block above it in a side column, blanked there.
+  repeats <- matrix(FALSE, n_row, n_lead)
+  if (xtab$merge_cells && n_row > 1) {
+    for (j in seq_len(n_lead)) {
+      key <- xtab$merge_keys[[j]]
+      repeats[, j] <- c(FALSE, key[-1] == key[-n_row])
+    }
+    ids[repeats] <- ""
+  }
   body <- rbind(
     cbind(set_rows, xtab$guideline_text),
     cbind(ids, result_cell_text(xtab$conc, xtab$nd))
@@ -869,7 +1217,13 @@ results_gt <- function(
   body <- as.data.frame(body, stringsAsFactors = FALSE)
   names(body) <- c(lead_names, analyte_names)
 
-  tbl <- gt::gt(body)
+  grouped <- !is.null(xtab$group)
+  if (grouped) {
+    body$.group <- c(rep("Guideline values", k), xtab$group)
+    tbl <- gt::gt(body, groupname_col = ".group")
+  } else {
+    tbl <- gt::gt(body)
+  }
 
   units <- xtab$analytes$output_unit
   analyte_labels <- paste0(
@@ -916,7 +1270,10 @@ results_gt <- function(
     table_body.vlines.style = "solid",
     table_body.vlines.color = "#D9D9D9",
     table_body.vlines.width = gt::px(1),
-    source_notes.font.size = gt::px(11)
+    source_notes.font.size = gt::px(11),
+    page.orientation = page$orientation,
+    page.width = paste0(page$width, "in"),
+    page.height = paste0(page$height, "in")
   )
   header_cells <- list(gt::cells_column_labels())
   if (spanned) {
@@ -979,6 +1336,21 @@ results_gt <- function(
       )
     }
 
+    # --- merged blocks: no line between a block's rows
+    for (j in seq_len(n_lead)) {
+      continuing <- which(repeats[, j])
+      if (length(continuing) > 0) {
+        tbl <- gt::tab_style(
+          tbl,
+          style = gt::cell_borders(sides = "top", style = "hidden"),
+          locations = gt::cells_body(
+            columns = lead_names[[j]],
+            rows = k + continuing
+          )
+        )
+      }
+    }
+
     # --- the results: bold detects, grey non-detects, shaded exceedances
     for (cc in seq_len(n_col)) {
       has <- !is.na(xtab$conc[, cc])
@@ -1011,6 +1383,18 @@ results_gt <- function(
         }
       }
     }
+  }
+
+  # --- banners, set as the Excel sheet sets them
+  if (grouped) {
+    tbl <- gt::tab_style(
+      tbl,
+      style = list(
+        gt::cell_fill(color = location_fill),
+        gt::cell_text(color = location_font, weight = "bold")
+      ),
+      locations = gt::cells_row_groups()
+    )
   }
 
   legend <- results_legend(xtab)

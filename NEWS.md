@@ -29,6 +29,19 @@
   order, with names as headings. Colours, fonts and zone grouping follow
   `mka_to_excel()` and `summary_stats_to_excel()`.
 
+  * Repeated values down the side columns merge into one block
+    (`merge_cells`), nested so a block never crosses a change in a column to
+    its left. gt blanks the repeats instead.
+  * `group_by` puts each group of rows (a monitoring round, say) under a
+    banner across the table. Rounds are ordered by the date they were
+    sampled.
+  * Analytes are ordered by name with each dissolved analyte beside its
+    total. `sort_analytes_by` orders them by a column that is not shown,
+    such as `chem_code`.
+  * The workbook prints on A3 landscape by default (`paper_size`,
+    `orientation`), with the header rows and side columns repeated on every
+    page. `fit_to_width` scales it to one page wide.
+
 * `data_processor()` and `action_level_processor()` accept a data frame as
   well as a file path, so the ESdat OData feeds read with esdatr
   (`esdatr::get_esdat_odata_chemistry()` and friends) go straight in. The

@@ -8,12 +8,17 @@ results_table(
   data,
   criteria_col = criteria,
   id_cols = c("date", "sample_code", "lab_report_number"),
+  group_by = NULL,
+  sort_analytes_by = NULL,
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  merge_cells = TRUE,
   include_zone = FALSE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
+  paper_size = "A3",
+  orientation = "landscape",
   header_fill = "#008768",
   header_font = "#FFFFFF",
   location_fill = "#9BBEAF",
@@ -48,6 +53,24 @@ splits a sample over several rows. Left at the default,
 lacks is left out with a message; a column named outright that \code{data}
 lacks is an error. \code{NULL} gives the location alone.}
 
+\item{group_by}{column or columns to split the rows by, e.g.
+\code{"monitoring_round"}. Each group is written under a banner across the
+table - "Round: 2024 Q1" - with its rows below it. Name an element to
+set the banner's heading, as for \code{id_cols}. Rounds (\code{monitoring_round},
+\code{task_code}) are ordered by the date they were sampled, so "2024 Q10"
+follows "2024 Q9"; dates and numbers are ordered as such, and other
+text alphabetically. A missing value reads "not recorded" and comes
+last. A column named here and in \code{id_cols} is shown in both. Default
+\code{NULL}, no groups.}
+
+\item{sort_analytes_by}{column or columns of \code{data} to order the analytes
+by within each chemical group, without showing them - \code{"chem_code"} to
+order by CAS number, say, or a lab report-order column. Each analyte
+takes the smallest value among its results, numbers in numeric order and
+text alphabetically. Ties fall back to the name, so a dissolved analyte
+sharing its total's code still sits beside it. Default \code{NULL}, ordering
+by name.}
+
 \item{highlight_lor}{shade a non-detect whose limit of reporting is above a
 guideline, as an exceedance is - its LOR is too high to show the
 guideline was met. Default \code{FALSE}, which writes it as any other
@@ -61,6 +84,13 @@ the sets named change. Unnamed, it must hold one colour per set, in
 \code{criteria_col} order. \code{NULL} (default) uses warm tints - amber, orange,
 rose, then blue and lilac.}
 
+\item{merge_cells}{merge a value repeated down a side column into one
+block, so a well is named once against all its samples. Each column's
+blocks sit within those of the column to its left - a date shared by two
+wells is not merged across them - and no block crosses a \code{group_by}
+banner. Default \code{TRUE}. In gt, which cannot merge cells, the repeats are
+left blank instead. \code{FALSE} writes the value on every row.}
+
 \item{include_zone}{write the monitoring zone as the first column, ahead of
 the location, and sort the rows by zone. Default \code{FALSE}.}
 
@@ -73,6 +103,12 @@ than one zone is an error.}
 
 \item{location_label}{heading for the location column. Default
 \code{"Monitoring Well"}.}
+
+\item{paper_size, orientation}{the printed page: \code{"A3"} (default), \code{"A2"},
+\code{"A4"}, \code{"A5"}, \code{"letter"}, \code{"legal"} or \code{"tabloid"}, and \code{"landscape"}
+(default) or \code{"portrait"}. A gt table takes them when saved as RTF with
+\code{gt::gtsave()}; in a Quarto or Word document, the document sets the
+page.}
 
 \item{header_fill}{background colour for the headings and the location
 names. Default \code{"#008768"}, a deep green.}
@@ -99,7 +135,15 @@ Across the top, each analyte's column is headed by its chemical group,
 then its name and its unit, then one row per guideline set giving the
 guideline value, shaded in that set's colour. Down the side, each row is
 named by its location and by the \code{id_cols} - by default the sample date,
-sample ID and lab report.
+sample ID and lab report. A value repeated down a side column is merged
+into one block (\code{merge_cells}), and the rows can be split into groups -
+by monitoring round, say - each under a banner naming it (\code{group_by}).
+
+Analytes are ordered by chemical group, then by name, read so that a
+dissolved analyte sits beside its total: where the table holds both,
+"Dissolved Copper" follows "Copper" rather than filing under D.
+\code{sort_analytes_by} orders them by another column instead, such as the
+\code{chem_code}, without showing it.
 
 In the body:
 \itemize{
@@ -153,6 +197,10 @@ gRs_data \%>\%
 
 # Non-detects with an LOR above a guideline shaded too
 compared \%>\% results_table(highlight_lor = TRUE)
+
+# A banner per monitoring round; metals ordered by CAS number
+compared \%>\%
+  results_table(group_by = "monitoring_round", sort_analytes_by = "chem_code")
 
 # Soil: depths beside the location, under headings of your own
 soil \%>\%

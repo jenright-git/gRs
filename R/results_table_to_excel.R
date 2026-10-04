@@ -18,8 +18,14 @@
 #'   one.
 #'
 #' Detected results stay numbers, so the sheet can still be calculated on.
-#' The header block and the identifier columns are frozen, and a second sheet
-#' explains the formatting.
+#' A value repeated down a side column is merged into one block
+#' (`merge_cells`), and with `group_by` each group of rows sits under a banner
+#' across the sheet. The header block and the identifier columns are frozen,
+#' and a second sheet explains the formatting.
+#'
+#' The sheet is set up to print on A3 landscape by default, with the header
+#' rows and the side columns repeated on every page, so a table too wide or
+#' too long for one page still reads page by page.
 #'
 #' See [results_table()] for how the rows, columns and shading are decided.
 #'
@@ -27,10 +33,18 @@
 #' @param save_path full file path, including filename, for the workbook. The
 #'   directory is created if it does not exist. Defaults to
 #'   `"Results Table_<yyyymmdd>.xlsx"` in the working directory.
-#' @param merge_zones merge each zone's repeated cells into a single block, so
-#'   the zone is named once against its rows. Default `TRUE`. Set `FALSE` to
-#'   leave a value in every row, which is what Excel's sort and filter tools
-#'   want. Ignored unless `include_zone = TRUE`.
+#' @param merge_cells merge a value repeated down a side column into one
+#'   block, so a well is named once against all its samples. Each column's
+#'   blocks sit within those of the column to its left - a date shared by two
+#'   wells is not merged across them - and no block crosses a `group_by`
+#'   banner. Default `TRUE`. Set `FALSE` to write the value on every row,
+#'   which is what Excel's sort and filter tools want.
+#' @param paper_size,orientation the printed page: `"A3"` (default), `"A2"`,
+#'   `"A4"`, `"A5"`, `"letter"`, `"legal"` or `"tabloid"`, and `"landscape"`
+#'   (default) or `"portrait"`.
+#' @param fit_to_width scale the sheet to print one page wide. Default
+#'   `FALSE`, printing at full size with the columns that do not fit carried
+#'   onto further pages - each repeating the side columns.
 #' @param legend add a `"Legend"` sheet explaining the bold, grey and shaded
 #'   cells. Default `TRUE`.
 #' @param sheet_name name of the results worksheet. Default `"Results"`. It
@@ -63,12 +77,21 @@
 #'     id_cols = c("date", "field_id", "lab_report_number"),
 #'     include_zone = TRUE
 #'   )
+#'
+#' # A banner per monitoring round, printed on A4 portrait, one page wide
+#' compared %>%
+#'   results_table_to_excel(
+#'     group_by = "monitoring_round",
+#'     paper_size = "A4",
+#'     orientation = "portrait",
+#'     fit_to_width = TRUE
+#'   )
 #' }
 #'
 #' @seealso [results_table()] for the same table in a report, and
 #'   [join_action_levels()] to join the guideline sets it shows.
 #' @importFrom openxlsx createWorkbook addWorksheet writeData createStyle
-#'   addStyle setColWidths setRowHeights freezePane mergeCells
+#'   addStyle setColWidths setRowHeights freezePane mergeCells pageSetup
 results_table_to_excel <- function(
   data,
   save_path = paste0(
@@ -78,13 +101,18 @@ results_table_to_excel <- function(
   ),
   criteria_col = criteria,
   id_cols = c("date", "sample_code", "lab_report_number"),
+  group_by = NULL,
+  sort_analytes_by = NULL,
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  merge_cells = TRUE,
   include_zone = FALSE,
-  merge_zones = TRUE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
+  paper_size = "A3",
+  orientation = "landscape",
+  fit_to_width = FALSE,
   header_fill = "#008768",
   header_font = "#FFFFFF",
   location_fill = "#9BBEAF",
@@ -99,6 +127,8 @@ results_table_to_excel <- function(
       "the legend sheet takes that name."
     ))
   }
+  check_flag(fit_to_width, "fit_to_width")
+  page <- page_spec(paper_size, orientation)
 
   # Built before anything is written, so a call that cannot be tabulated
   # fails without leaving half a workbook behind.
@@ -108,8 +138,11 @@ results_table_to_excel <- function(
     criteria_named = !missing(criteria_col),
     id_cols = id_cols,
     id_named = !missing(id_cols),
+    group_by = group_by,
+    sort_analytes_by = sort_analytes_by,
     highlight_lor = highlight_lor,
     criteria_colours = criteria_colours,
+    merge_cells = merge_cells,
     include_zone = include_zone,
     zone_name = rlang::quo_name(rlang::enquo(zone_col)),
     zone_label = zone_label,
@@ -121,11 +154,12 @@ results_table_to_excel <- function(
     wb,
     xtab,
     sheet = sheet_name,
+    page = page,
+    fit_to_width = fit_to_width,
     header_fill = header_fill,
     header_font = header_font,
     location_fill = location_fill,
-    location_font = location_font,
-    merge_zones = merge_zones
+    location_font = location_font
   )
   if (legend) {
     add_results_legend_sheet(wb, xtab, header_fill, header_font)
@@ -143,10 +177,15 @@ results_table_to_excel <- function(
 #' merged down the three rows, and each set's name is merged across the
 #' identifier columns.
 #'
+#' Below it, the rows are written one block per group, each block under its
+#' banner; without `group_by` there is one block and no banner. `row_at` maps
+#' each row of the crosstab to the sheet row it is written on.
+#'
 #' @param wb the workbook to add to
 #' @param xtab a crosstab from `results_crosstab()`
 #' @param sheet the name to give the sheet
-#' @param header_fill,header_font,location_fill,location_font,merge_zones as
+#' @param page the printed page, from `page_spec()`
+#' @param fit_to_width,header_fill,header_font,location_fill,location_font as
 #'   for [results_table_to_excel()]
 #' @returns `wb`, invisibly, modified in place
 #' @noRd
@@ -154,11 +193,12 @@ add_results_sheet <- function(
   wb,
   xtab,
   sheet,
+  page,
+  fit_to_width,
   header_fill,
   header_font,
   location_fill,
-  location_font,
-  merge_zones
+  location_font
 ) {
   n_lead <- length(xtab$id_labels)
   n_col <- ncol(xtab$conc)
@@ -166,7 +206,18 @@ add_results_sheet <- function(
   k <- length(xtab$sets)
   lead_cols <- seq_len(n_lead)
   analyte_cols <- n_lead + seq_len(n_col)
+  all_cols <- c(lead_cols, analyte_cols)
   first <- 4L + k
+
+  # Each group's rows in turn, a banner row above each.
+  block <- if (is.null(xtab$group)) {
+    rep(1L, n_row)
+  } else {
+    cumsum(c(TRUE, xtab$group[-1] != xtab$group[-n_row]))[seq_len(n_row)]
+  }
+  banners <- if (is.null(xtab$group)) 0L else block
+  row_at <- first - 1L + seq_len(n_row) + banners
+  blocks <- split(seq_len(n_row), block)
 
   openxlsx::addWorksheet(wb, sheet, gridLines = FALSE)
 
@@ -199,16 +250,17 @@ add_results_sheet <- function(
   write_row(wb, sheet, xtab$analytes$chem_name, row = 2, col = n_lead + 1)
   write_row(wb, sheet, units, row = 3, col = n_lead + 1)
 
-  # The groups are contiguous, the columns having been sorted by group.
-  group_runs <- rle(groups)
-  group_ends <- cumsum(group_runs$lengths)
-  group_starts <- group_ends - group_runs$lengths + 1L
-  for (i in seq_along(group_runs$lengths)) {
-    if (group_runs$lengths[[i]] > 1) {
+  # The chemical groups are contiguous, the columns having been sorted by
+  # group.
+  chem_runs <- rle(groups)
+  chem_ends <- cumsum(chem_runs$lengths)
+  chem_starts <- chem_ends - chem_runs$lengths + 1L
+  for (i in seq_along(chem_runs$lengths)) {
+    if (chem_runs$lengths[[i]] > 1) {
       openxlsx::mergeCells(
         wb,
         sheet,
-        cols = n_lead + group_starts[[i]]:group_ends[[i]],
+        cols = n_lead + chem_starts[[i]]:chem_ends[[i]],
         rows = 1
       )
     }
@@ -278,25 +330,95 @@ add_results_sheet <- function(
   }
 
   if (n_row > 0) {
-    rows <- first + seq_len(n_row) - 1L
+    nd <- xtab$nd
+    nd[is.na(nd)] <- FALSE
+    detected <- !is.na(xtab$conc) & !nd
+    numbers <- xtab$conc
+    numbers[!detected] <- NA
+    text <- result_cell_text(xtab$conc, xtab$nd)
+    id_frame <- excel_id_frame(xtab$ids)
 
-    # --- identifiers
-    openxlsx::writeData(
-      wb,
-      sheet,
-      excel_id_frame(xtab$ids),
-      startCol = 1,
-      startRow = first,
-      colNames = FALSE,
-      keepNA = FALSE
-    )
+    for (rows in blocks) {
+      top <- row_at[[rows[[1]]]]
+
+      # --- the group's banner, across the whole sheet
+      if (!is.null(xtab$group)) {
+        openxlsx::writeData(
+          wb,
+          sheet,
+          xtab$group[[rows[[1]]]],
+          startCol = 1,
+          startRow = top - 1L
+        )
+        openxlsx::mergeCells(wb, sheet, cols = all_cols, rows = top - 1L)
+        openxlsx::addStyle(
+          wb,
+          sheet,
+          group_banner_style(location_fill, location_font),
+          rows = top - 1L,
+          cols = all_cols,
+          gridExpand = TRUE
+        )
+      }
+
+      # --- identifiers, and detects as numbers
+      openxlsx::writeData(
+        wb,
+        sheet,
+        id_frame[rows, , drop = FALSE],
+        startCol = 1,
+        startRow = top,
+        colNames = FALSE,
+        keepNA = FALSE
+      )
+      openxlsx::writeData(
+        wb,
+        sheet,
+        as.data.frame(numbers[rows, , drop = FALSE]),
+        startCol = n_lead + 1,
+        startRow = top,
+        colNames = FALSE,
+        keepNA = FALSE
+      )
+
+      # --- then the text cells over the gaps. A run of them is written in
+      # one go: a never-detected analyte is one call, not one per sample.
+      for (cc in seq_len(n_col)) {
+        gaps <- rle(!detected[rows, cc])
+        gap_ends <- cumsum(gaps$lengths)
+        gap_starts <- gap_ends - gaps$lengths + 1L
+        for (i in which(gaps$values)) {
+          openxlsx::writeData(
+            wb,
+            sheet,
+            text[rows[gap_starts[[i]]:gap_ends[[i]]], cc],
+            startCol = n_lead + cc,
+            startRow = top + gap_starts[[i]] - 1L
+          )
+        }
+      }
+
+      # --- merged blocks down the side columns, nested
+      if (xtab$merge_cells) {
+        for (j in lead_cols) {
+          merge_column_runs(
+            wb,
+            sheet,
+            xtab$merge_keys[[j]][rows],
+            first_row = top,
+            col = j
+          )
+        }
+      }
+    }
+
     location_col <- if (xtab$include_zone) 2L else 1L
     if (xtab$include_zone) {
       openxlsx::addStyle(
         wb,
         sheet,
         id_body_style(header_fill, header_font),
-        rows = rows,
+        rows = row_at,
         cols = 1,
         gridExpand = TRUE
       )
@@ -304,19 +426,16 @@ add_results_sheet <- function(
         wb,
         sheet,
         id_body_style(location_fill, location_font),
-        rows = rows,
+        rows = row_at,
         cols = 2,
         gridExpand = TRUE
       )
-      if (merge_zones) {
-        merge_column_runs(wb, sheet, xtab$ids[[1]], first_row = first, col = 1)
-      }
     } else {
       openxlsx::addStyle(
         wb,
         sheet,
         id_body_style(header_fill, header_font),
-        rows = rows,
+        rows = row_at,
         cols = 1,
         gridExpand = TRUE
       )
@@ -326,43 +445,10 @@ add_results_sheet <- function(
         wb,
         sheet,
         stats_body_style(id_number_format(xtab$ids[[j]]), halign = "left"),
-        rows = rows,
+        rows = row_at,
         cols = j,
         gridExpand = TRUE
       )
-    }
-
-    # --- results: detects as numbers, then the text cells over the gaps
-    nd <- xtab$nd
-    nd[is.na(nd)] <- FALSE
-    detected <- !is.na(xtab$conc) & !nd
-    numbers <- xtab$conc
-    numbers[!detected] <- NA
-    openxlsx::writeData(
-      wb,
-      sheet,
-      as.data.frame(numbers),
-      startCol = n_lead + 1,
-      startRow = first,
-      colNames = FALSE,
-      keepNA = FALSE
-    )
-    text <- result_cell_text(xtab$conc, xtab$nd)
-    # A run of text cells is written in one go: a never-detected analyte is
-    # one call, not one per sample.
-    for (cc in seq_len(n_col)) {
-      gaps <- rle(!detected[, cc])
-      gap_ends <- cumsum(gaps$lengths)
-      gap_starts <- gap_ends - gaps$lengths + 1L
-      for (i in which(gaps$values)) {
-        openxlsx::writeData(
-          wb,
-          sheet,
-          text[gap_starts[[i]]:gap_ends[[i]], cc],
-          startCol = n_lead + cc,
-          startRow = first + gap_starts[[i]] - 1L
-        )
-      }
     }
 
     # One style per look, each laid over every cell it applies to at once.
@@ -385,7 +471,7 @@ add_results_sheet <- function(
             bold = bold,
             fill = if (s > 1) xtab$set_colours[[s - 1]]
           ),
-          rows = first - 1L + cells[, 1],
+          rows = row_at[cells[, 1]],
           cols = n_lead + cells[, 2],
           gridExpand = FALSE,
           stack = FALSE
@@ -435,10 +521,10 @@ add_results_sheet <- function(
   # the columns it spans.
   name_height <- min(250, max(60, 5.5 * max(nchar(xtab$analytes$chem_name))))
   group_lines <- vapply(
-    seq_along(group_runs$values),
+    seq_along(chem_runs$values),
     function(i) {
-      span <- sum(analyte_widths[group_starts[[i]]:group_ends[[i]]])
-      ceiling(nchar(group_runs$values[[i]]) * 0.9 / span)
+      span <- sum(analyte_widths[chem_starts[[i]]:chem_ends[[i]]])
+      ceiling(nchar(chem_runs$values[[i]]) * 0.9 / span)
     },
     numeric(1)
   )
@@ -455,7 +541,43 @@ add_results_sheet <- function(
     firstActiveCol = n_lead + 1
   )
 
+  # The header block and the side columns print on every page, so a page
+  # carried down or across still says what it holds.
+  openxlsx::pageSetup(
+    wb,
+    sheet,
+    orientation = page$orientation,
+    paperSize = page$code,
+    left = 0.25,
+    right = 0.25,
+    fitToWidth = fit_to_width,
+    fitToHeight = FALSE,
+    printTitleRows = seq_len(first - 1L),
+    printTitleCols = lead_cols
+  )
+
   invisible(wb)
+}
+
+
+#' Style for a group's banner row
+#'
+#' @param fill background colour
+#' @param font text colour
+#' @returns an openxlsx style object
+#' @noRd
+group_banner_style <- function(fill, font) {
+  openxlsx::createStyle(
+    fgFill = fill,
+    fontColour = font,
+    fontSize = 9,
+    textDecoration = "bold",
+    halign = "left",
+    valign = "center",
+    border = "TopBottomLeftRight",
+    borderColour = "#BFBFBF",
+    borderStyle = "thin"
+  )
 }
 
 

@@ -183,12 +183,12 @@ df <- get_esdat_odata_chemistry(
 
 
 al <- get_esdat_odata_action_levels(
-  sources = "ANZG Marine Water Toxicant DGVs LOSP 99% (March 2026)"
+  sources = "ANZG (2018) Marine Water Toxicant DGVs LOSP 99% (July 2026)"
 ) |>
   action_level_processor()
 
 al2 <- get_esdat_odata_action_levels(
-  sources = "ANZG Marine Water Toxicant DGVs LOSP 95% (March 2026)"
+  sources = "ANZG (2018) Marine Water Toxicant DGVs LOSP 95% (July 2026)"
 ) |>
   action_level_processor()
 
@@ -206,19 +206,20 @@ df_al <- df |>
 
 df_al |>
   results_table(
-    include_zone = TRUE,
+    include_zone = FALSE,
     id_cols = c('location_code', 'date', 'sample_type', 'field_id'),
     criteria_col = c(criteria_99, criteria_95),
     criteria_colours = c(
       criteria_99 = "#e98f09",
-      criteria_95 = "#a909e9"
-    )
+      criteria_95 = "#09b5e9"
+    ),
+    group_by = 'monitoring_zone',
   )
 
 df_al |>
   filter(monitoring_round == "2026-06") |>
   results_table_to_excel(
-    include_zone = TRUE,
+    include_zone = FALSE,
     id_cols = c(
       'location_code',
       'date',
@@ -229,6 +230,8 @@ df_al |>
     criteria_col = c(criteria_99, criteria_95),
     criteria_colours = c(
       criteria_99 = "#e98f09",
-      criteria_95 = "#a909e9"
-    )
+      criteria_95 = "#09b5e9"
+    ),
+    group_by = 'monitoring_zone',
+    merge_cells = TRUE
   )

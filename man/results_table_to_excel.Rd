@@ -9,13 +9,18 @@ results_table_to_excel(
   save_path = paste0("Results Table_", format(Sys.Date(), "\%Y\%m\%d"), ".xlsx"),
   criteria_col = criteria,
   id_cols = c("date", "sample_code", "lab_report_number"),
+  group_by = NULL,
+  sort_analytes_by = NULL,
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  merge_cells = TRUE,
   include_zone = FALSE,
-  merge_zones = TRUE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
+  paper_size = "A3",
+  orientation = "landscape",
+  fit_to_width = FALSE,
   header_fill = "#008768",
   header_font = "#FFFFFF",
   location_fill = "#9BBEAF",
@@ -57,6 +62,24 @@ splits a sample over several rows. Left at the default,
 lacks is left out with a message; a column named outright that \code{data}
 lacks is an error. \code{NULL} gives the location alone.}
 
+\item{group_by}{column or columns to split the rows by, e.g.
+\code{"monitoring_round"}. Each group is written under a banner across the
+table - "Round: 2024 Q1" - with its rows below it. Name an element to
+set the banner's heading, as for \code{id_cols}. Rounds (\code{monitoring_round},
+\code{task_code}) are ordered by the date they were sampled, so "2024 Q10"
+follows "2024 Q9"; dates and numbers are ordered as such, and other
+text alphabetically. A missing value reads "not recorded" and comes
+last. A column named here and in \code{id_cols} is shown in both. Default
+\code{NULL}, no groups.}
+
+\item{sort_analytes_by}{column or columns of \code{data} to order the analytes
+by within each chemical group, without showing them - \code{"chem_code"} to
+order by CAS number, say, or a lab report-order column. Each analyte
+takes the smallest value among its results, numbers in numeric order and
+text alphabetically. Ties fall back to the name, so a dissolved analyte
+sharing its total's code still sits beside it. Default \code{NULL}, ordering
+by name.}
+
 \item{highlight_lor}{shade a non-detect whose limit of reporting is above a
 guideline, as an exceedance is - its LOR is too high to show the
 guideline was met. Default \code{FALSE}, which writes it as any other
@@ -70,13 +93,15 @@ the sets named change. Unnamed, it must hold one colour per set, in
 \code{criteria_col} order. \code{NULL} (default) uses warm tints - amber, orange,
 rose, then blue and lilac.}
 
+\item{merge_cells}{merge a value repeated down a side column into one
+block, so a well is named once against all its samples. Each column's
+blocks sit within those of the column to its left - a date shared by two
+wells is not merged across them - and no block crosses a \code{group_by}
+banner. Default \code{TRUE}. Set \code{FALSE} to write the value on every row,
+which is what Excel's sort and filter tools want.}
+
 \item{include_zone}{write the monitoring zone as the first column, ahead of
 the location, and sort the rows by zone. Default \code{FALSE}.}
-
-\item{merge_zones}{merge each zone's repeated cells into a single block, so
-the zone is named once against its rows. Default \code{TRUE}. Set \code{FALSE} to
-leave a value in every row, which is what Excel's sort and filter tools
-want. Ignored unless \code{include_zone = TRUE}.}
 
 \item{zone_col}{Name of the column containing monitoring zones. Can be
 provided with or without quotes. Default is monitoring_zone. Locations
@@ -87,6 +112,14 @@ than one zone is an error.}
 
 \item{location_label}{heading for the location column. Default
 \code{"Monitoring Well"}.}
+
+\item{paper_size, orientation}{the printed page: \code{"A3"} (default), \code{"A2"},
+\code{"A4"}, \code{"A5"}, \code{"letter"}, \code{"legal"} or \code{"tabloid"}, and \code{"landscape"}
+(default) or \code{"portrait"}.}
+
+\item{fit_to_width}{scale the sheet to print one page wide. Default
+\code{FALSE}, printing at full size with the columns that do not fit carried
+onto further pages - each repeating the side columns.}
 
 \item{header_fill}{background colour for the headings and the location
 names. Default \code{"#008768"}, a deep green.}
@@ -133,8 +166,14 @@ one.
 }
 
 Detected results stay numbers, so the sheet can still be calculated on.
-The header block and the identifier columns are frozen, and a second sheet
-explains the formatting.
+A value repeated down a side column is merged into one block
+(\code{merge_cells}), and with \code{group_by} each group of rows sits under a banner
+across the sheet. The header block and the identifier columns are frozen,
+and a second sheet explains the formatting.
+
+The sheet is set up to print on A3 landscape by default, with the header
+rows and the side columns repeated on every page, so a table too wide or
+too long for one page still reads page by page.
 
 See \code{\link[=results_table]{results_table()}} for how the rows, columns and shading are decided.
 }
@@ -159,6 +198,15 @@ compared \%>\%
   results_table_to_excel(
     id_cols = c("date", "field_id", "lab_report_number"),
     include_zone = TRUE
+  )
+
+# A banner per monitoring round, printed on A4 portrait, one page wide
+compared \%>\%
+  results_table_to_excel(
+    group_by = "monitoring_round",
+    paper_size = "A4",
+    orientation = "portrait",
+    fit_to_width = TRUE
   )
 }
 

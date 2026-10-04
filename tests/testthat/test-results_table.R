@@ -7,8 +7,11 @@ crosstab <- function(
   sets = c("criteria_95", "criteria_99"),
   id_cols = "date",
   id_named = TRUE,
+  group_by = NULL,
+  sort_analytes_by = NULL,
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  merge_cells = TRUE,
   include_zone = FALSE
 ) {
   criteria_col <- if (is.null(sets)) {
@@ -22,8 +25,11 @@ crosstab <- function(
     criteria_named = TRUE,
     id_cols = id_cols,
     id_named = id_named,
+    group_by = group_by,
+    sort_analytes_by = sort_analytes_by,
     highlight_lor = highlight_lor,
     criteria_colours = criteria_colours,
+    merge_cells = merge_cells,
     include_zone = include_zone,
     zone_name = "monitoring_zone",
     zone_label = "Monitoring Zone",
@@ -31,7 +37,7 @@ crosstab <- function(
   )
 }
 
-write_results <- function(data = two_sets_fixture(), ...) {
+write_results <- function(data = two_sets_fixture(), id_cols = "date", ...) {
   path <- withr::local_tempfile(
     fileext = ".xlsx",
     .local_envir = parent.frame()
@@ -40,7 +46,7 @@ write_results <- function(data = two_sets_fixture(), ...) {
     data,
     save_path = path,
     criteria_col = c(criteria_95, criteria_99),
-    id_cols = "date",
+    id_cols = id_cols,
     ...
   ))
   path
@@ -413,7 +419,12 @@ test_that("a misnamed guideline set is an error", {
 
 test_that("the header block reads group, name, unit, then each set", {
   path <- write_results()
-  sheet <- openxlsx::read.xlsx(path, colNames = FALSE, skipEmptyRows = FALSE)
+  sheet <- openxlsx::read.xlsx(
+    path,
+    colNames = FALSE,
+    skipEmptyRows = FALSE,
+    fillMergedCells = TRUE
+  )
   cells <- function(row, cols) unname(unlist(sheet[row, cols]))
 
   expect_equal(cells(1, 1:3), c("Monitoring Well", "Sample Date", "Metals"))
@@ -568,9 +579,11 @@ gt_styles <- function(tbl, row, col) {
 
 test_that("results_table() puts the guideline rows above the results", {
   skip_if_not_installed("gt")
-  tbl <- suppressMessages(
-    results_table(two_sets_fixture(), criteria_col = c(criteria_95, criteria_99))
-  )
+  tbl <- suppressMessages(results_table(
+    two_sets_fixture(),
+    criteria_col = c(criteria_95, criteria_99),
+    merge_cells = FALSE
+  ))
 
   expect_s3_class(tbl, "gt_tbl")
   body <- tbl[["_data"]]
@@ -617,4 +630,272 @@ test_that("results_table() runs with no guideline set", {
   body <- tbl[["_data"]]
 
   expect_equal(nrow(body), 6)
+})
+
+
+# ---------------------------------------------------------------------------
+# analyte order
+# ---------------------------------------------------------------------------
+
+# Metals with their dissolved halves, lead (which sorts first by CAS
+# number) and dissolved oxygen, which has no total to sit beside.
+metals_fixture <- function() {
+  analyte <- function(name, code, order) {
+    chem_fixture(chem_name = name, chem_code = code, report_order = order)
+  }
+  dplyr::bind_rows(
+    analyte("Copper", "7440-50-8", 10),
+    analyte("Dissolved Copper", "7440-50-8", 11),
+    analyte("Arsenic", "7440-38-2", 2),
+    analyte("Dissolved Arsenic", "7440-38-2", 3),
+    analyte("Lead", "7439-92-1", 20),
+    analyte("Dissolved Oxygen", "7782-44-7", 1)
+  )
+}
+
+test_that("a dissolved analyte sits beside its total, the total first", {
+  x <- crosstab(metals_fixture(), sets = NULL)
+  expect_equal(
+    x$analytes$chem_name,
+    c(
+      "Arsenic", "Dissolved Arsenic", "Copper", "Dissolved Copper",
+      "Dissolved Oxygen", "Lead"
+    )
+  )
+})
+
+test_that("sort_analytes_by orders by a hidden column, keeping pairs together", {
+  x <- crosstab(metals_fixture(), sets = NULL, sort_analytes_by = "chem_code")
+  expect_equal(
+    x$analytes$chem_name,
+    c(
+      "Lead", "Arsenic", "Dissolved Arsenic", "Copper", "Dissolved Copper",
+      "Dissolved Oxygen"
+    )
+  )
+  # the sort column is not shown
+  expect_named(x$analytes, c("chem_group", "chem_name", "output_unit"))
+})
+
+test_that("a numeric sort column is ordered as numbers", {
+  x <- crosstab(metals_fixture(), sets = NULL, sort_analytes_by = "report_order")
+  # 2 before 10, which text order would reverse
+  expect_equal(
+    x$analytes$chem_name,
+    c(
+      "Dissolved Oxygen", "Arsenic", "Dissolved Arsenic", "Copper",
+      "Dissolved Copper", "Lead"
+    )
+  )
+})
+
+test_that("an unknown sort or group column is an error naming it", {
+  expect_error(
+    crosstab(sort_analytes_by = "cas_number"),
+    "sort_analytes_by.*cas_number"
+  )
+  expect_error(crosstab(group_by = "round_name"), "group_by.*round_name")
+})
+
+
+# ---------------------------------------------------------------------------
+# merging
+# ---------------------------------------------------------------------------
+
+# Two samples a day: MW01 on 15 Jan twice and 14 Feb; MW02 on 14 Feb and
+# 15 Mar twice. The 14 Feb dates sit on adjacent rows of different wells.
+same_day_fixture <- function() {
+  d <- as.POSIXct(c("2024-01-15", "2024-02-14", "2024-03-15"), tz = "UTC")
+  chem_fixture(
+    date = d[c(1, 1, 2, 2, 3, 3)],
+    sample_code = paste0("S", 1:6)
+  ) %>%
+    join_action_levels(
+      action_level_fixture(criteria_name = "NEMP 95%", criteria = 2),
+      value_col = "criteria_95",
+      quiet = TRUE
+    ) %>%
+    join_action_levels(
+      action_level_fixture(criteria_name = "NEMP 99%", criteria = 5000),
+      value_col = "criteria_99",
+      quiet = TRUE
+    )
+}
+
+merged_ranges <- function(path) {
+  sub(
+    '.*ref="([^"]+)".*',
+    "\\1",
+    openxlsx::loadWorkbook(path)$worksheets[[1]]$mergeCells
+  )
+}
+
+test_that("side columns merge their repeats, each within the column to its left", {
+  path <- write_results(
+    same_day_fixture(),
+    id_cols = c("date", "sample_code")
+  )
+  merges <- merged_ranges(path)
+
+  # each well, then each date within its well
+  expect_true(all(c("A6:A8", "A9:A11", "B6:B7", "B10:B11") %in% merges))
+  # 14 Feb ends MW01 and starts MW02: not one block
+  expect_false("B8:B9" %in% merges)
+  # sample IDs never repeat, so only the heading above them is merged
+  expect_equal(grep("^C", merges, value = TRUE), "C1:C3")
+})
+
+test_that("merge_cells = FALSE leaves every value on its row", {
+  path <- write_results(
+    same_day_fixture(),
+    id_cols = c("date", "sample_code"),
+    merge_cells = FALSE
+  )
+  merges <- merged_ranges(path)
+
+  expect_false(any(c("A6:A8", "B6:B7") %in% merges))
+  sheet <- openxlsx::read.xlsx(path, colNames = FALSE, skipEmptyRows = FALSE)
+  expect_equal(sheet[6:11, 1], rep(c("MW01", "MW02"), each = 3))
+})
+
+test_that("in gt a merged block shows its value once, with no lines inside", {
+  skip_if_not_installed("gt")
+  tbl <- suppressMessages(results_table(
+    same_day_fixture(),
+    criteria_col = c(criteria_95, criteria_99),
+    id_cols = c("date", "sample_code")
+  ))
+  body <- tbl[["_data"]]
+
+  expect_equal(body$.id_1, c("NEMP 95%", "NEMP 99%", "MW01", "", "", "MW02", "", ""))
+  expect_equal(
+    body$.id_2,
+    c("", "", "15/01/2024", "", "14/02/2024", "14/02/2024", "15/03/2024", "")
+  )
+  expect_true("hidden" %in% gt_styles(tbl, 4, ".id_1"))
+  expect_false("hidden" %in% gt_styles(tbl, 6, ".id_2"))
+})
+
+
+# ---------------------------------------------------------------------------
+# group_by banners
+# ---------------------------------------------------------------------------
+
+# Round 9 is sampled first, though "Round 10" sorts first as text.
+rounds_fixture <- function() {
+  data <- two_sets_fixture()
+  data$monitoring_round <- c(
+    "Round 9", "Round 9", "Round 10", "Round 10", "Round 9", "Round 10"
+  )
+  data
+}
+
+test_that("groups are ordered by the date their round was sampled", {
+  x <- crosstab(rounds_fixture(), group_by = "monitoring_round")
+
+  expect_equal(x$group, rep(c("Round: Round 9", "Round: Round 10"), each = 3))
+  expect_equal(x$ids$location_code, c("MW01", "MW01", "MW02", "MW01", "MW02", "MW02"))
+  expect_equal(x$conc[, 1], c(1.5, 2.5, 8, 0.5, 4, 0.5))
+})
+
+test_that("a group's banner heading can be named, and a missing value is said", {
+  data <- rounds_fixture()
+  data$monitoring_round[c(3, 4, 6)] <- NA
+  x <- crosstab(data, group_by = c("Event" = "monitoring_round"))
+
+  expect_equal(unique(x$group), c("Event: Round 9", "Event: not recorded"))
+})
+
+test_that("each group sits under a banner across the sheet", {
+  path <- write_results(rounds_fixture(), group_by = "monitoring_round")
+  sheet <- openxlsx::read.xlsx(
+    path,
+    colNames = FALSE,
+    skipEmptyRows = FALSE,
+    fillMergedCells = TRUE
+  )
+  merges <- merged_ranges(path)
+
+  # 3 header rows, 2 sets, then a banner over each round's three rows
+  expect_equal(unname(unlist(sheet[6, ])), rep("Round: Round 9", 3))
+  expect_equal(unname(unlist(sheet[10, ])), rep("Round: Round 10", 3))
+  expect_true(all(c("A6:C6", "A10:C10") %in% merges))
+  expect_equal(sheet[c(7:9, 11:13), 1], c("MW01", "MW01", "MW02", "MW01", "MW02", "MW02"))
+  expect_equal(sheet[c(7:9, 11:13), 3], c("1.5", "2.5", "8", "<0.5", "4", "<0.5"))
+  # no block crosses a banner: MW02 ends round 9, MW01 starts round 10
+  expect_true(all(c("A7:A8", "A12:A13") %in% merges))
+  # and the styles follow the rows down
+  expect_equal(fill_of(style_at(path, 9, 3)), "F0A868")
+  expect_equal(fill_of(style_at(path, 6, 1)), "9BBEAF")
+})
+
+test_that("in gt each group is a row group, after the guideline values", {
+  skip_if_not_installed("gt")
+  tbl <- suppressMessages(results_table(
+    rounds_fixture(),
+    criteria_col = c(criteria_95, criteria_99),
+    id_cols = "date",
+    group_by = "monitoring_round"
+  ))
+
+  expect_equal(
+    gt:::dt_row_groups_get(tbl),
+    c("Guideline values", "Round: Round 9", "Round: Round 10")
+  )
+})
+
+
+# ---------------------------------------------------------------------------
+# page setup
+# ---------------------------------------------------------------------------
+
+sheet_xml <- function(path) {
+  dir <- withr::local_tempdir()
+  utils::unzip(path, files = "xl/worksheets/sheet1.xml", exdir = dir)
+  paste(readLines(file.path(dir, "xl", "worksheets", "sheet1.xml"), warn = FALSE), collapse = "")
+}
+
+test_that("the sheet prints on A3 landscape, its headings on every page", {
+  path <- write_results()
+  xml <- sheet_xml(path)
+
+  expect_match(xml, 'paperSize="8"', fixed = TRUE)
+  expect_match(xml, 'orientation="landscape"', fixed = TRUE)
+  expect_match(xml, 'fitToWidth="0"', fixed = TRUE)
+  expect_true(any(grepl(
+    "_xlnm.Print_Titles",
+    openxlsx::loadWorkbook(path)$workbook$definedNames,
+    fixed = TRUE
+  )))
+})
+
+test_that("the page size and orientation can be set, and fitted to width", {
+  xml <- sheet_xml(write_results(
+    paper_size = "A4",
+    orientation = "portrait",
+    fit_to_width = TRUE
+  ))
+
+  expect_match(xml, 'paperSize="9"', fixed = TRUE)
+  expect_match(xml, 'orientation="portrait"', fixed = TRUE)
+  expect_match(xml, 'fitToWidth="1"', fixed = TRUE)
+  expect_match(xml, 'fitToPage="1"', fixed = TRUE)
+})
+
+test_that("an unknown paper size or orientation is an error", {
+  expect_error(write_results(paper_size = "A0"), "paper_size")
+  expect_error(write_results(orientation = "sideways"), "orientation")
+})
+
+test_that("results_table() carries the page for RTF output", {
+  skip_if_not_installed("gt")
+  tbl <- suppressMessages(results_table(
+    two_sets_fixture(),
+    criteria_col = c(criteria_95, criteria_99),
+    paper_size = "A4"
+  ))
+
+  expect_equal(gt:::dt_options_get_value(tbl, "page_orientation"), "landscape")
+  expect_equal(gt:::dt_options_get_value(tbl, "page_width"), "8.27in")
+  expect_equal(gt:::dt_options_get_value(tbl, "page_height"), "11.69in")
 })
