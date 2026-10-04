@@ -88,20 +88,6 @@ sw_data |>
   ) |>
   create_gt(merge_range = FALSE, highlight = TRUE)
 
-both |>
-  historical_range(
-    round = "2026-06",
-    include_criteria = TRUE,
-    spike_factor = 0.1,
-    criteria_col = criteria_95
-  ) |>
-  create_gt() |>
-  gt::cols_merge_range(
-    col_begin = hist_min_prefix,
-    col_end = hist_max_prefix
-  ) |>
-  gt::cols_label(hist_min_prefix = "Historical Range")
-
 
 sw_data |>
   summary_stats(include_criteria = TRUE) |>
@@ -130,3 +116,37 @@ ar |>
   ) |>
   group_by(chem_name) |>
   create_gt()
+
+
+both |>
+  criteria_long() |>
+  summary_stats(include_criteria = TRUE) |>
+  create_gt()
+
+
+both |>
+  mann_kendall_test() |>
+  mka_to_excel(
+    include_zone = TRUE,
+    include_stats = TRUE,
+    include_summary = TRUE,
+    criteria = c(criteria_95, criteria_99)
+  )
+
+
+both |>
+  summary_stats(
+    include_criteria = TRUE,
+    criteria_col = c(criteria_95, criteria_99),
+    lor_multiplier = 0
+  ) |>
+  create_gt()
+
+# Takes summary_stats()'s output, as mka_to_excel() takes mann_kendall_test()'s
+both |>
+  summary_stats(
+    include_criteria = TRUE,
+    criteria_col = c(criteria_95, criteria_99),
+    group_vars = "monitoring_zone"
+  ) |>
+  summary_stats_to_excel(include_zone = TRUE)
