@@ -7,7 +7,8 @@
 #' compared. The locations this happens at are named in a message; convert
 #' the results to a single unit beforehand to test them as one series. Each
 #' series still needs four samples of its own, so a split series can drop out
-#' where the whole would have been tested.
+#' where the whole would have been tested. Results with no unit recorded are
+#' a series of their own too, named as `"no unit"`.
 #'
 #' @param data tibble processed with the data_processor function
 #' @param traditional perform the standard analysis and not analyse for "Probably" or "Stable" trends
@@ -302,7 +303,9 @@ report_mixed_units <- function(data, loc_name, ana_name) {
   }
   unit <- as.character(data$output_unit)
   key <- paste(data[[loc_name]], data[[ana_name]], sep = " / ")
-  units <- tapply(unit, key, function(u) sort(unique(stats::na.omit(u))))
+  # A result with no unit is nested apart from the rest, so it counts as a
+  # unit of its own here too.
+  units <- tapply(unit, key, function(u) sort(unique(u), na.last = TRUE))
   mixed <- units[lengths(units) > 1]
   if (length(mixed) == 0) {
     return(invisible(NULL))
@@ -311,7 +314,11 @@ report_mixed_units <- function(data, loc_name, ana_name) {
     "  - ",
     names(mixed),
     " (",
-    vapply(mixed, paste, character(1), collapse = ", "),
+    vapply(
+      mixed,
+      function(u) paste(ifelse(is.na(u), NO_UNIT, u), collapse = ", "),
+      character(1)
+    ),
     ")"
   )
   message(
@@ -332,7 +339,8 @@ report_mixed_units <- function(data, loc_name, ana_name) {
 #' [mka_to_excel()], the rows of the heatmaps - the two would land in one
 #' cell. Those analytes carry their unit in the name, e.g. `"Zinc (mg/L)"`.
 #' An analyte reported in a single unit keeps its name unchanged, so a table
-#' that never mixes units reads as it always has.
+#' that never mixes units reads as it always has. A missing unit is tested
+#' as a series of its own, so it counts as a unit here: `"Zinc (no unit)"`.
 #'
 #' @param chem analyte names
 #' @param unit the unit of each, or `NULL` where the table carries none
@@ -344,11 +352,15 @@ unit_labelled <- function(chem, unit) {
     return(chem)
   }
   unit <- as.character(unit)
-  n_units <- tapply(unit, chem, function(u) length(unique(stats::na.omit(u))))
-  mixed <- chem %in% names(n_units)[n_units > 1] & !is.na(unit)
-  chem[mixed] <- paste0(chem[mixed], " (", unit[mixed], ")")
+  n_units <- tapply(unit, chem, function(u) length(unique(u)))
+  mixed <- chem %in% names(n_units)[n_units > 1]
+  shown <- ifelse(is.na(unit), NO_UNIT, unit)
+  chem[mixed] <- paste0(chem[mixed], " (", shown[mixed], ")")
   chem
 }
+
+# How a missing unit is named where an analyte also comes in a real one.
+NO_UNIT <- "no unit"
 
 
 #' Mann_Kendall Test returning test result and stats

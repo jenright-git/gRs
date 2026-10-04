@@ -103,13 +103,20 @@ results_table_to_excel <- function(
   id_cols = c("date", "sample_code", "lab_report_number"),
   group_by = NULL,
   sort_analytes_by = NULL,
+  analytes = "all",
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  criteria_labels = NULL,
+  statistics = FALSE,
+  statistics_by_group = FALSE,
   merge_cells = TRUE,
+  layout = "samples_down",
   include_zone = FALSE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
+  title = NULL,
+  notes = TRUE,
   paper_size = "A3",
   orientation = "landscape",
   fit_to_width = FALSE,
@@ -129,6 +136,9 @@ results_table_to_excel <- function(
   }
   check_flag(fit_to_width, "fit_to_width")
   page <- page_spec(paper_size, orientation)
+  check_choice(layout, LAYOUTS, "layout")
+  check_title(title)
+  check_notes(notes)
 
   # Built before anything is written, so a call that cannot be tabulated
   # fails without leaving half a workbook behind.
@@ -140,8 +150,12 @@ results_table_to_excel <- function(
     id_named = !missing(id_cols),
     group_by = group_by,
     sort_analytes_by = sort_analytes_by,
+    analytes = analytes,
     highlight_lor = highlight_lor,
     criteria_colours = criteria_colours,
+    criteria_labels = criteria_labels,
+    statistics = statistics,
+    statistics_by_group = statistics_by_group,
     merge_cells = merge_cells,
     include_zone = include_zone,
     zone_name = rlang::quo_name(rlang::enquo(zone_col)),
@@ -150,11 +164,18 @@ results_table_to_excel <- function(
   )
 
   wb <- openxlsx::createWorkbook()
-  add_results_sheet(
+  write_sheet <- if (identical(layout, "analytes_down")) {
+    add_results_sheet_down
+  } else {
+    add_results_sheet
+  }
+  write_sheet(
     wb,
     xtab,
     sheet = sheet_name,
     page = page,
+    title = title,
+    notes = results_notes(xtab, notes),
     fit_to_width = fit_to_width,
     header_fill = header_fill,
     header_font = header_font,
@@ -177,14 +198,18 @@ results_table_to_excel <- function(
 #' merged down the three rows, and each set's name is merged across the
 #' identifier columns.
 #'
-#' Below it, the rows are written one block per group, each block under its
-#' banner; without `group_by` there is one block and no banner. `row_at` maps
-#' each row of the crosstab to the sheet row it is written on.
+#' Below it, the rows follow the crosstab's sample axis: each group's banner,
+#' its samples and its statistics, then the whole table's statistics. Runs
+#' of samples between them are written a block at a time; `row_at` maps
+#' each row of the crosstab to the sheet row it is written on. The notes
+#' follow the last row.
 #'
 #' @param wb the workbook to add to
 #' @param xtab a crosstab from `results_crosstab()`
 #' @param sheet the name to give the sheet
 #' @param page the printed page, from `page_spec()`
+#' @param title the `title` argument
+#' @param notes the notes, from `results_notes()`
 #' @param fit_to_width,header_fill,header_font,location_fill,location_font as
 #'   for [results_table_to_excel()]
 #' @returns `wb`, invisibly, modified in place
@@ -194,6 +219,8 @@ add_results_sheet <- function(
   xtab,
   sheet,
   page,
+  title,
+  notes,
   fit_to_width,
   header_fill,
   header_font,
@@ -209,15 +236,18 @@ add_results_sheet <- function(
   all_cols <- c(lead_cols, analyte_cols)
   first <- 4L + k
 
-  # Each group's rows in turn, a banner row above each.
-  block <- if (is.null(xtab$group)) {
-    rep(1L, n_row)
-  } else {
-    cumsum(c(TRUE, xtab$group[-1] != xtab$group[-n_row]))[seq_len(n_row)]
-  }
-  banners <- if (is.null(xtab$group)) 0L else block
-  row_at <- first - 1L + seq_len(n_row) + banners
-  blocks <- split(seq_len(n_row), block)
+  axis <- xtab$axis
+  entry_row <- first - 1L + seq_len(nrow(axis))
+  is_sample <- axis$kind == "sample"
+  row_at <- integer(n_row)
+  row_at[axis$index[is_sample]] <- entry_row[is_sample]
+  # A run of samples is broken by every banner and statistic.
+  blocks <- unname(split(axis$index[is_sample], cumsum(!is_sample)[is_sample]))
+  banner_at <- entry_row[axis$kind == "banner"]
+  banner_text <- axis$group[axis$kind == "banner"]
+  stat_at <- entry_row[axis$kind == "stat"]
+  stat_index <- axis$index[axis$kind == "stat"]
+  last_row <- max(c(first - 1L, entry_row))
 
   openxlsx::addWorksheet(wb, sheet, gridLines = FALSE)
 
@@ -338,28 +368,28 @@ add_results_sheet <- function(
     text <- result_cell_text(xtab$conc, xtab$nd)
     id_frame <- excel_id_frame(xtab$ids)
 
+    # --- each group's banner, across the whole sheet
+    for (i in seq_along(banner_at)) {
+      openxlsx::writeData(
+        wb,
+        sheet,
+        banner_text[[i]],
+        startCol = 1,
+        startRow = banner_at[[i]]
+      )
+      openxlsx::mergeCells(wb, sheet, cols = all_cols, rows = banner_at[[i]])
+      openxlsx::addStyle(
+        wb,
+        sheet,
+        group_banner_style(location_fill, location_font),
+        rows = banner_at[[i]],
+        cols = all_cols,
+        gridExpand = TRUE
+      )
+    }
+
     for (rows in blocks) {
       top <- row_at[[rows[[1]]]]
-
-      # --- the group's banner, across the whole sheet
-      if (!is.null(xtab$group)) {
-        openxlsx::writeData(
-          wb,
-          sheet,
-          xtab$group[[rows[[1]]]],
-          startCol = 1,
-          startRow = top - 1L
-        )
-        openxlsx::mergeCells(wb, sheet, cols = all_cols, rows = top - 1L)
-        openxlsx::addStyle(
-          wb,
-          sheet,
-          group_banner_style(location_fill, location_font),
-          rows = top - 1L,
-          cols = all_cols,
-          gridExpand = TRUE
-        )
-      }
 
       # --- identifiers, and detects as numbers
       openxlsx::writeData(
@@ -480,6 +510,41 @@ add_results_sheet <- function(
     }
   }
 
+  # --- the statistics, a row each, labelled across the side columns
+  for (i in seq_along(stat_at)) {
+    s <- stat_index[[i]]
+    r <- stat_at[[i]]
+    rule <- xtab$stats$first[[s]]
+    set <- xtab$stats$set[[s]]
+    openxlsx::writeData(wb, sheet, xtab$stats$label[[s]], startCol = 1, startRow = r)
+    if (n_lead > 1) {
+      openxlsx::mergeCells(wb, sheet, cols = lead_cols, rows = r)
+    }
+    openxlsx::addStyle(
+      wb,
+      sheet,
+      statistic_style(
+        fill = if (is.na(set)) RESULTS_STATS_FILL else xtab$set_colours[[set]],
+        rule = rule,
+        label = TRUE
+      ),
+      rows = r,
+      cols = lead_cols,
+      gridExpand = TRUE
+    )
+    write_statistic_cells(wb, sheet, xtab$stats, s, row = r, cols = analyte_cols)
+    openxlsx::addStyle(
+      wb,
+      sheet,
+      statistic_style(fill = RESULTS_STATS_FILL, rule = rule, label = FALSE),
+      rows = r,
+      cols = analyte_cols,
+      gridExpand = TRUE
+    )
+  }
+
+  write_results_notes(wb, sheet, notes, first_row = last_row + 2L)
+
   # --- widths, heights and the frozen header
   id_widths <- vapply(
     lead_cols,
@@ -555,7 +620,195 @@ add_results_sheet <- function(
     printTitleRows = seq_len(first - 1L),
     printTitleCols = lead_cols
   )
+  set_page_title(wb, sheet, title)
 
+  invisible(wb)
+}
+
+
+#' Write one statistic across its cells
+#'
+#' Numbers as numbers; a value with its `<`, or nothing to report, as text.
+#'
+#' @param wb the workbook
+#' @param sheet the worksheet name
+#' @param stats the statistics, from `results_statistics()`
+#' @param s the statistic's row in `stats`
+#' @param row,cols where a `samples_down` sheet writes it: one row, across
+#'   the analyte columns
+#' @param col,rows where an `analytes_down` sheet writes it: one column, down
+#'   the analyte rows
+#' @param analytes the analyte columns of `stats` to write, in the order of
+#'   `cols` or `rows`; all of them by default
+#' @returns `wb`, invisibly, modified in place
+#' @noRd
+write_statistic_cells <- function(
+  wb,
+  sheet,
+  stats,
+  s,
+  row = NULL,
+  cols = NULL,
+  col = NULL,
+  rows = NULL,
+  analytes = seq_len(ncol(stats$value))
+) {
+  value <- stats$value[s, analytes]
+  text <- stats$text[s, analytes]
+  across <- !is.null(row)
+
+  if (across) {
+    write_row(wb, sheet, value, row = row, col = cols[[1]])
+  } else {
+    openxlsx::writeData(
+      wb,
+      sheet,
+      value,
+      startCol = col,
+      startRow = rows[[1]],
+      keepNA = FALSE
+    )
+  }
+  # The text cells - a "<" value, or "-" - a run at a time: an exceedance
+  # row is mostly "-" where most analytes have no guideline in the set.
+  runs <- rle(is.na(value))
+  ends <- cumsum(runs$lengths)
+  starts <- ends - runs$lengths + 1L
+  for (i in which(runs$values)) {
+    span <- starts[[i]]:ends[[i]]
+    if (across) {
+      write_row(wb, sheet, text[span], row = row, col = cols[[span[[1]]]])
+    } else {
+      openxlsx::writeData(
+        wb,
+        sheet,
+        text[span],
+        startCol = col,
+        startRow = rows[[span[[1]]]]
+      )
+    }
+  }
+  invisible(wb)
+}
+
+
+#' Style for a statistic's cells
+#'
+#' @param fill background colour
+#' @param rule whether the row or column starts a block, and takes a medium
+#'   rule before it
+#' @param label whether the cell is the statistic's name
+#' @param across whether the block runs across, its rule above (`TRUE`, a
+#'   `samples_down` sheet) or down, its rule to its left
+#' @returns an openxlsx style object
+#' @noRd
+statistic_style <- function(fill, rule, label, across = TRUE) {
+  ruled <- if (across) "top" else "left"
+  sides <- c("top", "bottom", "left", "right")
+  openxlsx::createStyle(
+    fgFill = fill,
+    fontSize = 9,
+    textDecoration = if (label) "bold" else NULL,
+    halign = if (label) "left" else "right",
+    valign = "center",
+    numFmt = "GENERAL",
+    border = sides,
+    borderColour = ifelse(rule & sides == ruled, RESULTS_STATS_RULE, "#D9D9D9"),
+    borderStyle = ifelse(rule & sides == ruled, "medium", "thin")
+  )
+}
+
+
+#' Write a results table's notes below it
+#'
+#' A bold "Notes" line, then the key - each key cell styled as the cells it
+#' explains, its meaning beside it - then the plain lines, which run on to
+#' the right of their cell.
+#'
+#' @param wb the workbook
+#' @param sheet the worksheet name
+#' @param notes the notes, from `results_notes()`
+#' @param first_row the sheet row to start on
+#' @returns `wb`, invisibly, modified in place
+#' @noRd
+write_results_notes <- function(wb, sheet, notes, first_row) {
+  if (nrow(notes) == 0) {
+    return(invisible(wb))
+  }
+  openxlsx::writeData(wb, sheet, "Notes", startCol = 1, startRow = first_row)
+  openxlsx::addStyle(
+    wb,
+    sheet,
+    openxlsx::createStyle(fontSize = 9, textDecoration = "bold"),
+    rows = first_row,
+    cols = 1
+  )
+
+  for (i in seq_len(nrow(notes))) {
+    r <- first_row + i
+    key <- notes$key[[i]]
+    if (!is.na(key) && nzchar(key)) {
+      openxlsx::writeData(wb, sheet, key, startCol = 1, startRow = r)
+      openxlsx::writeData(wb, sheet, notes$meaning[[i]], startCol = 2, startRow = r)
+      openxlsx::addStyle(
+        wb,
+        sheet,
+        openxlsx::createStyle(
+          fgFill = if (!is.na(notes$fill[[i]])) notes$fill[[i]],
+          fontColour = if (notes$grey[[i]]) RESULTS_ND_FONT,
+          fontSize = 9,
+          textDecoration = if (notes$bold[[i]]) "bold",
+          halign = "center",
+          valign = "center",
+          border = "TopBottomLeftRight",
+          borderColour = "#D9D9D9",
+          borderStyle = "thin"
+        ),
+        rows = r,
+        cols = 1
+      )
+      openxlsx::addStyle(
+        wb,
+        sheet,
+        openxlsx::createStyle(fontSize = 9, valign = "center"),
+        rows = r,
+        cols = 2
+      )
+    } else {
+      openxlsx::writeData(wb, sheet, notes$meaning[[i]], startCol = 1, startRow = r)
+      openxlsx::addStyle(
+        wb,
+        sheet,
+        openxlsx::createStyle(fontSize = 9, valign = "center"),
+        rows = r,
+        cols = 1
+      )
+    }
+  }
+  invisible(wb)
+}
+
+
+#' Put a results table's title in its sheet's page header
+#'
+#' In the centre, in bold, so it prints at the top of every page without
+#' taking a row of the sheet. An "&" is a code in a page header, so one in
+#' the title is doubled to print as itself.
+#'
+#' @param wb the workbook
+#' @param sheet the worksheet name
+#' @param title the `title` argument
+#' @returns `wb`, invisibly, modified in place
+#' @noRd
+set_page_title <- function(wb, sheet, title) {
+  if (is.null(title)) {
+    return(invisible(wb))
+  }
+  openxlsx::setHeaderFooter(
+    wb,
+    sheet,
+    header = c(NA, paste0("&B", gsub("&", "&&", title, fixed = TRUE)), NA)
+  )
   invisible(wb)
 }
 

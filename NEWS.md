@@ -41,6 +41,21 @@
   * The workbook prints on A3 landscape by default (`paper_size`,
     `orientation`), with the header rows and side columns repeated on every
     page. `fit_to_width` scales it to one page wide.
+  * `statistics` adds summary rows: results, detects, minimum, maximum (the
+    highest detect, as `summary_stats()` reports it) and exceedances per
+    guideline set, plus optional mean and median. `statistics_by_group`
+    repeats them for each `group_by` group.
+  * `analytes` shows only the analytes `"detected"`, `"with_guideline"` or
+    `"exceeding"`, and leaves out samples left with nothing to show.
+  * `criteria_labels` gives the guideline sets short names in the table;
+    the notes keep their full names.
+  * `layout = "analytes_down"` puts the analytes down the side, grouped by
+    chemical group with the guidelines beside them, and the samples across
+    the top. The statistics become columns.
+  * `title` heads the table: in gt as its title, in Excel in the page header.
+    `notes` writes notes below the table: the key to the formatting, the
+    guideline sources, how the statistics were worked out, and any lines of
+    your own.
 
 * `data_processor()` and `action_level_processor()` accept a data frame as
   well as a file path, so the ESdat OData feeds read with esdatr
@@ -134,7 +149,8 @@
   tested as one series of numbers that could not be compared, giving a
   spurious trend. Each trend row now carries `output_unit`, and the series
   that were split are named in a message. Each part still needs four samples
-  to be tested. `mka_to_excel()`, `mann_kendall_heatmap()` and
+  to be tested. Results with no unit recorded are a series of their own,
+  named and labelled `"no unit"`, rather than splitting off unannounced. `mka_to_excel()`, `mann_kendall_heatmap()` and
   `mann_kendall_heatmap_bw()` give such an analyte a column or row per unit,
   named with the unit (`"Zinc (mg/L)"`); an analyte reported in one unit
   keeps its plain name. A nested series that still mixes units is an error in

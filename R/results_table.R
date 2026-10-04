@@ -17,7 +17,25 @@
 #' dissolved analyte sits beside its total: where the table holds both,
 #' "Dissolved Copper" follows "Copper" rather than filing under D.
 #' `sort_analytes_by` orders them by another column instead, such as the
-#' `chem_code`, without showing it.
+#' `chem_code`, without showing it. `analytes` keeps only those detected,
+#' with a guideline, or exceeding one - a wide suite is often mostly
+#' non-detects.
+#'
+#' `layout = "analytes_down"` turns the table on its side: analytes down the
+#' left, grouped under their chemical group, with each guideline set as a
+#' column beside them, and the samples across the top. It suits a long suite
+#' measured in few samples. Every option works in either layout.
+#'
+#' `statistics` adds summary rows - the number of results and of detects,
+#' the minimum and maximum, and the exceedances of each guideline set - over
+#' the results the table shows, and with `statistics_by_group` for each
+#' `group_by` group as well. The maximum is the highest detected result, as
+#' [summary_stats()] reports it; only where nothing was detected is it the
+#' highest LOR, written with its `<`.
+#'
+#' Notes below the table give the key to the formatting, the guideline
+#' sets' full names - shorten them in the table with `criteria_labels` - and
+#' how the statistics were worked out. `title` heads the table.
 #'
 #' In the body:
 #'
@@ -94,6 +112,37 @@
 #'   text alphabetically. Ties fall back to the name, so a dissolved analyte
 #'   sharing its total's code still sits beside it. Default `NULL`, ordering
 #'   by name.
+#' @param analytes which analytes to show: `"all"` (default); `"detected"`,
+#'   those detected at least once; `"with_guideline"`, those with a guideline
+#'   in a set shown; or `"exceeding"`, those with at least one shaded result.
+#'   A sample left with no result to show is left out too, and the notes say
+#'   what was filtered.
+#' @param criteria_labels short names for the guideline sets, used in the
+#'   table, its legend and its statistics, while the notes keep each set's
+#'   full name. Named by the set's column or its full name, e.g.
+#'   `c(criteria_99 = "ANZG 99%")`; sets not named keep their full names.
+#' @param statistics summary rows at the foot of the table: `TRUE` for the
+#'   number of results, the number of detects, the minimum, the maximum and
+#'   the exceedances of each guideline set, or a selection of `"n"`,
+#'   `"n_detects"`, `"min"`, `"max"`, `"mean"`, `"median"` and
+#'   `"exceedances"`. The mean and median are of the results as reported,
+#'   non-detects at their LOR, to 4 significant figures. An analyte with no
+#'   guideline in a set reads `-` for that set's exceedances. In
+#'   `analytes_down` they are columns at the right. Default `FALSE`.
+#' @param statistics_by_group add a block of `statistics` at the foot of each
+#'   `group_by` group as well as the whole table's. It needs both
+#'   `statistics` and `group_by`, and says so where either is missing.
+#'   Default `FALSE`.
+#' @param layout `"samples_down"` (default), one row per sample and one
+#'   column per analyte; or `"analytes_down"`, one row per analyte, grouped by
+#'   chemical group, and one column per sample.
+#' @param title the table's title. In gt, the table's heading; in Excel, the
+#'   centre of the page header, printed at the top of every page. Default
+#'   `NULL`, no title.
+#' @param notes `TRUE` (default) writes notes below the table: the key to
+#'   its formatting, each guideline set's full name, how the statistics were
+#'   worked out, any analytes filtered, and the date. `FALSE` writes none;
+#'   a character vector adds its lines after them.
 #' @param merge_cells merge a value repeated down a side column into one
 #'   block, so a well is named once against all its samples. Each column's
 #'   blocks sit within those of the column to its left - a date shared by two
@@ -158,6 +207,18 @@
 #' compared %>%
 #'   results_table(group_by = "monitoring_round", sort_analytes_by = "chem_code")
 #'
+#' # Only analytes detected, with statistics, a title and short set names
+#' compared %>%
+#'   results_table(
+#'     analytes = "detected",
+#'     statistics = TRUE,
+#'     criteria_labels = c(criteria = "ANZG 95%"),
+#'     title = "Table 3: Surface Water Analytical Results"
+#'   )
+#'
+#' # On its side: analytes down, samples across
+#' compared %>% results_table(layout = "analytes_down")
+#'
 #' # Soil: depths beside the location, under headings of your own
 #' soil %>%
 #'   results_table(
@@ -175,13 +236,20 @@ results_table <- function(
   id_cols = c("date", "sample_code", "lab_report_number"),
   group_by = NULL,
   sort_analytes_by = NULL,
+  analytes = "all",
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  criteria_labels = NULL,
+  statistics = FALSE,
+  statistics_by_group = FALSE,
   merge_cells = TRUE,
+  layout = "samples_down",
   include_zone = FALSE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
+  title = NULL,
+  notes = TRUE,
   paper_size = "A3",
   orientation = "landscape",
   header_fill = "#008768",
@@ -194,6 +262,9 @@ results_table <- function(
     reason = "to build a table with results_table()."
   )
   page <- page_spec(paper_size, orientation)
+  check_choice(layout, LAYOUTS, "layout")
+  check_title(title)
+  check_notes(notes)
 
   xtab <- results_crosstab(
     data,
@@ -203,8 +274,12 @@ results_table <- function(
     id_named = !missing(id_cols),
     group_by = group_by,
     sort_analytes_by = sort_analytes_by,
+    analytes = analytes,
     highlight_lor = highlight_lor,
     criteria_colours = criteria_colours,
+    criteria_labels = criteria_labels,
+    statistics = statistics,
+    statistics_by_group = statistics_by_group,
     merge_cells = merge_cells,
     include_zone = include_zone,
     zone_name = rlang::quo_name(rlang::enquo(zone_col)),
@@ -212,9 +287,12 @@ results_table <- function(
     location_label = location_label
   )
 
-  results_gt(
+  build <- if (identical(layout, "analytes_down")) results_gt_down else results_gt
+  build(
     xtab,
     page = page,
+    title = title,
+    notes = results_notes(xtab, notes),
     header_fill = header_fill,
     header_font = header_font,
     location_fill = location_fill,
@@ -234,9 +312,12 @@ results_table <- function(
 #' @param criteria_named whether `criteria_col` was passed at all
 #' @param id_cols the `id_cols` argument
 #' @param id_named whether `id_cols` was passed at all
-#' @param group_by,sort_analytes_by,highlight_lor,criteria_colours,merge_cells
-#'   as for [results_table()]
-#' @param include_zone,zone_label,location_label as for [results_table()]
+#' @param group_by,sort_analytes_by,analytes,highlight_lor as for
+#'   [results_table()]
+#' @param criteria_colours,criteria_labels,statistics,statistics_by_group as
+#'   for [results_table()]
+#' @param merge_cells,include_zone,zone_label,location_label as for
+#'   [results_table()]
 #' @param zone_name the zone column's name, as a string
 #' @returns a list:
 #'   * `ids`: one row per table row - the zone, the location and the
@@ -253,12 +334,18 @@ results_table <- function(
 #'     non-detect, `NA` where the sample was not analysed for the analyte;
 #'   * `fill`: matrix of the guideline set each cell is shaded for, `NA` for
 #'     none;
-#'   * `sets`, `set_labels`, `set_colours`: each guideline set's column, the
-#'     name it is shown under and its colour;
+#'   * `hits`: one logical matrix per set, of the cells exceeding it - every
+#'     set a cell exceeds, where `fill` names only the highest;
+#'   * `sets`, `set_labels`, `set_names`, `set_colours`: each guideline set's
+#'     column, the name it is shown under, its full name and its colour;
 #'   * `guideline_value`, `guideline_text`: matrices, one row per set and one
 #'     column per analyte, of the guideline as a number (`NA` where there is
 #'     none, or a range) and as text (`""` where there is none);
-#'   * `highlight_lor`.
+#'   * `stats`: the summary statistics, from `results_statistics()`;
+#'   * `axis`: what runs along the sample direction, in order, from
+#'     `sample_axis()`;
+#'   * `filtered`: what `analytes` left out, for the notes; `shared`: the
+#'     number of cells whose results differed; `highlight_lor`.
 #' @noRd
 results_crosstab <- function(
   data,
@@ -268,8 +355,12 @@ results_crosstab <- function(
   id_named,
   group_by = NULL,
   sort_analytes_by = NULL,
+  analytes = "all",
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  criteria_labels = NULL,
+  statistics = FALSE,
+  statistics_by_group = FALSE,
   merge_cells = TRUE,
   include_zone = FALSE,
   zone_name = "monitoring_zone",
@@ -279,6 +370,11 @@ results_crosstab <- function(
   check_flag(highlight_lor, "highlight_lor")
   check_flag(include_zone, "include_zone")
   check_flag(merge_cells, "merge_cells")
+  check_flag(statistics_by_group, "statistics_by_group")
+  check_choice(analytes, ANALYTE_FILTERS, "analytes")
+  # `analytes` names the table of analyte columns below.
+  analyte_filter <- analytes
+  statistics <- resolve_statistics(statistics)
 
   if (!is.data.frame(data)) {
     stop("`data` must be a data frame of results from data_processor().")
@@ -335,6 +431,17 @@ results_crosstab <- function(
   lead <- c(if (include_zone) zone_name, "location_code", unname(ids))
   groups <- resolve_named_columns(group_by, data, "group_by")
   sort_cols <- unname(resolve_named_columns(sort_analytes_by, data, "sort_analytes_by"))
+  lacking <- c(
+    if (length(groups) == 0) "`group_by`",
+    if (length(statistics) == 0) "`statistics`"
+  )
+  if (statistics_by_group && length(lacking) > 0) {
+    message(
+      "`statistics_by_group = TRUE` does nothing without ",
+      paste(lacking, collapse = " and "),
+      "; no statistics were added for each group."
+    )
+  }
 
   sets <- criteria_columns(
     criteria_col,
@@ -352,6 +459,14 @@ results_crosstab <- function(
         "Join it with join_action_levels(), which writes them."
       )
     }
+  }
+  if (length(sets) == 0 && analyte_filter %in% c("with_guideline", "exceeding")) {
+    stop(
+      "`analytes = \"", analyte_filter, "\"` keeps analytes by their ",
+      "guidelines, but no guideline set is shown. Name the sets in ",
+      "`criteria_col`, or use analytes = \"all\".",
+      call. = FALSE
+    )
   }
 
   conc <- suppressWarnings(as.numeric(data$concentration))
@@ -435,7 +550,8 @@ results_crosstab <- function(
   k <- length(sets)
   guideline_value <- matrix(NA_real_, k, n_col)
   guideline_text <- matrix("", k, n_col)
-  set_labels <- character(0)
+  set_names <- character(0)
+  hits <- list()
 
   if (k > 0) {
     crit <- set_matrix(data, sets, as.numeric)
@@ -456,6 +572,13 @@ results_crosstab <- function(
     hit[is.na(hit)] <- FALSE
     winner <- highest_exceeded(hit, crit)
     fill_m[at] <- sets[winner[kept]]
+    # Every set each shown result exceeds, not only the highest: the
+    # statistics count each set's exceedances.
+    hits <- lapply(seq_len(k), function(j) {
+      exceeded <- matrix(FALSE, n_row, n_col)
+      exceeded[at] <- hit[kept, j]
+      exceeded
+    })
 
     joined_lor <- sum(rowSums(exceeds[kept, , drop = FALSE] & nd[kept],
       na.rm = TRUE
@@ -492,18 +615,60 @@ results_crosstab <- function(
     }
 
     recorded <- recorded_set_names(list(data), sets)
-    set_labels <- vapply(
+    set_names <- vapply(
       seq_len(k),
       function(j) criteria_set_label(recorded[[j]], sets[[j]], several = TRUE),
       character(1)
     )
     # Two sets joined under one name are told apart by their columns.
-    clash <- duplicated(set_labels) | duplicated(set_labels, fromLast = TRUE)
-    set_labels[clash] <- paste0(set_labels[clash], " (", sets[clash], ")")
+    clash <- duplicated(set_names) | duplicated(set_names, fromLast = TRUE)
+    set_names[clash] <- paste0(set_names[clash], " (", sets[clash], ")")
   }
 
+  # --- which analytes to show, and the samples left with something to show
+  shown <- analytes_to_show(analyte_filter, conc_m, nd_m, fill_m, guideline_text)
+  filtered <- list(
+    analytes = analyte_filter,
+    shown = sum(shown),
+    of = n_col,
+    dropped_rows = 0L
+  )
+  if (!all(shown)) {
+    if (!any(shown)) {
+      stop(
+        ANALYTE_FILTER_EMPTY[[analyte_filter]],
+        ", so the table would be empty. Use analytes = \"all\".",
+        call. = FALSE
+      )
+    }
+    keep_rows <- rowSums(!is.na(conc_m[, shown, drop = FALSE])) > 0
+    filtered$dropped_rows <- sum(!keep_rows)
+    message(
+      "Showing ", sum(shown), " of ", n_col, " analytes (",
+      ANALYTE_FILTER_TEXT[[analyte_filter]], ")",
+      if (filtered$dropped_rows > 0) {
+        paste0(
+          "; ", filtered$dropped_rows,
+          " sample(s) left with no result to show were left out"
+        )
+      },
+      "."
+    )
+    analytes <- analytes[shown, , drop = FALSE]
+    rownames(analytes) <- NULL
+    conc_m <- conc_m[keep_rows, shown, drop = FALSE]
+    nd_m <- nd_m[keep_rows, shown, drop = FALSE]
+    fill_m <- fill_m[keep_rows, shown, drop = FALSE]
+    hits <- lapply(hits, function(m) m[keep_rows, shown, drop = FALSE])
+    guideline_value <- guideline_value[, shown, drop = FALSE]
+    guideline_text <- guideline_text[, shown, drop = FALSE]
+    rows <- rows[keep_rows, , drop = FALSE]
+    group <- group[keep_rows]
+  }
+
+  set_labels <- short_set_labels(criteria_labels, sets, set_names)
   ids_out <- rows[lead]
-  list(
+  xtab <- list(
     ids = ids_out,
     id_labels = c(if (include_zone) zone_label, location_label, names(ids)),
     include_zone = include_zone,
@@ -514,13 +679,25 @@ results_crosstab <- function(
     conc = conc_m,
     nd = nd_m,
     fill = fill_m,
+    hits = hits,
     sets = sets,
     set_labels = set_labels,
-    set_colours = unname(resolve_set_colours(criteria_colours, sets, set_labels)),
+    set_names = set_names,
+    set_colours = unname(resolve_set_colours(
+      criteria_colours,
+      sets,
+      set_names,
+      set_labels
+    )),
     guideline_value = guideline_value,
     guideline_text = guideline_text,
-    highlight_lor = highlight_lor
+    highlight_lor = highlight_lor,
+    filtered = filtered,
+    shared = shared
   )
+  xtab$stats <- results_statistics(xtab, statistics, statistics_by_group)
+  xtab$axis <- sample_axis(xtab$group, nrow(conc_m), xtab$stats)
+  xtab
 }
 
 
@@ -958,10 +1135,11 @@ RESULTS_ND_FONT <- "#808080"
 #'
 #' @param colours the `criteria_colours` argument
 #' @param sets the sets' columns
-#' @param labels the names the sets are shown under
+#' @param full the sets' full names
+#' @param labels the names the sets are shown under, from `criteria_labels`
 #' @returns a character vector of colours, one per set, named by set column
 #' @noRd
-resolve_set_colours <- function(colours, sets, labels) {
+resolve_set_colours <- function(colours, sets, full, labels = full) {
   k <- length(sets)
   if (k == 0) {
     return(stats::setNames(character(0), character(0)))
@@ -999,20 +1177,68 @@ resolve_set_colours <- function(colours, sets, labels) {
     return(out)
   }
 
-  where <- match(nms, sets)
-  where[is.na(where)] <- match(nms[is.na(where)], labels)
+  out[match_sets(nms, sets, full, labels, "criteria_colours")] <- unname(colours)
+  out
+}
+
+
+#' Find the guideline sets an argument's names refer to
+#'
+#' A set can be named by its column, its full name or the short label
+#' `criteria_labels` gave it.
+#'
+#' @param keys the names given
+#' @param sets,full,labels the sets' columns, full names and labels
+#' @param arg the argument's name, for the error
+#' @returns the index of the set each key names
+#' @noRd
+match_sets <- function(keys, sets, full, labels = full, arg) {
+  where <- match(keys, sets)
+  where[is.na(where)] <- match(keys[is.na(where)], full)
+  where[is.na(where)] <- match(keys[is.na(where)], labels)
   if (anyNA(where)) {
     stop(
-      "`criteria_colours` names no guideline set in the table: ",
-      toString(nms[is.na(where)]),
+      "`", arg, "` names no guideline set in the table: ",
+      toString(keys[is.na(where)]),
       ". Name a set by its column (",
       toString(sets),
       ") or by its name (",
-      toString(labels),
-      ")."
+      toString(unique(c(full, labels))),
+      ").",
+      call. = FALSE
     )
   }
-  out[where] <- unname(colours)
+  where
+}
+
+
+#' The names the guideline sets are shown under
+#'
+#' @param criteria_labels the `criteria_labels` argument
+#' @param sets the sets' columns
+#' @param full the sets' full names
+#' @returns a character vector, one per set: its short label where given,
+#'   its full name otherwise
+#' @noRd
+short_set_labels <- function(criteria_labels, sets, full) {
+  if (is.null(criteria_labels) || length(criteria_labels) == 0) {
+    return(full)
+  }
+  keys <- names(criteria_labels)
+  if (
+    !is.character(criteria_labels) ||
+      is.null(keys) ||
+      any(is.na(keys) | !nzchar(keys))
+  ) {
+    stop(
+      "`criteria_labels` must be a named character vector, e.g. ",
+      "c(criteria_99 = \"ANZG 99%\").",
+      call. = FALSE
+    )
+  }
+  out <- full
+  out[match_sets(keys, sets, full, arg = "criteria_labels")] <-
+    unname(criteria_labels)
   out
 }
 
@@ -1028,6 +1254,446 @@ check_flag <- function(x, arg) {
     stop("`", arg, "` must be TRUE or FALSE.", call. = FALSE)
   }
   invisible(NULL)
+}
+
+
+#' Stop unless an argument is one of its choices
+#'
+#' @param x the argument's value
+#' @param choices the values it may take
+#' @param arg the argument's name
+#' @returns `NULL`, invisibly
+#' @noRd
+check_choice <- function(x, choices, arg) {
+  if (!is.character(x) || length(x) != 1 || !x %in% choices) {
+    stop(
+      "`", arg, "` must be one of ",
+      toString(paste0("\"", choices, "\"")),
+      ".",
+      call. = FALSE
+    )
+  }
+  invisible(NULL)
+}
+
+
+#' Stop unless `title` is a single string or NULL
+#'
+#' @param title the `title` argument
+#' @returns `NULL`, invisibly
+#' @noRd
+check_title <- function(title) {
+  if (!is.null(title) && (!is.character(title) || length(title) != 1)) {
+    stop("`title` must be a single string, or NULL.", call. = FALSE)
+  }
+  invisible(NULL)
+}
+
+
+#' Stop unless `notes` is TRUE, FALSE or lines of text
+#'
+#' @param notes the `notes` argument
+#' @returns `NULL`, invisibly
+#' @noRd
+check_notes <- function(notes) {
+  ok <- (is.logical(notes) && length(notes) == 1 && !is.na(notes)) ||
+    is.character(notes)
+  if (!ok) {
+    stop(
+      "`notes` must be TRUE, FALSE or a character vector of lines to add.",
+      call. = FALSE
+    )
+  }
+  invisible(NULL)
+}
+
+
+# The layouts a results table comes in.
+LAYOUTS <- c("samples_down", "analytes_down")
+
+# What `analytes` may keep, and how each is said in the notes and messages.
+ANALYTE_FILTERS <- c("all", "detected", "with_guideline", "exceeding")
+ANALYTE_FILTER_TEXT <- c(
+  all = "shown",
+  detected = "detected in at least one sample",
+  with_guideline = "with a guideline in a set shown",
+  exceeding = "exceeding a guideline at least once"
+)
+# The error where a filter leaves nothing to show.
+ANALYTE_FILTER_EMPTY <- c(
+  detected = "No analyte in `data` was detected",
+  with_guideline = "No analyte in `data` has a guideline in the sets shown",
+  exceeding = "No result in `data` exceeds a guideline"
+)
+
+
+#' Which analyte columns `analytes` keeps
+#'
+#' @param filter the `analytes` argument
+#' @param conc,nd,fill the crosstab's matrices
+#' @param guideline_text the guidelines, one row per set
+#' @returns a logical vector, one per analyte column
+#' @noRd
+analytes_to_show <- function(filter, conc, nd, fill, guideline_text) {
+  switch(
+    filter,
+    all = rep(TRUE, ncol(conc)),
+    detected = colSums(!is.na(conc) & !nd, na.rm = TRUE) > 0,
+    # nzchar() drops a matrix's shape.
+    with_guideline = colSums(matrix(
+      nzchar(guideline_text),
+      nrow = nrow(guideline_text),
+      ncol = ncol(guideline_text)
+    )) > 0,
+    exceeding = colSums(!is.na(fill)) > 0
+  )
+}
+
+
+# The statistics a table can carry, in the order they are written, and the
+# set `statistics = TRUE` gives.
+STATISTICS <- c("n", "n_detects", "min", "max", "mean", "median", "exceedances")
+STATISTICS_DEFAULT <- c("n", "n_detects", "min", "max", "exceedances")
+STATISTIC_LABELS <- c(
+  n = "Results (n)",
+  n_detects = "Detects (n)",
+  min = "Minimum",
+  max = "Maximum",
+  mean = "Mean",
+  median = "Median"
+)
+
+
+#' Settle which statistics to show
+#'
+#' @param statistics the `statistics` argument
+#' @returns a character vector of `STATISTICS`, in their written order
+#' @noRd
+resolve_statistics <- function(statistics) {
+  if (is.null(statistics) || isFALSE(statistics)) {
+    return(character(0))
+  }
+  if (isTRUE(statistics)) {
+    return(STATISTICS_DEFAULT)
+  }
+  if (!is.character(statistics)) {
+    stop(
+      "`statistics` must be TRUE, FALSE or a selection of ",
+      toString(paste0("\"", STATISTICS, "\"")),
+      ".",
+      call. = FALSE
+    )
+  }
+  unknown <- setdiff(statistics, STATISTICS)
+  if (length(unknown) > 0) {
+    stop(
+      "`statistics` names no statistic gRs reports: ",
+      toString(unknown),
+      ". Choose from ",
+      toString(paste0("\"", STATISTICS, "\"")),
+      ".",
+      call. = FALSE
+    )
+  }
+  STATISTICS[STATISTICS %in% statistics]
+}
+
+
+#' Work out the summary statistics a table carries
+#'
+#' Over the results the table shows - one per cell - for each analyte
+#' column: the whole table's, and with `by_group` each group's too.
+#'
+#' @param xtab a crosstab, as `results_crosstab()` builds it
+#' @param which the statistics, from `resolve_statistics()`
+#' @param by_group also work them out for each `group_by` group
+#' @returns a list: `text` and `value`, matrices with a row per statistic
+#'   and a column per analyte - the statistic as shown, and as a number
+#'   where it is one (`NA` for a `<` value or nothing to report); `label`;
+#'   `set`, the guideline set an exceedance row counts (`NA` otherwise);
+#'   `scope`, the group a row describes (`NA` for the whole table); and
+#'   `first`, whether a row starts its block
+#' @noRd
+results_statistics <- function(xtab, which, by_group) {
+  n_col <- ncol(xtab$conc)
+  empty <- list(
+    text = matrix("", 0, n_col),
+    value = matrix(NA_real_, 0, n_col),
+    label = character(0),
+    set = integer(0),
+    scope = character(0),
+    first = logical(0)
+  )
+  if (length(which) == 0) {
+    return(empty)
+  }
+
+  scopes <- list()
+  if (by_group && !is.null(xtab$group)) {
+    for (g in unique(xtab$group)) {
+      scopes[[length(scopes) + 1]] <- list(scope = g, rows = which(xtab$group == g))
+    }
+  }
+  scopes[[length(scopes) + 1]] <- list(
+    scope = NA_character_,
+    rows = seq_len(nrow(xtab$conc))
+  )
+
+  blocks <- lapply(scopes, function(s) {
+    block <- statistic_block(xtab, which, s$rows)
+    block$scope <- rep(s$scope, length(block$label))
+    block$first <- seq_along(block$label) == 1
+    block
+  })
+  list(
+    text = do.call(rbind, c(list(empty$text), lapply(blocks, `[[`, "text"))),
+    value = do.call(rbind, c(list(empty$value), lapply(blocks, `[[`, "value"))),
+    label = unlist(lapply(blocks, `[[`, "label")),
+    set = unlist(lapply(blocks, `[[`, "set")),
+    scope = unlist(lapply(blocks, `[[`, "scope")),
+    first = unlist(lapply(blocks, `[[`, "first"))
+  )
+}
+
+
+#' One block of summary statistics, over some of a table's rows
+#'
+#' @param xtab a crosstab
+#' @param which the statistics
+#' @param rows the rows of the crosstab the block describes
+#' @returns a list of `text`, `value`, `label` and `set`, as
+#'   `results_statistics()` returns them
+#' @noRd
+statistic_block <- function(xtab, which, rows) {
+  n_col <- ncol(xtab$conc)
+  text <- list()
+  value <- list()
+  label <- character(0)
+  set <- integer(0)
+
+  for (stat in which) {
+    if (identical(stat, "exceedances")) {
+      for (j in seq_along(xtab$sets)) {
+        counts <- vapply(
+          seq_len(n_col),
+          function(cc) {
+            has <- !is.na(xtab$conc[rows, cc])
+            # Nothing to exceed, or nothing to count: a 0 would read as
+            # compliance.
+            if (!nzchar(xtab$guideline_text[j, cc]) || !any(has)) {
+              return(NA_real_)
+            }
+            as.numeric(sum(xtab$hits[[j]][rows, cc] & has))
+          },
+          numeric(1)
+        )
+        text[[length(text) + 1]] <- ifelse(
+          is.na(counts),
+          STATS_NA,
+          format(counts, trim = TRUE)
+        )
+        value[[length(value) + 1]] <- counts
+        label <- c(label, paste0("Exceedances: ", xtab$set_labels[[j]]))
+        set <- c(set, j)
+      }
+      next
+    }
+    cells <- lapply(seq_len(n_col), function(cc) {
+      one_statistic(stat, xtab$conc[rows, cc], xtab$nd[rows, cc])
+    })
+    text[[length(text) + 1]] <- vapply(cells, `[[`, "", "text")
+    value[[length(value) + 1]] <- vapply(cells, `[[`, 0, "value")
+    label <- c(label, STATISTIC_LABELS[[stat]])
+    set <- c(set, NA_integer_)
+  }
+
+  list(
+    text = matrix(unlist(text), ncol = n_col, byrow = TRUE),
+    value = matrix(unlist(value), ncol = n_col, byrow = TRUE),
+    label = label,
+    set = set
+  )
+}
+
+
+#' One statistic of one analyte's results
+#'
+#' The minimum and maximum follow [summary_stats()]: the maximum is the
+#' highest detect, and only where nothing was detected the highest LOR, with
+#' its `<`; the minimum carries a `<` where a non-detect is the lowest.
+#'
+#' @param stat the statistic
+#' @param conc,nd the results and whether each is a non-detect
+#' @returns list(text, value): as shown, and as a number where it is one
+#' @noRd
+one_statistic <- function(stat, conc, nd) {
+  keep <- !is.na(conc)
+  x <- conc[keep]
+  flag <- ifelse(nd[keep], "N", "Y")
+  count <- function(n) list(text = format(n), value = as.numeric(n))
+  if (identical(stat, "n")) {
+    return(count(length(x)))
+  }
+  if (identical(stat, "n_detects")) {
+    return(count(sum(flag == "Y")))
+  }
+  if (length(x) == 0) {
+    return(list(text = STATS_NA, value = NA_real_))
+  }
+  extreme <- function(v, below) {
+    if (below) {
+      list(text = paste0("<", format_reported(v)), value = NA_real_)
+    } else {
+      list(text = format_reported(v), value = v)
+    }
+  }
+  switch(
+    stat,
+    min = extreme(safe_min(x), nd_extremes(x, flag)[[1]]),
+    max = extreme(max_detected(x, flag), nd_extremes(x, flag)[[2]]),
+    mean = {
+      v <- signif(mean(x), 4)
+      list(text = format_reported(v), value = v)
+    },
+    median = {
+      v <- signif(stats::median(x), 4)
+      list(text = format_reported(v), value = v)
+    }
+  )
+}
+
+
+#' What runs along a table's sample direction, in order
+#'
+#' Each group's banner, then its samples, then its statistics; the whole
+#' table's statistics last. The rows of a `samples_down` table, and the
+#' columns of an `analytes_down` one.
+#'
+#' @param group each sample's group, or `NULL`
+#' @param n the number of samples
+#' @param stats the statistics, from `results_statistics()`
+#' @returns a data frame of `kind` (`"banner"`, `"sample"` or `"stat"`),
+#'   `index` (the sample, or the statistic's row in `stats`) and `group`
+#' @noRd
+sample_axis <- function(group, n, stats) {
+  overall <- which(is.na(stats$scope))
+  entry <- function(kind, index, group) {
+    data.frame(
+      kind = rep(kind, length(index)),
+      index = as.integer(index),
+      group = rep(group, length(index)),
+      stringsAsFactors = FALSE
+    )
+  }
+  if (is.null(group)) {
+    return(rbind(
+      entry("sample", seq_len(n), NA_character_),
+      entry("stat", overall, NA_character_)
+    ))
+  }
+  parts <- lapply(unique(group), function(g) {
+    rbind(
+      entry("banner", NA_integer_, g),
+      entry("sample", which(group == g), g),
+      entry("stat", which(!is.na(stats$scope) & stats$scope == g), g)
+    )
+  })
+  rbind(do.call(rbind, parts), entry("stat", overall, NA_character_))
+}
+
+
+#' The notes written below a results table
+#'
+#' @param xtab a crosstab
+#' @param notes the `notes` argument
+#' @returns a data frame as `results_legend()` returns, with a `key` of
+#'   `NA` for a line of plain text; no rows where `notes = FALSE`
+#' @noRd
+results_notes <- function(xtab, notes) {
+  if (isFALSE(notes)) {
+    return(results_legend(xtab)[0, ])
+  }
+  line <- function(text) {
+    data.frame(
+      key = NA_character_,
+      meaning = text,
+      fill = NA_character_,
+      bold = FALSE,
+      grey = FALSE,
+      stringsAsFactors = FALSE
+    )
+  }
+  out <- list(results_legend(xtab))
+
+  # Each set by the name it is shown under, its full name beside a short one.
+  if (length(xtab$sets) > 0) {
+    named <- ifelse(
+      xtab$set_labels == xtab$set_names,
+      xtab$set_names,
+      paste0(xtab$set_labels, " (", xtab$set_names, ")")
+    )
+    out[[length(out) + 1]] <- line(paste0(
+      if (length(named) > 1) "Guidelines: " else "Guideline: ",
+      paste(named, collapse = "; "),
+      "."
+    ))
+  }
+
+  shown <- xtab$stats$label
+  if (length(shown) > 0) {
+    if ("Minimum" %in% shown || "Maximum" %in% shown) {
+      out[[length(out) + 1]] <- line(paste(
+        "Minimum: the lowest result, with < where a non-detect is the lowest.",
+        "Maximum: the highest detected result; where nothing was detected,",
+        "the highest LOR, with <."
+      ))
+    }
+    if ("Mean" %in% shown || "Median" %in% shown) {
+      out[[length(out) + 1]] <- line(paste(
+        "Mean and median: of the results as reported, with non-detects at",
+        "their LOR, to 4 significant figures."
+      ))
+    }
+    if (any(!is.na(xtab$stats$set))) {
+      out[[length(out) + 1]] <- line(paste0(
+        "Exceedances: the results above each guideline",
+        if (xtab$highlight_lor) {
+          ", counting non-detects whose LOR is above it"
+        } else {
+          ""
+        },
+        "; - where an analyte has no guideline in that set."
+      ))
+    }
+    if (any(!is.na(xtab$stats$scope))) {
+      out[[length(out) + 1]] <- line(
+        "Statistics are given for each group and for the whole table."
+      )
+    }
+  }
+
+  filtered <- xtab$filtered
+  if (!identical(filtered$analytes, "all")) {
+    out[[length(out) + 1]] <- line(paste0(
+      "Only analytes ", ANALYTE_FILTER_TEXT[[filtered$analytes]],
+      " are shown (", filtered$shown, " of ", filtered$of, ")."
+    ))
+  }
+  if (xtab$shared > 0) {
+    out[[length(out) + 1]] <- line(paste(
+      "Where a sample has more than one result for an analyte, the highest",
+      "detected result is shown, or the highest LOR where none was detected."
+    ))
+  }
+  out[[length(out) + 1]] <- line(paste0(
+    "Generated ", format(Sys.Date(), "%d/%m/%Y"), " with gRs."
+  ))
+  if (is.character(notes)) {
+    for (extra in notes) {
+      out[[length(out) + 1]] <- line(extra)
+    }
+  }
+  do.call(rbind, out)
 }
 
 
@@ -1164,18 +1830,26 @@ escape_html <- function(x) {
 }
 
 
-#' Build the gt table from a crosstab
+# The fill behind a block of summary statistics, and the rule above it.
+RESULTS_STATS_FILL <- "#F2F2F2"
+RESULTS_STATS_RULE <- "#7F7F7F"
+
+
+#' Build the gt table from a crosstab, samples down
 #'
 #' The guideline sets are the first rows of the body, shaded in their
 #' colours, since gt has no header row to hold a value per column. The
 #' analyte's unit goes under its name in the column label. With `group_by`,
-#' the guideline rows are a row group of their own ahead of the banners.
+#' the guideline rows are a row group of their own ahead of the banners, and
+#' the whole table's statistics a row group after them.
 #'
 #' gt cannot merge cells, so a merged block is drawn by blanking the repeats
 #' below its first row and hiding the lines between them.
 #'
 #' @param xtab a crosstab from `results_crosstab()`
 #' @param page the printed page, from `page_spec()`
+#' @param title the `title` argument
+#' @param notes the notes, from `results_notes()`
 #' @param header_fill,header_font,location_fill,location_font as for
 #'   [results_table()]
 #' @returns a `gt_tbl`
@@ -1183,6 +1857,8 @@ escape_html <- function(x) {
 results_gt <- function(
   xtab,
   page,
+  title,
+  notes,
   header_fill,
   header_font,
   location_fill,
@@ -1194,9 +1870,8 @@ results_gt <- function(
   k <- length(xtab$sets)
   lead_names <- paste0(".id_", seq_len(n_lead))
   analyte_names <- paste0(".analyte_", seq_len(n_col))
+  stats <- xtab$stats
 
-  set_rows <- matrix("", k, n_lead)
-  set_rows[, 1] <- xtab$set_labels
   ids <- matrix(
     unlist(lapply(xtab$ids, format_id_values), use.names = FALSE),
     nrow = n_row
@@ -1210,16 +1885,40 @@ results_gt <- function(
     }
     ids[repeats] <- ""
   }
+  cells <- result_cell_text(xtab$conc, xtab$nd)
+
+  # The body below the guideline rows, in the order the axis gives: each
+  # group's samples and statistics, the whole table's statistics last.
+  axis <- xtab$axis[xtab$axis$kind != "banner", , drop = FALSE]
+  is_sample <- axis$kind == "sample"
+  lines_lead <- matrix("", nrow(axis), n_lead)
+  lines_value <- matrix("", nrow(axis), n_col)
+  lines_lead[is_sample, ] <- ids[axis$index[is_sample], , drop = FALSE]
+  lines_value[is_sample, ] <- cells[axis$index[is_sample], , drop = FALSE]
+  lines_lead[!is_sample, 1] <- stats$label[axis$index[!is_sample]]
+  lines_value[!is_sample, ] <- stats$text[axis$index[!is_sample], , drop = FALSE]
+
+  set_rows <- matrix("", k, n_lead)
+  set_rows[, 1] <- xtab$set_labels
   body <- rbind(
     cbind(set_rows, xtab$guideline_text),
-    cbind(ids, result_cell_text(xtab$conc, xtab$nd))
+    cbind(lines_lead, lines_value)
   )
   body <- as.data.frame(body, stringsAsFactors = FALSE)
   names(body) <- c(lead_names, analyte_names)
 
+  body_row <- k + seq_len(nrow(axis))
+  sample_row <- integer(n_row)
+  sample_row[axis$index[is_sample]] <- body_row[is_sample]
+  stat_row <- body_row[!is_sample]
+  stat_index <- axis$index[!is_sample]
+
   grouped <- !is.null(xtab$group)
   if (grouped) {
-    body$.group <- c(rep("Guideline values", k), xtab$group)
+    body$.group <- c(
+      rep("Guideline values", k),
+      ifelse(is.na(axis$group), "Summary statistics", axis$group)
+    )
     tbl <- gt::gt(body, groupname_col = ".group")
   } else {
     tbl <- gt::gt(body)
@@ -1259,31 +1958,7 @@ results_gt <- function(
 
   tbl <- gt::cols_align(tbl, align = "left", columns = lead_names)
   tbl <- gt::cols_align(tbl, align = "right", columns = analyte_names)
-
-  tbl <- gt::tab_options(
-    tbl,
-    table.font.size = gt::px(12),
-    column_labels.background.color = header_fill,
-    column_labels.font.weight = "bold",
-    data_row.padding = gt::px(3),
-    table_body.hlines.color = "#D9D9D9",
-    table_body.vlines.style = "solid",
-    table_body.vlines.color = "#D9D9D9",
-    table_body.vlines.width = gt::px(1),
-    source_notes.font.size = gt::px(11),
-    page.orientation = page$orientation,
-    page.width = paste0(page$width, "in"),
-    page.height = paste0(page$height, "in")
-  )
-  header_cells <- list(gt::cells_column_labels())
-  if (spanned) {
-    header_cells <- c(header_cells, list(gt::cells_column_spanners()))
-  }
-  tbl <- gt::tab_style(
-    tbl,
-    style = gt::cell_text(color = header_font, weight = "bold"),
-    locations = header_cells
-  )
+  tbl <- gt_house_style(tbl, page, header_fill, header_font, spanned)
 
   # --- the guideline rows
   for (j in seq_len(k)) {
@@ -1310,79 +1985,117 @@ results_gt <- function(
     )
   }
 
-  if (n_row > 0) {
-    result_rows <- k + seq_len(n_row)
+  # --- the zone and location, as the house sheets set them
+  id_style <- function(fill, font) {
+    list(gt::cell_fill(color = fill), gt::cell_text(color = font, weight = "bold"))
+  }
+  if (xtab$include_zone) {
+    tbl <- gt::tab_style(
+      tbl,
+      style = id_style(header_fill, header_font),
+      locations = gt::cells_body(columns = lead_names[[1]], rows = sample_row)
+    )
+    tbl <- gt::tab_style(
+      tbl,
+      style = id_style(location_fill, location_font),
+      locations = gt::cells_body(columns = lead_names[[2]], rows = sample_row)
+    )
+  } else {
+    tbl <- gt::tab_style(
+      tbl,
+      style = id_style(header_fill, header_font),
+      locations = gt::cells_body(columns = lead_names[[1]], rows = sample_row)
+    )
+  }
 
-    # --- the zone and location, as the house sheets set them
-    id_style <- function(fill, font) {
-      list(gt::cell_fill(color = fill), gt::cell_text(color = font, weight = "bold"))
-    }
-    if (xtab$include_zone) {
+  # --- merged blocks: no line between a block's rows
+  for (j in seq_len(n_lead)) {
+    continuing <- which(repeats[, j])
+    if (length(continuing) > 0) {
       tbl <- gt::tab_style(
         tbl,
-        style = id_style(header_fill, header_font),
-        locations = gt::cells_body(columns = lead_names[[1]], rows = result_rows)
-      )
-      tbl <- gt::tab_style(
-        tbl,
-        style = id_style(location_fill, location_font),
-        locations = gt::cells_body(columns = lead_names[[2]], rows = result_rows)
-      )
-    } else {
-      tbl <- gt::tab_style(
-        tbl,
-        style = id_style(header_fill, header_font),
-        locations = gt::cells_body(columns = lead_names[[1]], rows = result_rows)
+        style = gt::cell_borders(sides = "top", style = "hidden"),
+        locations = gt::cells_body(
+          columns = lead_names[[j]],
+          rows = sample_row[continuing]
+        )
       )
     }
+  }
 
-    # --- merged blocks: no line between a block's rows
-    for (j in seq_len(n_lead)) {
-      continuing <- which(repeats[, j])
-      if (length(continuing) > 0) {
+  # --- the results: bold detects, grey non-detects, shaded exceedances
+  for (cc in seq_len(n_col)) {
+    has <- !is.na(xtab$conc[, cc])
+    nd <- xtab$nd[, cc] %in% TRUE
+    column <- analyte_names[[cc]]
+    detects <- which(has & !nd)
+    faded <- which(!has | nd)
+    if (length(detects) > 0) {
+      tbl <- gt::tab_style(
+        tbl,
+        style = gt::cell_text(weight = "bold"),
+        locations = gt::cells_body(columns = column, rows = sample_row[detects])
+      )
+    }
+    if (length(faded) > 0) {
+      tbl <- gt::tab_style(
+        tbl,
+        style = gt::cell_text(color = RESULTS_ND_FONT),
+        locations = gt::cells_body(columns = column, rows = sample_row[faded])
+      )
+    }
+    for (j in seq_len(k)) {
+      shaded <- which(xtab$fill[, cc] %in% xtab$sets[[j]])
+      if (length(shaded) > 0) {
         tbl <- gt::tab_style(
           tbl,
-          style = gt::cell_borders(sides = "top", style = "hidden"),
-          locations = gt::cells_body(
-            columns = lead_names[[j]],
-            rows = k + continuing
-          )
+          style = gt::cell_fill(color = xtab$set_colours[[j]]),
+          locations = gt::cells_body(columns = column, rows = sample_row[shaded])
         )
       }
     }
+  }
 
-    # --- the results: bold detects, grey non-detects, shaded exceedances
-    for (cc in seq_len(n_col)) {
-      has <- !is.na(xtab$conc[, cc])
-      nd <- xtab$nd[, cc] %in% TRUE
-      column <- analyte_names[[cc]]
-      detects <- which(has & !nd)
-      faded <- which(!has | nd)
-      if (length(detects) > 0) {
-        tbl <- gt::tab_style(
-          tbl,
-          style = gt::cell_text(weight = "bold"),
-          locations = gt::cells_body(columns = column, rows = k + detects)
-        )
-      }
-      if (length(faded) > 0) {
-        tbl <- gt::tab_style(
-          tbl,
-          style = gt::cell_text(color = RESULTS_ND_FONT),
-          locations = gt::cells_body(columns = column, rows = k + faded)
-        )
-      }
-      for (j in seq_len(k)) {
-        shaded <- which(xtab$fill[, cc] %in% xtab$sets[[j]])
-        if (length(shaded) > 0) {
-          tbl <- gt::tab_style(
-            tbl,
-            style = gt::cell_fill(color = xtab$set_colours[[j]]),
-            locations = gt::cells_body(columns = column, rows = k + shaded)
-          )
-        }
-      }
+  # --- the statistics: grey rows, each exceedance label in its set's colour
+  if (length(stat_row) > 0) {
+    tbl <- gt::tab_style(
+      tbl,
+      style = gt::cell_fill(color = RESULTS_STATS_FILL),
+      locations = gt::cells_body(columns = c(lead_names[-1], analyte_names), rows = stat_row)
+    )
+    set_of <- stats$set[stat_index]
+    plain <- stat_row[is.na(set_of)]
+    if (length(plain) > 0) {
+      tbl <- gt::tab_style(
+        tbl,
+        style = gt::cell_fill(color = RESULTS_STATS_FILL),
+        locations = gt::cells_body(columns = lead_names[[1]], rows = plain)
+      )
     }
+    for (j in unique(stats::na.omit(set_of))) {
+      tbl <- gt::tab_style(
+        tbl,
+        style = gt::cell_fill(color = xtab$set_colours[[j]]),
+        locations = gt::cells_body(
+          columns = lead_names[[1]],
+          rows = stat_row[set_of %in% j]
+        )
+      )
+    }
+    tbl <- gt::tab_style(
+      tbl,
+      style = gt::cell_text(weight = "bold"),
+      locations = gt::cells_body(columns = lead_names[[1]], rows = stat_row)
+    )
+    tbl <- gt::tab_style(
+      tbl,
+      style = gt::cell_borders(
+        sides = "top",
+        color = RESULTS_STATS_RULE,
+        weight = gt::px(2)
+      ),
+      locations = gt::cells_body(rows = stat_row[stats$first[stat_index]])
+    )
   }
 
   # --- banners, set as the Excel sheet sets them
@@ -1397,30 +2110,80 @@ results_gt <- function(
     )
   }
 
-  legend <- results_legend(xtab)
-  for (i in seq_len(nrow(legend))) {
-    key_style <- c(
-      if (!is.na(legend$fill[[i]])) {
-        paste0(
-          "background-color:", legend$fill[[i]],
-          ";padding:0 4px;border:1px solid #BFBFBF"
-        )
-      },
-      if (legend$bold[[i]]) "font-weight:bold",
-      if (legend$grey[[i]]) paste0("color:", RESULTS_ND_FONT)
-    )
-    note <- if (nzchar(legend$key[[i]])) {
+  gt_titles_and_notes(tbl, title, notes)
+}
+
+
+#' Set a results gt table out in the house style
+#'
+#' @param tbl the `gt_tbl`
+#' @param page the printed page, from `page_spec()`
+#' @param header_fill,header_font as for [results_table()]
+#' @param spanned whether the table has column spanners to style
+#' @returns `tbl`
+#' @noRd
+gt_house_style <- function(tbl, page, header_fill, header_font, spanned) {
+  tbl <- gt::tab_options(
+    tbl,
+    table.font.size = gt::px(12),
+    column_labels.background.color = header_fill,
+    column_labels.font.weight = "bold",
+    data_row.padding = gt::px(3),
+    table_body.hlines.color = "#D9D9D9",
+    table_body.vlines.style = "solid",
+    table_body.vlines.color = "#D9D9D9",
+    table_body.vlines.width = gt::px(1),
+    source_notes.font.size = gt::px(11),
+    page.orientation = page$orientation,
+    page.width = paste0(page$width, "in"),
+    page.height = paste0(page$height, "in")
+  )
+  header_cells <- list(gt::cells_column_labels())
+  if (spanned) {
+    header_cells <- c(header_cells, list(gt::cells_column_spanners()))
+  }
+  gt::tab_style(
+    tbl,
+    style = gt::cell_text(color = header_font, weight = "bold"),
+    locations = header_cells
+  )
+}
+
+
+#' Head a results gt table with its title, and foot it with its notes
+#'
+#' @param tbl the `gt_tbl`
+#' @param title the `title` argument
+#' @param notes the notes, from `results_notes()`
+#' @returns `tbl`
+#' @noRd
+gt_titles_and_notes <- function(tbl, title, notes) {
+  if (!is.null(title)) {
+    tbl <- gt::tab_header(tbl, title = title)
+  }
+  for (i in seq_len(nrow(notes))) {
+    key <- notes$key[[i]]
+    note <- if (!is.na(key) && nzchar(key)) {
+      key_style <- c(
+        if (!is.na(notes$fill[[i]])) {
+          paste0(
+            "background-color:", notes$fill[[i]],
+            ";padding:0 4px;border:1px solid #BFBFBF"
+          )
+        },
+        if (notes$bold[[i]]) "font-weight:bold",
+        if (notes$grey[[i]]) paste0("color:", RESULTS_ND_FONT)
+      )
       paste0(
         "<span style=\"", paste(key_style, collapse = ";"), "\">",
-        escape_html(legend$key[[i]]),
+        escape_html(key),
         "</span>: ",
-        escape_html(legend$meaning[[i]])
+        escape_html(notes$meaning[[i]])
       )
     } else {
-      escape_html(legend$meaning[[i]])
+      escape_html(notes$meaning[[i]])
     }
     tbl <- gt::tab_source_note(tbl, gt::html(note))
   }
-
   tbl
 }

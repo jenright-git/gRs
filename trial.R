@@ -104,7 +104,7 @@ ar |>
 
 
 ar |>
-  min_max_locations(n_max = 2, n_min = 2) |>
+  min_max_locations(n_max = 2, n_min = 2, group_vars = "task_code") |>
   select(
     location_code,
     extreme,
@@ -234,4 +234,33 @@ df_al |>
     ),
     group_by = 'monitoring_zone',
     merge_cells = TRUE
+  )
+
+
+df_al |>
+  results_table_to_excel(
+    criteria_col = c(criteria_99, criteria_95),
+    criteria_labels = c(criteria_99 = "ANZG 99%", criteria_95 = "ANZG 95%"),
+    analytes = "exceeding",
+    statistics = TRUE,
+    #group_by = "monitoring_round",
+    statistics_by_group = TRUE,
+    title = "Table 3: Surface Water Analytical Results",
+    layout = "samples_down"
+  )
+df_al |>
+  results_table_to_excel(
+    layout = "analytes_down",
+    overwrite = TRUE,
+    # criteria_col = c(criteria_99, criteria_95),
+    # criteria_labels = c(criteria_99 = "ANZG 99%", criteria_95 = "ANZG 95%")
+  )
+
+df_al |>
+  filter(monitoring_round == '2026-06', location_code == "10_South") |>
+  results_table(
+    layout = "analytes_down",
+    analytes = "detected"
+    #  criteria_col = c(criteria_99, criteria_95),
+    # criteria_labels = c(criteria_99 = "ANZG 99%", criteria_95 = "ANZG 95%"),
   )

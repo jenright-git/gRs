@@ -10,13 +10,20 @@ results_table(
   id_cols = c("date", "sample_code", "lab_report_number"),
   group_by = NULL,
   sort_analytes_by = NULL,
+  analytes = "all",
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  criteria_labels = NULL,
+  statistics = FALSE,
+  statistics_by_group = FALSE,
   merge_cells = TRUE,
+  layout = "samples_down",
   include_zone = FALSE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
+  title = NULL,
+  notes = TRUE,
   paper_size = "A3",
   orientation = "landscape",
   header_fill = "#008768",
@@ -71,6 +78,12 @@ text alphabetically. Ties fall back to the name, so a dissolved analyte
 sharing its total's code still sits beside it. Default \code{NULL}, ordering
 by name.}
 
+\item{analytes}{which analytes to show: \code{"all"} (default); \code{"detected"},
+those detected at least once; \code{"with_guideline"}, those with a guideline
+in a set shown; or \code{"exceeding"}, those with at least one shaded result.
+A sample left with no result to show is left out too, and the notes say
+what was filtered.}
+
 \item{highlight_lor}{shade a non-detect whose limit of reporting is above a
 guideline, as an exceedance is - its LOR is too high to show the
 guideline was met. Default \code{FALSE}, which writes it as any other
@@ -84,12 +97,35 @@ the sets named change. Unnamed, it must hold one colour per set, in
 \code{criteria_col} order. \code{NULL} (default) uses warm tints - amber, orange,
 rose, then blue and lilac.}
 
+\item{criteria_labels}{short names for the guideline sets, used in the
+table, its legend and its statistics, while the notes keep each set's
+full name. Named by the set's column or its full name, e.g.
+\code{c(criteria_99 = "ANZG 99\%")}; sets not named keep their full names.}
+
+\item{statistics}{summary rows at the foot of the table: \code{TRUE} for the
+number of results, the number of detects, the minimum, the maximum and
+the exceedances of each guideline set, or a selection of \code{"n"},
+\code{"n_detects"}, \code{"min"}, \code{"max"}, \code{"mean"}, \code{"median"} and
+\code{"exceedances"}. The mean and median are of the results as reported,
+non-detects at their LOR, to 4 significant figures. An analyte with no
+guideline in a set reads \code{-} for that set's exceedances. In
+\code{analytes_down} they are columns at the right. Default \code{FALSE}.}
+
+\item{statistics_by_group}{add a block of \code{statistics} at the foot of each
+\code{group_by} group as well as the whole table's. It needs both
+\code{statistics} and \code{group_by}, and says so where either is missing.
+Default \code{FALSE}.}
+
 \item{merge_cells}{merge a value repeated down a side column into one
 block, so a well is named once against all its samples. Each column's
 blocks sit within those of the column to its left - a date shared by two
 wells is not merged across them - and no block crosses a \code{group_by}
 banner. Default \code{TRUE}. In gt, which cannot merge cells, the repeats are
 left blank instead. \code{FALSE} writes the value on every row.}
+
+\item{layout}{\code{"samples_down"} (default), one row per sample and one
+column per analyte; or \code{"analytes_down"}, one row per analyte, grouped by
+chemical group, and one column per sample.}
 
 \item{include_zone}{write the monitoring zone as the first column, ahead of
 the location, and sort the rows by zone. Default \code{FALSE}.}
@@ -103,6 +139,15 @@ than one zone is an error.}
 
 \item{location_label}{heading for the location column. Default
 \code{"Monitoring Well"}.}
+
+\item{title}{the table's title. In gt, the table's heading; in Excel, the
+centre of the page header, printed at the top of every page. Default
+\code{NULL}, no title.}
+
+\item{notes}{\code{TRUE} (default) writes notes below the table: the key to
+its formatting, each guideline set's full name, how the statistics were
+worked out, any analytes filtered, and the date. \code{FALSE} writes none;
+a character vector adds its lines after them.}
 
 \item{paper_size, orientation}{the printed page: \code{"A3"} (default), \code{"A2"},
 \code{"A4"}, \code{"A5"}, \code{"letter"}, \code{"legal"} or \code{"tabloid"}, and \code{"landscape"}
@@ -143,7 +188,25 @@ Analytes are ordered by chemical group, then by name, read so that a
 dissolved analyte sits beside its total: where the table holds both,
 "Dissolved Copper" follows "Copper" rather than filing under D.
 \code{sort_analytes_by} orders them by another column instead, such as the
-\code{chem_code}, without showing it.
+\code{chem_code}, without showing it. \code{analytes} keeps only those detected,
+with a guideline, or exceeding one - a wide suite is often mostly
+non-detects.
+
+\code{layout = "analytes_down"} turns the table on its side: analytes down the
+left, grouped under their chemical group, with each guideline set as a
+column beside them, and the samples across the top. It suits a long suite
+measured in few samples. Every option works in either layout.
+
+\code{statistics} adds summary rows - the number of results and of detects,
+the minimum and maximum, and the exceedances of each guideline set - over
+the results the table shows, and with \code{statistics_by_group} for each
+\code{group_by} group as well. The maximum is the highest detected result, as
+\code{\link[=summary_stats]{summary_stats()}} reports it; only where nothing was detected is it the
+highest LOR, written with its \code{<}.
+
+Notes below the table give the key to the formatting, the guideline
+sets' full names - shorten them in the table with \code{criteria_labels} - and
+how the statistics were worked out. \code{title} heads the table.
 
 In the body:
 \itemize{
@@ -201,6 +264,18 @@ compared \%>\% results_table(highlight_lor = TRUE)
 # A banner per monitoring round; metals ordered by CAS number
 compared \%>\%
   results_table(group_by = "monitoring_round", sort_analytes_by = "chem_code")
+
+# Only analytes detected, with statistics, a title and short set names
+compared \%>\%
+  results_table(
+    analytes = "detected",
+    statistics = TRUE,
+    criteria_labels = c(criteria = "ANZG 95\%"),
+    title = "Table 3: Surface Water Analytical Results"
+  )
+
+# On its side: analytes down, samples across
+compared \%>\% results_table(layout = "analytes_down")
 
 # Soil: depths beside the location, under headings of your own
 soil \%>\%

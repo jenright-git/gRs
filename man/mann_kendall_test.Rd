@@ -66,7 +66,8 @@ is tested as two series rather than one series of numbers that cannot be
 compared. The locations this happens at are named in a message; convert
 the results to a single unit beforehand to test them as one series. Each
 series still needs four samples of its own, so a split series can drop out
-where the whole would have been tested.
+where the whole would have been tested. Results with no unit recorded are
+a series of their own too, named as \code{"no unit"}.
 }
 \examples{
 # Six trend categories, LOR results left as reported

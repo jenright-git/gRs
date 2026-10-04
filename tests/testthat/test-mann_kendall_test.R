@@ -192,6 +192,31 @@ test_that("unit_labelled() names the unit only where an analyte has two", {
   expect_equal(unit_labelled(c("Zinc", "Copper"), NULL), c("Zinc", "Copper"))
 })
 
+test_that("results with no unit are a series of their own, named as such", {
+  # the first five results lost their unit
+  data <- dplyr::mutate(
+    trend_fixture(c(1:5, 6:10)),
+    output_unit = rep(c(NA, "mg/L"), each = 5)
+  )
+
+  expect_message(
+    out <- mann_kendall_test(data),
+    "MW01 / Copper (mg/L, no unit)",
+    fixed = TRUE
+  )
+  expect_equal(nrow(out), 2)
+  expect_setequal(
+    unit_labelled(out$chem_name, out$output_unit),
+    c("Copper (mg/L)", "Copper (no unit)")
+  )
+  expect_equal(
+    unit_labelled(c("Zinc", "Zinc"), c(NA, "mg/L")),
+    c("Zinc (no unit)", "Zinc (mg/L)")
+  )
+  # an analyte whose only unit is missing keeps its plain name
+  expect_equal(unit_labelled(c("Zinc", "Zinc"), c(NA, NA)), c("Zinc", "Zinc"))
+})
+
 test_that("the heatmaps give each unit of an analyte its own row", {
   data <- dplyr::mutate(
     trend_fixture(c(1:5, 6000:6004)),

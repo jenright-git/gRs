@@ -9,8 +9,12 @@ crosstab <- function(
   id_named = TRUE,
   group_by = NULL,
   sort_analytes_by = NULL,
+  analytes = "all",
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  criteria_labels = NULL,
+  statistics = FALSE,
+  statistics_by_group = FALSE,
   merge_cells = TRUE,
   include_zone = FALSE
 ) {
@@ -27,8 +31,12 @@ crosstab <- function(
     id_named = id_named,
     group_by = group_by,
     sort_analytes_by = sort_analytes_by,
+    analytes = analytes,
     highlight_lor = highlight_lor,
     criteria_colours = criteria_colours,
+    criteria_labels = criteria_labels,
+    statistics = statistics,
+    statistics_by_group = statistics_by_group,
     merge_cells = merge_cells,
     include_zone = include_zone,
     zone_name = "monitoring_zone",
@@ -620,7 +628,7 @@ test_that("results_table() carries the legend as source notes", {
   ))
   notes <- vapply(tbl[["_source_notes"]], as.character, character(1))
 
-  expect_length(notes, nrow(results_legend(crosstab(highlight_lor = TRUE))))
+  expect_length(notes, nrow(results_notes(crosstab(highlight_lor = TRUE), TRUE)))
   expect_true(any(grepl("Exceeds the NEMP 95% guideline", notes, fixed = TRUE)))
 })
 
@@ -898,4 +906,457 @@ test_that("results_table() carries the page for RTF output", {
   expect_equal(gt:::dt_options_get_value(tbl, "page_orientation"), "landscape")
   expect_equal(gt:::dt_options_get_value(tbl, "page_width"), "8.27in")
   expect_equal(gt:::dt_options_get_value(tbl, "page_height"), "11.69in")
+})
+
+
+# ---------------------------------------------------------------------------
+# criteria_labels
+# ---------------------------------------------------------------------------
+
+test_that("criteria_labels shortens a set's name, its full name kept for the notes", {
+  x <- crosstab(criteria_labels = c(criteria_99 = "99%"))
+  notes <- results_notes(x, TRUE)
+
+  expect_equal(x$set_labels, c("NEMP 95%", "99%"))
+  expect_equal(x$set_names, c("NEMP 95%", "NEMP 99%"))
+  expect_true("Exceeds the 99% guideline" %in% notes$meaning)
+  expect_true("Guidelines: NEMP 95%; 99% (NEMP 99%)." %in% notes$meaning)
+})
+
+test_that("a set is named by its column, its full name or its short label", {
+  expect_equal(
+    crosstab(criteria_labels = c("NEMP 95%" = "95%"))$set_labels,
+    c("95%", "NEMP 99%")
+  )
+  x <- crosstab(
+    criteria_labels = c(criteria_99 = "99%"),
+    criteria_colours = c("99%" = "#123456")
+  )
+  expect_equal(x$set_colours, c("#FBD08A", "#123456"))
+  expect_error(
+    crosstab(criteria_labels = c(nonsense = "x")),
+    "criteria_labels.*nonsense"
+  )
+  expect_error(crosstab(criteria_labels = "unnamed"), "named character vector")
+})
+
+
+# ---------------------------------------------------------------------------
+# analytes
+# ---------------------------------------------------------------------------
+
+# Copper detected and over its guideline; zinc never detected, under its
+# guideline; lead detected, with no guideline. MW03 has only zinc.
+filter_fixture <- function() {
+  nd <- function(...) {
+    chem_fixture(
+      chem_name = "Zinc",
+      chem_code = "7440-66-6",
+      detect_flag = rep("N", 6),
+      prefix = rep("<", 6),
+      concentration = rep(0.1, 6),
+      ...
+    )
+  }
+  data <- dplyr::bind_rows(
+    chem_fixture(),
+    nd(),
+    chem_fixture(
+      chem_name = "Lead",
+      chem_code = "7439-92-1",
+      concentration = rep(0.05, 6),
+      detect_flag = rep("Y", 6),
+      prefix = rep(NA_character_, 6)
+    ),
+    nd(location_code = "MW03")[1, ]
+  )
+  levels <- dplyr::bind_rows(
+    action_level_fixture(criteria_name = "NEMP 95%", criteria = 2),
+    action_level_fixture(
+      criteria_name = "NEMP 95%",
+      chem_code = "7440-66-6",
+      chem_name = "Zinc",
+      criteria = 1000
+    )
+  )
+  join_action_levels(data, levels, value_col = "criteria_95", quiet = TRUE)
+}
+
+test_that("analytes keeps the detected, guideline or exceeding analytes", {
+  shown <- function(analytes) {
+    x <- suppressMessages(
+      crosstab(filter_fixture(), sets = "criteria_95", analytes = analytes)
+    )
+    list(analytes = x$analytes$chem_name, wells = unique(x$ids$location_code))
+  }
+
+  expect_equal(shown("all")$analytes, c("Copper", "Lead", "Zinc"))
+  expect_equal(shown("all")$wells, c("MW01", "MW02", "MW03"))
+  # MW03 had only zinc, never detected
+  expect_equal(shown("detected")$analytes, c("Copper", "Lead"))
+  expect_equal(shown("detected")$wells, c("MW01", "MW02"))
+  expect_equal(shown("with_guideline")$analytes, c("Copper", "Zinc"))
+  expect_equal(shown("with_guideline")$wells, c("MW01", "MW02", "MW03"))
+  expect_equal(shown("exceeding")$analytes, "Copper")
+})
+
+test_that("the filter says what it left out, and an empty table is an error", {
+  expect_message(
+    crosstab(filter_fixture(), sets = "criteria_95", analytes = "detected"),
+    "Showing 2 of 3 analytes.*1 sample"
+  )
+  x <- suppressMessages(
+    crosstab(filter_fixture(), sets = "criteria_95", analytes = "detected")
+  )
+  expect_true(
+    "Only analytes detected in at least one sample are shown (2 of 3)." %in%
+      results_notes(x, TRUE)$meaning
+  )
+  expect_error(
+    crosstab(sets = NULL, analytes = "with_guideline"),
+    "no guideline set is shown"
+  )
+  nothing_detected <- two_sets_fixture()
+  nothing_detected$detect_flag <- "N"
+  expect_error(
+    suppressMessages(crosstab(nothing_detected, analytes = "detected")),
+    "No analyte in `data` was detected, so the table would be empty",
+    fixed = TRUE
+  )
+  expect_error(crosstab(analytes = "some"), "analytes")
+})
+
+
+# ---------------------------------------------------------------------------
+# statistics
+# ---------------------------------------------------------------------------
+
+test_that("statistics follow the summary_stats() rules", {
+  s <- crosstab(statistics = TRUE)$stats
+
+  expect_equal(
+    s$label,
+    c(
+      "Results (n)", "Detects (n)", "Minimum", "Maximum",
+      "Exceedances: NEMP 95%", "Exceedances: NEMP 99%"
+    )
+  )
+  # results 1.5, 2.5, <0.5, 4, 8, <0.5: the maximum is the highest detect
+  expect_equal(s$text[, 1], c("6", "4", "<0.5", "8", "4", "1"))
+  expect_equal(s$value[, 1], c(6, 4, NA, 8, 4, 1))
+  # the two non-detects are above NEMP 95% too, and counted when shaded
+  expect_equal(
+    crosstab(statistics = "exceedances", highlight_lor = TRUE)$stats$text[, 1],
+    c("6", "1")
+  )
+})
+
+test_that("an analyte with no guideline in a set reads - for its exceedances", {
+  s <- crosstab(with_zinc(), statistics = "exceedances")$stats
+  expect_equal(s$text[, 2], c("-", "-"))
+  expect_equal(s$text[, 1], c("4", "1"))
+})
+
+test_that("the maximum is an LOR, with its <, only where nothing was detected", {
+  s <- crosstab(with_zinc(), statistics = c("min", "max"))$stats
+  # zinc at MW01: 0.2, 0.3, <0.1
+  expect_equal(s$text[, 2], c("<0.1", "0.3"))
+  # every result a non-detect, re-flagged after the join had judged them
+  data <- two_sets_fixture()
+  data$detect_flag <- "N"
+  data$prefix <- "<"
+  expect_equal(
+    suppressMessages(crosstab(data, statistics = "max"))$stats$text[, 1],
+    "<8"
+  )
+})
+
+test_that("the mean and median are of the results as reported", {
+  s <- crosstab(statistics = c("mean", "median"))$stats
+  reported <- c(1.5, 2.5, 0.5, 4, 8, 0.5)
+  expect_equal(s$value[, 1], c(signif(mean(reported), 4), median(reported)))
+})
+
+test_that("statistics_by_group adds a block per group before the table's own", {
+  x <- crosstab(
+    rounds_fixture(),
+    group_by = "monitoring_round",
+    statistics = c("n", "max"),
+    statistics_by_group = TRUE
+  )
+
+  expect_equal(
+    x$stats$scope,
+    c("Round: Round 9", "Round: Round 9", "Round: Round 10", "Round: Round 10", NA, NA)
+  )
+  expect_equal(x$stats$text[, 1], c("3", "8", "3", "4", "6", "8"))
+  expect_equal(
+    x$axis$kind,
+    c(
+      "banner", "sample", "sample", "sample", "stat", "stat",
+      "banner", "sample", "sample", "sample", "stat", "stat",
+      "stat", "stat"
+    )
+  )
+})
+
+test_that("statistics_by_group says so where it has nothing to act on", {
+  expect_message(
+    crosstab(statistics = "n", statistics_by_group = TRUE),
+    "statistics_by_group = TRUE` does nothing without `group_by`;",
+    fixed = TRUE
+  )
+  expect_message(
+    crosstab(
+      rounds_fixture(),
+      group_by = "monitoring_round",
+      statistics_by_group = TRUE
+    ),
+    "without `statistics`;",
+    fixed = TRUE
+  )
+  expect_no_message(crosstab(
+    rounds_fixture(),
+    group_by = "monitoring_round",
+    statistics = "n",
+    statistics_by_group = TRUE
+  ))
+})
+
+test_that("an unknown statistic is an error naming it", {
+  expect_error(crosstab(statistics = "mode"), "statistics.*mode")
+})
+
+test_that("statistic rows sit below the results, numbers kept as numbers", {
+  path <- write_results(statistics = TRUE)
+  sheet <- openxlsx::read.xlsx(
+    path,
+    colNames = FALSE,
+    skipEmptyRows = FALSE,
+    fillMergedCells = TRUE
+  )
+
+  # 3 header rows and 2 sets, 6 samples on rows 6-11, then the statistics
+  expect_equal(
+    sheet[12:17, 1],
+    c(
+      "Results (n)", "Detects (n)", "Minimum", "Maximum",
+      "Exceedances: NEMP 95%", "Exceedances: NEMP 99%"
+    )
+  )
+  expect_equal(sheet[12:17, 3], c("6", "4", "<0.5", "8", "4", "1"))
+  expect_equal(
+    openxlsx::readWorkbook(path, rows = 15, cols = 3, colNames = FALSE)[[1]],
+    8
+  )
+  expect_true("A12:B12" %in% merged_ranges(path))
+  expect_equal(fill_of(style_at(path, 16, 1)), "FBD08A")
+  expect_equal(fill_of(style_at(path, 12, 3)), "F2F2F2")
+})
+
+test_that("in gt the statistics are rows below the results", {
+  skip_if_not_installed("gt")
+  tbl <- suppressMessages(results_table(
+    two_sets_fixture(),
+    criteria_col = c(criteria_95, criteria_99),
+    id_cols = "date",
+    statistics = c("n", "max")
+  ))
+  body <- tbl[["_data"]]
+
+  expect_equal(utils::tail(body$.id_1, 2), c("Results (n)", "Maximum"))
+  expect_equal(utils::tail(body$.analyte_1, 2), c("6", "8"))
+  expect_true("#F2F2F2" %in% gt_styles(tbl, 9, ".analyte_1"))
+})
+
+
+# ---------------------------------------------------------------------------
+# title and notes
+# ---------------------------------------------------------------------------
+
+test_that("the notes follow the table and the title goes in the page header", {
+  path <- write_results(
+    title = "Table 1: Water & Sediment",
+    notes = "Checked by JE."
+  )
+  sheet <- openxlsx::read.xlsx(path, colNames = FALSE, skipEmptyRows = FALSE)
+
+  # the table is where it always was: the title takes no row
+  expect_equal(sheet[1, 1], "Monitoring Well")
+  # results on rows 6-11, a blank row, then the notes
+  expect_equal(sheet[13, 1], "Notes")
+  expect_equal(sheet[14, 1:2], data.frame(X1 = "Bold", X2 = "Detected result"), ignore_attr = TRUE)
+  expect_true("Guidelines: NEMP 95%; NEMP 99%." %in% sheet[[1]])
+  expect_true(any(grepl("^Generated ", sheet[[1]])))
+  expect_equal(utils::tail(sheet[[1]], 1), "Checked by JE.")
+  expect_true(is_bold(style_at(path, 14, 1)))
+
+  xml <- sheet_xml(path)
+  expect_match(xml, "Water &amp;&amp; Sediment", fixed = TRUE)
+})
+
+test_that("notes = FALSE writes none, and no title leaves no page header", {
+  path <- write_results(notes = FALSE)
+  sheet <- openxlsx::read.xlsx(path, colNames = FALSE, skipEmptyRows = FALSE)
+
+  expect_equal(nrow(sheet), 11)
+  expect_false(grepl("oddHeader", sheet_xml(path), fixed = TRUE))
+})
+
+test_that("in gt the title heads the table and notes = FALSE leaves no notes", {
+  skip_if_not_installed("gt")
+  tbl <- suppressMessages(results_table(
+    two_sets_fixture(),
+    criteria_col = c(criteria_95, criteria_99),
+    title = "Table 1",
+    notes = FALSE
+  ))
+
+  expect_equal(tbl[["_heading"]]$title, "Table 1")
+  expect_length(tbl[["_source_notes"]], 0)
+  expect_error(
+    results_table(two_sets_fixture(), title = c("a", "b")),
+    "title"
+  )
+})
+
+
+# ---------------------------------------------------------------------------
+# layout = "analytes_down"
+# ---------------------------------------------------------------------------
+
+test_that("analytes_down puts the analytes down and the samples across", {
+  path <- write_results(layout = "analytes_down")
+  sheet <- openxlsx::read.xlsx(
+    path,
+    colNames = FALSE,
+    skipEmptyRows = FALSE,
+    fillMergedCells = TRUE
+  )
+  merges <- merged_ranges(path)
+
+  # rows: location, date, the heading row, the chemical group, then copper;
+  # columns: analyte, unit, the two sets, then the six samples
+  expect_equal(unname(unlist(sheet[1, 5:10])), rep(c("MW01", "MW02"), each = 3))
+  expect_equal(
+    unname(unlist(sheet[3, 1:4])),
+    c("Analyte", "Unit", "NEMP 95%", "NEMP 99%")
+  )
+  expect_equal(sheet[4, 1], "Metals")
+  expect_equal(unname(unlist(sheet[5, 1:4])), c("Copper", "mg/L", "0.002", "5"))
+  expect_equal(
+    unname(unlist(sheet[5, 5:10])),
+    c("1.5", "2.5", "<0.5", "4", "8", "<0.5")
+  )
+  expect_true(all(c("A1:D1", "A2:D2", "E1:G1", "H1:J1", "A4:J4") %in% merges))
+
+  expect_true(is_bold(style_at(path, 5, 5)))
+  expect_equal(fill_of(style_at(path, 5, 5)), "FBD08A")
+  expect_equal(font_of(style_at(path, 5, 7)), "808080")
+  expect_equal(fill_of(style_at(path, 5, 9)), "F0A868")
+  expect_equal(fill_of(style_at(path, 5, 3)), "FBD08A")
+  # the date row reads across, set as the headings are
+  expect_equal(fill_of(style_at(path, 2, 5)), "008768")
+  expect_equal(font_of(style_at(path, 2, 5)), "FFFFFF")
+  expect_true(is_bold(style_at(path, 2, 5)))
+  expect_null(style_at(path, 2, 5)$textRotation)
+
+  xml <- sheet_xml(path)
+  expect_match(xml, 'xSplit="4"', fixed = TRUE)
+  expect_match(xml, 'ySplit="3"', fixed = TRUE)
+})
+
+test_that("analytes_down runs with no guideline set, in gt and in Excel", {
+  skip_if_not_installed("gt")
+  tbl <- suppressMessages(results_table(
+    chem_fixture(),
+    criteria_col = NULL,
+    id_cols = "date",
+    layout = "analytes_down"
+  ))
+  expect_equal(
+    names(tbl[["_data"]]),
+    c(".analyte", ".unit", paste0(".entry_", 1:6), ".chem_group")
+  )
+  expect_no_error(gt::as_raw_html(tbl))
+
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(results_table_to_excel(
+    chem_fixture(),
+    save_path = path,
+    criteria_col = NULL,
+    id_cols = "date",
+    layout = "analytes_down"
+  ))
+  sheet <- openxlsx::read.xlsx(
+    path,
+    colNames = FALSE,
+    skipEmptyRows = FALSE,
+    fillMergedCells = TRUE
+  )
+  # no set columns: analyte and unit, then the six samples
+  expect_equal(unname(unlist(sheet[3, 1:2])), c("Analyte", "Unit"))
+  expect_equal(
+    unname(unlist(sheet[5, 3:8])),
+    c("1.5", "2.5", "<0.5", "4", "8", "<0.5")
+  )
+})
+
+test_that("analytes_down gives each group a banner and the statistics columns", {
+  path <- write_results(
+    rounds_fixture(),
+    group_by = "monitoring_round",
+    statistics = c("n", "max"),
+    statistics_by_group = TRUE,
+    layout = "analytes_down"
+  )
+  sheet <- openxlsx::read.xlsx(
+    path,
+    colNames = FALSE,
+    skipEmptyRows = FALSE,
+    fillMergedCells = TRUE
+  )
+  merges <- merged_ranges(path)
+
+  # each round's three samples then its two statistics; the table's last
+  expect_equal(unname(unlist(sheet[1, 5:9])), rep("Round: Round 9", 5))
+  expect_equal(unname(unlist(sheet[1, 10:14])), rep("Round: Round 10", 5))
+  expect_equal(unname(unlist(sheet[2, 8:9])), c("Results (n)", "Maximum"))
+  expect_equal(unname(unlist(sheet[1, 15:16])), c("Results (n)", "Maximum"))
+  expect_equal(
+    unname(unlist(sheet[6, c(5:7, 10:12)])),
+    c("1.5", "2.5", "8", "<0.5", "4", "<0.5")
+  )
+  expect_equal(
+    unname(unlist(sheet[6, c(8, 9, 13, 14, 15, 16)])),
+    c("3", "8", "3", "4", "6", "8")
+  )
+  # a well merges across its samples, never across a round
+  expect_true(all(c("E2:F2", "K2:L2") %in% merges))
+})
+
+test_that("in gt analytes_down groups rows by chemical group under stacked spanners", {
+  skip_if_not_installed("gt")
+  tbl <- suppressMessages(results_table(
+    rounds_fixture(),
+    criteria_col = c(criteria_95, criteria_99),
+    id_cols = "date",
+    group_by = "monitoring_round",
+    layout = "analytes_down"
+  ))
+  spanners <- gt:::dt_spanners_get(tbl)
+
+  expect_equal(gt:::dt_row_groups_get(tbl), "Metals")
+  expect_equal(tbl[["_data"]]$.analyte, "Copper")
+  expect_true(all(
+    c("MW01", "MW02", "Round: Round 9", "Round: Round 10") %in%
+      unlist(spanners$spanner_label)
+  ))
+  expect_equal(sort(unique(spanners$spanner_level)), c(1, 2))
+  # round 9's third sample is MW02's 8 mg/L, shaded for NEMP 99%
+  expect_true(all(c("bold", "#F0A868") %in% gt_styles(tbl, 1, ".entry_3")))
+  expect_error(
+    results_table(two_sets_fixture(), layout = "sideways"),
+    "layout"
+  )
 })

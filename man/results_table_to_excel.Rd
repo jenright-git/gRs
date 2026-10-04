@@ -11,13 +11,20 @@ results_table_to_excel(
   id_cols = c("date", "sample_code", "lab_report_number"),
   group_by = NULL,
   sort_analytes_by = NULL,
+  analytes = "all",
   highlight_lor = FALSE,
   criteria_colours = NULL,
+  criteria_labels = NULL,
+  statistics = FALSE,
+  statistics_by_group = FALSE,
   merge_cells = TRUE,
+  layout = "samples_down",
   include_zone = FALSE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
+  title = NULL,
+  notes = TRUE,
   paper_size = "A3",
   orientation = "landscape",
   fit_to_width = FALSE,
@@ -80,6 +87,12 @@ text alphabetically. Ties fall back to the name, so a dissolved analyte
 sharing its total's code still sits beside it. Default \code{NULL}, ordering
 by name.}
 
+\item{analytes}{which analytes to show: \code{"all"} (default); \code{"detected"},
+those detected at least once; \code{"with_guideline"}, those with a guideline
+in a set shown; or \code{"exceeding"}, those with at least one shaded result.
+A sample left with no result to show is left out too, and the notes say
+what was filtered.}
+
 \item{highlight_lor}{shade a non-detect whose limit of reporting is above a
 guideline, as an exceedance is - its LOR is too high to show the
 guideline was met. Default \code{FALSE}, which writes it as any other
@@ -93,12 +106,35 @@ the sets named change. Unnamed, it must hold one colour per set, in
 \code{criteria_col} order. \code{NULL} (default) uses warm tints - amber, orange,
 rose, then blue and lilac.}
 
+\item{criteria_labels}{short names for the guideline sets, used in the
+table, its legend and its statistics, while the notes keep each set's
+full name. Named by the set's column or its full name, e.g.
+\code{c(criteria_99 = "ANZG 99\%")}; sets not named keep their full names.}
+
+\item{statistics}{summary rows at the foot of the table: \code{TRUE} for the
+number of results, the number of detects, the minimum, the maximum and
+the exceedances of each guideline set, or a selection of \code{"n"},
+\code{"n_detects"}, \code{"min"}, \code{"max"}, \code{"mean"}, \code{"median"} and
+\code{"exceedances"}. The mean and median are of the results as reported,
+non-detects at their LOR, to 4 significant figures. An analyte with no
+guideline in a set reads \code{-} for that set's exceedances. In
+\code{analytes_down} they are columns at the right. Default \code{FALSE}.}
+
+\item{statistics_by_group}{add a block of \code{statistics} at the foot of each
+\code{group_by} group as well as the whole table's. It needs both
+\code{statistics} and \code{group_by}, and says so where either is missing.
+Default \code{FALSE}.}
+
 \item{merge_cells}{merge a value repeated down a side column into one
 block, so a well is named once against all its samples. Each column's
 blocks sit within those of the column to its left - a date shared by two
 wells is not merged across them - and no block crosses a \code{group_by}
 banner. Default \code{TRUE}. Set \code{FALSE} to write the value on every row,
 which is what Excel's sort and filter tools want.}
+
+\item{layout}{\code{"samples_down"} (default), one row per sample and one
+column per analyte; or \code{"analytes_down"}, one row per analyte, grouped by
+chemical group, and one column per sample.}
 
 \item{include_zone}{write the monitoring zone as the first column, ahead of
 the location, and sort the rows by zone. Default \code{FALSE}.}
@@ -112,6 +148,15 @@ than one zone is an error.}
 
 \item{location_label}{heading for the location column. Default
 \code{"Monitoring Well"}.}
+
+\item{title}{the table's title. In gt, the table's heading; in Excel, the
+centre of the page header, printed at the top of every page. Default
+\code{NULL}, no title.}
+
+\item{notes}{\code{TRUE} (default) writes notes below the table: the key to
+its formatting, each guideline set's full name, how the statistics were
+worked out, any analytes filtered, and the date. \code{FALSE} writes none;
+a character vector adds its lines after them.}
 
 \item{paper_size, orientation}{the printed page: \code{"A3"} (default), \code{"A2"},
 \code{"A4"}, \code{"A5"}, \code{"letter"}, \code{"legal"} or \code{"tabloid"}, and \code{"landscape"}
