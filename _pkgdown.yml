@@ -30,6 +30,8 @@ reference:
   - summary_stats
   - summary_stats_to_excel
   - create_gt
+  - results_table
+  - results_table_to_excel
 
 - title: Trend analysis
   contents:

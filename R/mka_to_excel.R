@@ -758,21 +758,25 @@ check_one_zone_per_location <- function(locations, zones, zone_name) {
 #' @param wb the workbook to modify
 #' @param sheet the worksheet name
 #' @param x the column as written, excluding its header
+#' @param first_row the sheet row `x` starts on. Default 2, below a single
+#'   header row; [results_table_to_excel()] writes several.
+#' @param col the sheet column `x` is written in. Default 1.
 #' @returns `wb`, invisibly, modified in place
 #' @noRd
-merge_column_runs <- function(wb, sheet, x) {
+merge_column_runs <- function(wb, sheet, x, first_row = 2L, col = 1L) {
   runs <- rle(x)
   ends <- cumsum(runs$lengths)
   starts <- ends - runs$lengths + 1L
+  # Steps over the header rows above the column.
+  offset <- first_row - 1L
 
   for (i in seq_along(runs$lengths)) {
     if (runs$lengths[i] > 1) {
-      # +1 throughout to step over the header row.
       openxlsx::mergeCells(
         wb,
         sheet,
-        cols = 1,
-        rows = (starts[i] + 1):(ends[i] + 1)
+        cols = col,
+        rows = (starts[i] + offset):(ends[i] + offset)
       )
     }
   }
@@ -885,6 +889,23 @@ stats_body_style <- function(num_fmt = "GENERAL", halign = NULL) {
   )
 }
 
+#' Style for the header row of a legend sheet
+#'
+#' @param fill background colour
+#' @param font text colour
+#' @returns an openxlsx style object
+#' @noRd
+legend_header_style <- function(fill, font) {
+  openxlsx::createStyle(
+    fgFill = fill,
+    fontColour = font,
+    textDecoration = "bold",
+    fontSize = 10,
+    border = "bottom",
+    borderStyle = "medium"
+  )
+}
+
 #' Style for one trend category's cells
 #'
 #' @param lvl the trend category
@@ -955,14 +976,7 @@ add_legend_sheet <- function(
     wb,
     LEGEND_SHEET,
     legend,
-    headerStyle = openxlsx::createStyle(
-      fgFill = header_fill,
-      fontColour = header_font,
-      textDecoration = "bold",
-      fontSize = 10,
-      border = "bottom",
-      borderStyle = "medium"
-    )
+    headerStyle = legend_header_style(header_fill, header_font)
   )
 
   for (i in seq_len(nrow(legend))) {

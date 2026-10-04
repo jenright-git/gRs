@@ -51,7 +51,7 @@ The exports carry `Field_D`, `Interlab_D`, `Rinsate`, `Trip_B`, `Field_B`, `Trip
 
 ## Presentation and report production
 
-- [ ] **`results_table()`.** The standard report table: samples across, analytes down grouped by `chem_group`, each guideline set beside it, cells styled per set exceeded (e.g. bold for ecological, shaded for human health), LOR above criteria marked. Output to gt and Excel, built from `criteria_long()`.
+- [x] **`results_table()`** (done 2026-10-04, with `results_table_to_excel()`). The standard report table. Built with analytes across, grouped by `chem_group`, and samples down, with each guideline set as a row across the top. Cells are shaded in the colour of the highest guideline exceeded, and `highlight_lor` marks an LOR above the criteria.
 - [ ] **`exceedance_map()`.** Locations at their coordinates coloured by exceedance ratio class (\<0.5x, 0.5-1x, 1-10x, \>10x), faceted by analyte or round, with optional GeoPackage export for GIS.
 - [ ] **`depth_profile_plot()`.** Concentration against depth per borehole, with the criterion line.
 - [ ] **`boxplot_with_criteria()`.** Boxplot by location or group with the guideline as a dashed line. Carried over from the old `planned_functions.txt`; may be covered by `compare_background()`.

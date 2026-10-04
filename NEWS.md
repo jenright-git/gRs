@@ -16,6 +16,19 @@
 
 ## New features
 
+* New `results_table()` and `results_table_to_excel()` lay results out as a
+  report table, as a `gt` table or a formatted workbook. Each sample gets a
+  row, named by its location and the `id_cols` (by default the sample date,
+  sample ID and lab report). Each analyte gets a column, headed by its
+  chemical group, name and unit, with a row per guideline set across the
+  top. Detects are bold and non-detects are a grey `<LOR`. A result
+  exceeding a guideline is shaded in that set's colour, taking the highest
+  guideline it exceeds where it exceeds more than one. `highlight_lor`
+  decides whether a non-detect with an LOR above a guideline is shaded too.
+  `id_cols` takes any vector of columns to show beside the location, in
+  order, with names as headings. Colours, fonts and zone grouping follow
+  `mka_to_excel()` and `summary_stats_to_excel()`.
+
 * `data_processor()` and `action_level_processor()` accept a data frame as
   well as a file path, so the ESdat OData feeds read with esdatr
   (`esdatr::get_esdat_odata_chemistry()` and friends) go straight in. The
