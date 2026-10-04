@@ -69,6 +69,18 @@
   `include_criteria = TRUE` it attaches each set's name, as recorded by
   `join_action_levels()`, in a `"criteria_names"` attribute.
 
+* New `summary_stats_to_excel()` writes a `summary_stats()` table to a
+  formatted workbook, as `mka_to_excel()` does for `mann_kendall_test()`:
+  `data %>% summary_stats() %>% summary_stats_to_excel()`. The sheet is laid
+  out as `mka_to_excel()`'s Statistics sheet with `include_summary = TRUE` -
+  detect counts, the minimum, mean, maximum, standard deviation and
+  percentiles, then a guideline and exceedance count for each set the
+  summary carries, headed with the set's name - but covers every location,
+  analyte and unit, not only the series `mann_kendall_test()` could test.
+  It shares that sheet's styling and `<` on non-detect extremes, groups by
+  zone where the summary was grouped by one, and adds a sample count and a
+  unit column.
+
 * `mka_to_excel(include_summary = TRUE)` substitutes non-detects in the
   summary statistics with the same `lor_multiplier` the trend test used,
   which `mann_kendall_test()` now records in a `"lor_multiplier"` attribute.
