@@ -29,7 +29,6 @@ reference:
   - min_max_locations
   - summary_stats
   - create_gt
-  - create_dt
 
 - title: Trend analysis
   contents:

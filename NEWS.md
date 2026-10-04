@@ -1,5 +1,11 @@
 # gRs (development version)
 
+## Breaking changes
+
+* `create_dt()` has been removed, and with it the dependency on DT. Use
+  `create_gt()` for a formatted table, or call `DT::datatable()` directly
+  for an interactive one.
+
 ## New features
 
 * `data_processor()` and `action_level_processor()` accept a data frame as
