@@ -647,6 +647,35 @@ criteria_sets <- function(data) {
   ]
 }
 
+#' Keep only the guideline value columns of a selection
+#'
+#' A helper such as `starts_with("criteria")` also catches the columns
+#' [join_action_levels()] writes beside each guideline - its name, unit,
+#' basis and exceedance verdicts - which are not guidelines themselves.
+#'
+#' @param picked column names selected by `criteria_col`
+#' @param data the table they were selected from
+#' @returns `picked` less those companion columns, in the order picked. An
+#'   error where that leaves nothing of a selection that was not empty.
+#' @noRd
+guideline_value_columns <- function(picked, data) {
+  companions <- unlist(
+    lapply(criteria_sets(data), function(s) setdiff(set_columns(s), s)),
+    use.names = FALSE
+  )
+  sets <- setdiff(picked, companions)
+
+  if (length(picked) > 0 && length(sets) == 0) {
+    stop(
+      "`criteria_col` picked only columns that sit beside a guideline (",
+      toString(picked),
+      "), not a guideline value column itself.",
+      call. = FALSE
+    )
+  }
+  sets
+}
+
 
 # ---------------------------------------------------------------------------
 # Reading

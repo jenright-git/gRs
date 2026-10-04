@@ -9,7 +9,9 @@ summary_stats(
   save_path = NULL,
   tidy_path = NULL,
   include_criteria = FALSE,
-  criteria_col = criteria
+  criteria_col = criteria,
+  group_vars = NULL,
+  lor_multiplier = 1
 )
 }
 \arguments{
@@ -20,24 +22,42 @@ export - stats as columns, one row per location/chemical, e.g.
 \code{"output/summary.xlsx"}. The directory is created if it does not exist.}
 
 \item{tidy_path}{full file path, including filename, for the long-format
-export - one row per statistic per location/chemical, with columns
-\code{location_code}, \code{chem_name}, \code{stat} and \code{value}.}
+export - one row per statistic per location/chemical, with the grouping
+columns (\code{location_code}, \code{chem_name}, and \code{output_unit} and
+\code{criteria_set} where present) followed by \code{stat} and \code{value}.}
 
 \item{include_criteria}{include the guideline value and an exceedance
 count. The count comes from the \code{exceedance} column written by
 \code{\link[=join_action_levels]{join_action_levels()}}, so whether a non-detect above the guideline
 counts is decided there by \code{lor_as_exceedance}, not here.}
 
-\item{criteria_col}{name of the column holding the guideline value,
-matching the \code{value_col} it was joined under by \code{\link[=join_action_levels]{join_action_levels()}}.
-Can be given with or without quotes. Default \code{criteria}. The output
-columns take the same name - \code{criteria_99} and
-\code{criteria_99_exceedance_count} - so two sets summarised separately can be
-told apart. Ignored unless \code{include_criteria = TRUE}.}
+\item{criteria_col}{the column or columns holding the guideline value,
+matching the \code{value_col} each set was joined under by
+\code{\link[=join_action_levels]{join_action_levels()}}. One column, or several as
+\code{c(criteria_95, criteria_99)}, with or without quotes; \code{all_of()} and
+helpers such as \code{starts_with("criteria")} work too. Default \code{criteria}.
+Each set adds two columns, in the order named, under its own name -
+\code{criteria_99} and \code{criteria_99_exceedance_count} - so the sets sit side
+by side, each counted against its own verdicts. Ignored unless
+\code{include_criteria = TRUE}.}
+
+\item{group_vars}{character vector of further columns to group by, ahead
+of the location, e.g. \code{"monitoring_zone"}, which is how the zone reaches
+\code{\link[=summary_stats_to_excel]{summary_stats_to_excel()}}. Default \code{NULL}.}
+
+\item{lor_multiplier}{what to multiply a non-detect's LOR by for the mean,
+standard deviation and percentiles, as \code{\link[=half_lor]{half_lor()}} and
+\code{\link[=mann_kendall_test]{mann_kendall_test()}} take it: 1 (default) for the full LOR, 0.5 for
+half, 0 for zero.}
 }
 \value{
-A tibble of summary statistics, invisibly written to \code{save_path}
-and \code{tidy_path} where those are given.
+A tibble of summary statistics, one row per \code{group_vars},
+\code{location_code}, \code{chem_name}, and \code{output_unit} and \code{criteria_set} where
+present, also written to \code{save_path} and \code{tidy_path} where those are
+given. The long form at \code{tidy_path} holds the numbers only, without
+\code{min_nd} and \code{max_nd}. With \code{include_criteria = TRUE}, the
+\code{"criteria_names"} attribute names each set, \code{NA} where
+\code{\link[=join_action_levels]{join_action_levels()}} recorded no single name.
 }
 \description{
 One row per location and chemical, with detection counts, the usual
@@ -45,12 +65,70 @@ descriptive statistics and a set of percentiles. Optionally carries the
 guideline value joined on by \code{\link[=join_action_levels]{join_action_levels()}} and a count of the
 results that exceeded it.
 }
+\details{
+Results are also grouped by \code{output_unit} and \code{criteria_set} where \code{data}
+carries them, as \code{\link[=analyte_summary]{analyte_summary()}} and \code{\link[=historical_range]{historical_range()}} group them.
+An analyte reported in two units therefore gets a row per unit rather than
+having its statistics pooled across both, and a table stacked by
+\code{\link[=criteria_long]{criteria_long()}} gets a row per guideline set, each counting its results
+once and its exceedances against its own guideline.
+
+The maximum is the highest \emph{detected} result, as \code{\link[=analyte_summary]{analyte_summary()}}
+reports it: a non-detect says only that the result was below its LOR, so
+an LOR above every detect is not the highest result, however high the lab
+set it. Where nothing was detected, the highest result stands in. The
+minimum is the lowest result, detected or not. \code{min_nd} and \code{max_nd} say
+where that end of the range is a non-detect - \verb{<0.5} rather than \code{0.5}:
+the minimum where any non-detect sits at the lowest value, the maximum only
+where nothing was detected.
+
+The mean, standard deviation and percentiles take non-detects at their LOR
+times \code{lor_multiplier}, substituted by \code{\link[=half_lor]{half_lor()}} - at the full LOR by
+default, so where an LOR sits above the detects an upper percentile can be
+higher than the maximum. The counts, minimum and maximum are always of the
+results as reported: a \verb{<0.5} stays \verb{<0.5}, whatever multiplier the
+statistics were calculated with. The multiplier is kept in the table's
+\code{"lor_multiplier"} attribute, for \code{\link[=summary_stats_to_excel]{summary_stats_to_excel()}} to head the
+columns it changed with.
+
+Pass the table on to \code{\link[=summary_stats_to_excel]{summary_stats_to_excel()}} for a formatted workbook.
+The name \code{\link[=join_action_levels]{join_action_levels()}} recorded for each guideline set -
+\code{"NEMP 99\%"}, say - goes with it, in the table's \code{"criteria_names"}
+attribute, to head that set's columns.
+}
 \examples{
 summary_stats(gRs_data)
+
+# Non-detects at half their LOR in the mean, SD and percentiles
+summary_stats(gRs_data, lor_multiplier = 0.5)
 
 # With a guideline set joined on by join_action_levels()
 \dontrun{
 summary_stats(compared, include_criteria = TRUE)
 summary_stats(compared, include_criteria = TRUE, criteria_col = criteria_99)
+
+# Several sets side by side, a guideline and a count for each
+summary_stats(
+  compared,
+  include_criteria = TRUE,
+  criteria_col = c(criteria_95, criteria_99)
+)
+
+# Every joined set at once, one row per set
+compared \%>\%
+  criteria_long() \%>\%
+  summary_stats(include_criteria = TRUE)
 }
+
+# Grouped by monitoring zone, then written to a formatted workbook
+gRs_data \%>\%
+  summary_stats(group_vars = "monitoring_zone") \%>\%
+  summary_stats_to_excel(
+    save_path = tempfile(fileext = ".xlsx"),
+    include_zone = TRUE
+  )
+}
+\seealso{
+\code{\link[=summary_stats_to_excel]{summary_stats_to_excel()}} for the same statistics as a formatted
+workbook, and \code{\link[=half_lor]{half_lor()}} for the substitution \code{lor_multiplier} makes.
 }

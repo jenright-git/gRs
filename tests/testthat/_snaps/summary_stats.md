@@ -1,3 +1,19 @@
+# lor_multiplier must be a single number, 0 or more
+
+    Code
+      summary_stats(chem_fixture(), lor_multiplier = -1)
+    Condition
+      Error in `summary_stats()`:
+      ! `lor_multiplier` must be a single number, 0 or more.
+
+# group_vars names the columns `data` lacks
+
+    Code
+      summary_stats(chem_fixture(), group_vars = "zone")
+    Condition
+      Error in `summary_stats()`:
+      ! `group_vars` names columns `data` does not have: zone.
+
 # summary_stats names the columns it cannot do without
 
     Code

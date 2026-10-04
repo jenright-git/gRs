@@ -54,3 +54,20 @@ action_level_fixture <- function(...) {
   for (nm in names(args)) out[[nm]] <- args[[nm]]
   out
 }
+
+# chem_fixture() with two guideline sets joined side by side: 2 ug/L as
+# criteria_95, which every detect exceeds, and 5000 ug/L as criteria_99, which
+# only MW02's 8 mg/L does.
+two_sets_fixture <- function() {
+  chem_fixture() %>%
+    join_action_levels(
+      action_level_fixture(criteria_name = "NEMP 95%", criteria = 2),
+      value_col = "criteria_95",
+      quiet = TRUE
+    ) %>%
+    join_action_levels(
+      action_level_fixture(criteria_name = "NEMP 99%", criteria = 5000),
+      value_col = "criteria_99",
+      quiet = TRUE
+    )
+}

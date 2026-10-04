@@ -6,6 +6,14 @@
   `create_gt()` for a formatted table, or call `DT::datatable()` directly
   for an interactive one.
 
+* `summary_stats()` reports the highest *detected* result as `max`, as
+  `analyte_summary()` does, falling back to the highest result - flagged by
+  `max_nd` - only where nothing was detected. Before, a non-detect whose LOR
+  sat above every detect was reported as the maximum. The mean, standard
+  deviation and percentiles are unchanged, of every result as reported.
+  `summary_stats_to_excel()`, `mka_to_excel(include_summary = TRUE)` and
+  `create_gt()` report the new maximum.
+
 ## New features
 
 * `data_processor()` and `action_level_processor()` accept a data frame as
@@ -34,7 +42,37 @@
   reported, as a `"6.5 - 8.5"` cell in an export is. `name` is only required
   for a data frame that names no set.
 
+* `summary_stats()` takes several guideline sets at once:
+  `criteria_col = c(criteria_95, criteria_99)` adds a guideline column and an
+  exceedance count for each set, side by side and in the order named, each
+  counted against that set's own verdicts. Quoted names, `all_of()` and
+  helpers such as `starts_with("criteria")` work too; a helper's catch of a
+  set's `_name`, `_unit` and verdict columns is dropped. A single set gives
+  the same columns as before.
+
+* `summary_stats()` gains `lor_multiplier`, as `half_lor()` and
+  `mann_kendall_test()` take it: the mean, standard deviation and
+  percentiles take non-detects at their LOR times the multiplier (0.5 for
+  half LOR), while the counts, minimum and maximum stay as reported.
+  `summary_stats_to_excel()` heads the changed columns with the multiplier
+  used, e.g. "Mean (ND at 0.5x LOR)".
+
+* `summary_stats()` gains `group_vars`, for further grouping columns such as
+  `"monitoring_zone"` ahead of the location, and `min_nd` and `max_nd`
+  columns flagging a minimum or maximum that is a non-detect. With
+  `include_criteria = TRUE` it attaches each set's name, as recorded by
+  `join_action_levels()`, in a `"criteria_names"` attribute.
+
 ## Bug fixes
+
+* `summary_stats()` groups by `output_unit` and `criteria_set` where present,
+  as `analyte_summary()` and `historical_range()` already did. An analyte
+  reported in two units now gets a row per unit instead of one pooled mean,
+  and a table stacked by `criteria_long()` gets a row per guideline set.
+  Before, every result was counted once per set (doubling `n_samples` for
+  two sets), the exceedances of all sets were added together, and the lowest
+  set's guideline was reported with a warning wrongly blaming units. The
+  extra grouping columns appear in the output and in the `tidy_path` export.
 
 * `data_processor()` now prefixes `Dissolved` onto EQuIS dissolved results
   (fraction `D`) as it does ESDAT filtered ones (`F`), so the two fractions

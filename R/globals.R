@@ -45,9 +45,12 @@ utils::globalVariables(c(
 
   # computed inside summary_stats(), mann_kendall_test() and
   # select_max_concentration()
+  ".exceedance",
+  ".guideline",
   ".has_duplicate",
   ".is_detect",
   ".label",
+  ".value",
   "COV",
   "SD",
   "n_detects",
