@@ -69,6 +69,17 @@
   `include_criteria = TRUE` it attaches each set's name, as recorded by
   `join_action_levels()`, in a `"criteria_names"` attribute.
 
+* `mka_to_excel(include_summary = TRUE)` substitutes non-detects in the
+  summary statistics with the same `lor_multiplier` the trend test used,
+  which `mann_kendall_test()` now records in a `"lor_multiplier"` attribute.
+  The summary's mean and standard deviation then agree with the test's "as
+  tested" pair, and their headings name the multiplier, e.g. "Mean (ND at
+  0.5x LOR)". The counts, minimum and maximum stay as reported.
+
+* `mka_to_excel(include_summary = TRUE)` calculates the summary statistics
+  in one `summary_stats()` call, rather than one more for each guideline
+  set. The sheet is unchanged.
+
 ## Bug fixes
 
 * `summary_stats()` groups by `output_unit` and `criteria_set` where present,

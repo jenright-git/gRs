@@ -152,6 +152,12 @@ in white on a deep green, and the first row and column are frozen. A second
 sheet explains what each trend category means.
 }
 \details{
+\code{\link[=mann_kendall_test]{mann_kendall_test()}} tests each unit an analyte was reported in as a
+separate series. Where an analyte comes in more than one unit, each unit
+gets a column of its own, headed with the unit - \code{"Zinc (mg/L)"} and
+\code{"Zinc (ug/L)"} - on the summary and statistics sheets alike. An analyte
+reported in one unit keeps its plain name.
+
 Location/analyte combinations that \code{\link[=mann_kendall_test]{mann_kendall_test()}} could not test,
 because they had too few samples or too few detects, are absent from its
 output and so come through the pivot as \code{NA}. They are written as
@@ -185,14 +191,20 @@ compute, are written as \code{-} rather than as Excel's \verb{#NUM!} error.
 detect counts and percentages, the minimum, mean, maximum and standard
 deviation, and the 5th to 99th percentiles - calculated from the nested
 \code{data} column, so they describe exactly the samples each trend was tested
-on. They use concentrations as reported, with no LOR substitution, so the
-mean and standard deviation are labelled "as reported" beside the test's
-own "as tested" pair; the two agree when \code{\link[=mann_kendall_test]{mann_kendall_test()}} was run with
-its default \code{lor_multiplier = 1}. A minimum or maximum that is a non-detect
-is written with its \code{<}, as text: the minimum where any non-detect sits at
-the lowest value, the maximum only where every result at the highest value
-is one, since a detect outranks a non-detect at the same figure. The mean
-and percentiles are calculated rather than reported, and stay numbers.
+on. The mean, standard deviation and percentiles take non-detects at the
+same multiple of their LOR the test did - the \code{lor_multiplier}
+\code{\link[=mann_kendall_test]{mann_kendall_test()}} was run with, which it records on its result - so
+the summary's mean and standard deviation agree with the test's own "as
+tested" pair, and their headings name the multiplier where it is not 1:
+"Mean (ND at 0.5x LOR)". Where the record has been lost, by
+\code{dplyr::bind_rows()} say, they are of the full LOR, headed "as reported".
+The counts, minimum and maximum are always as reported. The maximum is the
+highest detected
+result, as \code{\link[=summary_stats]{summary_stats()}} reports it. A minimum or maximum that is a
+non-detect is written with its \code{<}, as text: the minimum where any
+non-detect sits at the lowest value, the maximum only where nothing was
+detected. The mean and percentiles are calculated rather than reported,
+and stay numbers.
 Where guideline sets were joined on with \code{\link[=join_action_levels]{join_action_levels()}} before the
 trend test, each set named in \code{criteria_col} follows with a guideline column
 and an exceedance count of its own, headed with the set's name.

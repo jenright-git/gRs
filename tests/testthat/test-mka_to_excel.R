@@ -8,9 +8,12 @@ mka_fixture <- function() {
 }
 
 test_that("the export pivots analytes across and trends into the cells", {
-  out <- mka_to_excel(mka_fixture(), save_path = withr::local_tempfile(
-    fileext = ".xlsx"
-  ))
+  out <- mka_to_excel(
+    mka_fixture(),
+    save_path = withr::local_tempfile(
+      fileext = ".xlsx"
+    )
+  )
 
   expect_named(out, c("Monitoring Well", "Copper", "Zinc"))
   expect_equal(out[["Monitoring Well"]], c("MW01", "MW02"))
@@ -35,9 +38,12 @@ test_that("legend = FALSE drops the second sheet", {
 
 test_that("untested location/analyte pairs are labelled, not left blank", {
   data <- mka_fixture()[1:3, ]
-  out <- mka_to_excel(data, save_path = withr::local_tempfile(
-    fileext = ".xlsx"
-  ))
+  out <- mka_to_excel(
+    data,
+    save_path = withr::local_tempfile(
+      fileext = ".xlsx"
+    )
+  )
 
   expect_equal(out$Copper, c("NC", "Stable"))
 
@@ -80,7 +86,10 @@ test_that("colours can be given as a list", {
     "trend_colours"
   )
 
-  expect_equal(unname(fills[c("Increasing", "Stable")]), c("#000000", "#111111"))
+  expect_equal(
+    unname(fills[c("Increasing", "Stable")]),
+    c("#000000", "#111111")
+  )
 })
 
 test_that("an unnamed vector must be a complete set, in level order", {
@@ -322,9 +331,12 @@ cells_filled <- function(path, fill, sheet = NULL) {
     styles
   )
 
-  unique(do.call(rbind, lapply(hits, function(s) {
-    cbind(row = s$rows, col = s$cols)
-  })))
+  unique(do.call(
+    rbind,
+    lapply(hits, function(s) {
+      cbind(row = s$rows, col = s$cols)
+    })
+  ))
 }
 
 test_that("the well names are set a shade back from the zone beside them", {
@@ -399,7 +411,10 @@ test_that("include_zone must be a single TRUE or FALSE", {
 
 mka_stats_fixture <- function() {
   data <- mka_nested_fixture()
-  data$data[[3]] <- dplyr::tibble(monitoring_zone = "Upper", concentration = 1:6)
+  data$data[[3]] <- dplyr::tibble(
+    monitoring_zone = "Upper",
+    concentration = 1:6
+  )
   data$p_value <- c(0.0123456, 0.5, 0.02, 0.6)
   data$tau_statistic <- stats::setNames(c(0.8, 0, -0.7, 0.1), rep("tau", 4))
   data$S_statistic <- c(5, 0, -9, 1)
@@ -428,11 +443,21 @@ test_that("the statistics sheet has a row per pair, sorted as the summary", {
   mka_to_excel(mka_stats_fixture(), save_path = path, include_stats = TRUE)
   stats <- read_stats_sheet(path)
 
-  expect_named(stats, c(
-    "Monitoring Well", "Analyte", "Trend", "Samples", "S Statistic",
-    "Kendall's Tau", "p-value", "Mean", "Standard Deviation",
-    "Coefficient of Variation"
-  ))
+  expect_named(
+    stats,
+    c(
+      "Monitoring Well",
+      "Analyte",
+      "Trend",
+      "Samples",
+      "S Statistic",
+      "Kendall's Tau",
+      "p-value",
+      "Mean",
+      "Standard Deviation",
+      "Coefficient of Variation"
+    )
+  )
   expect_equal(stats[["Monitoring Well"]], c("MW01", "MW01", "MW02", "MW02"))
   expect_equal(stats$Analyte, c("Copper", "Zinc", "Copper", "Zinc"))
   expect_equal(
@@ -547,7 +572,10 @@ test_that("the statistics sheet carries the zone, merged unless told not to", {
   )
 
   stats <- read_stats_sheet(path)
-  expect_equal(names(stats)[1:3], c("Monitoring Zone", "Monitoring Well", "Analyte"))
+  expect_equal(
+    names(stats)[1:3],
+    c("Monitoring Zone", "Monitoring Well", "Analyte")
+  )
   expect_equal(stats[["Monitoring Well"]], c("MW02", "MW02", "MW01", "MW01"))
 
   wb <- openxlsx::loadWorkbook(path)
@@ -651,7 +679,7 @@ mka_summary_fixture <- function() {
       concentration = c(0.001, 0.001, 0.002, 0.005, 0.005, 0.003),
       detect_flag = c("Y", "N", "Y", "N", "Y", "Y")
     ),
-    # MW01 / Copper: only non-detects at the highest value
+    # MW01 / Copper: a non-detect LOR above every detect
     dplyr::tibble(
       concentration = c(0.002, 0.003, 0.01, 0.01),
       detect_flag = c("Y", "Y", "N", "N")
@@ -661,7 +689,10 @@ mka_summary_fixture <- function() {
 }
 
 write_summary_fixture <- function(data = mka_summary_fixture(), ...) {
-  path <- withr::local_tempfile(fileext = ".xlsx", .local_envir = parent.frame())
+  path <- withr::local_tempfile(
+    fileext = ".xlsx",
+    .local_envir = parent.frame()
+  )
   mka_to_excel(
     data,
     save_path = path,
@@ -675,14 +706,30 @@ write_summary_fixture <- function(data = mka_summary_fixture(), ...) {
 test_that("include_summary adds the summary_stats() columns after the test's", {
   stats <- read_stats_sheet(write_summary_fixture())
 
-  expect_equal(names(stats), c(
-    "Monitoring Well", "Analyte", "Trend", "Samples", "S Statistic",
-    "Kendall's Tau", "p-value", "Mean (as tested)",
-    "Standard Deviation (as tested)", "Coefficient of Variation",
-    "Detects", "Non-Detects", "% Detects", "% Non-Detects", "Minimum",
-    "Mean (as reported)", "Maximum", "Standard Deviation (as reported)",
-    paste0(PERCENTILES, "th Percentile")
-  ))
+  expect_equal(
+    names(stats),
+    c(
+      "Monitoring Well",
+      "Analyte",
+      "Trend",
+      "Samples",
+      "S Statistic",
+      "Kendall's Tau",
+      "p-value",
+      "Mean (as tested)",
+      "Standard Deviation (as tested)",
+      "Coefficient of Variation",
+      "Detects",
+      "Non-Detects",
+      "% Detects",
+      "% Non-Detects",
+      "Minimum",
+      "Mean (as reported)",
+      "Maximum",
+      "Standard Deviation (as reported)",
+      paste0(PERCENTILES, "th Percentile")
+    )
+  )
   expect_equal(stats$Samples, c(4, 6, 4, 4))
   expect_equal(stats$Detects, c(2, 4, 0, 4))
   expect_equal(stats[["Non-Detects"]], c(2, 2, 4, 0))
@@ -702,6 +749,52 @@ test_that("the summary describes the nested series, as summary_stats() would", {
   expect_equal(stats[["95th Percentile"]][4], zinc$p95)
 })
 
+test_that("an analyte tested in two units gets a column for each", {
+  # MW01 Zinc changed units partway through; MW02 Zinc did not
+  data <- dplyr::tibble(
+    location_code = rep(c("MW01", "MW02"), c(10, 5)),
+    chem_name = "Zinc",
+    date = as.POSIXct("2024-01-15", tz = "UTC") + c(0:9, 0:4) * 8.64e6,
+    concentration = c(1:5, 6000:6004, 1:5),
+    prefix = NA_character_,
+    detect_flag = "Y",
+    output_unit = rep(c("mg/L", "ug/L", "mg/L"), each = 5)
+  )
+  trends <- suppressMessages(mann_kendall_test(data))
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  out <- suppressMessages(mka_to_excel(
+    trends,
+    save_path = path,
+    include_stats = TRUE,
+    include_summary = TRUE
+  ))
+
+  expect_named(out, c("Monitoring Well", "Zinc (mg/L)", "Zinc (ug/L)"))
+  expect_equal(out[["Zinc (ug/L)"]], c("Increasing", "NC"))
+
+  stats <- read_stats_sheet(path)
+  expect_equal(stats$Analyte, c("Zinc (mg/L)", "Zinc (ug/L)", "Zinc (mg/L)"))
+  expect_equal(stats$Maximum, c(5, 6004, 5))
+})
+
+test_that("an analyte in one unit keeps its plain name", {
+  data <- dplyr::mutate(mka_summary_fixture(), output_unit = "mg/L")
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  out <- suppressMessages(mka_to_excel(data, save_path = path))
+
+  expect_false(any(grepl("mg/L", names(out), fixed = TRUE)))
+})
+
+test_that("a nested series holding two units is an error, not pooled", {
+  data <- mka_summary_fixture()
+  data$data[[3]]$output_unit <- c(rep("mg/L", 2), "ug/L", rep("mg/L", 3))
+
+  expect_error(
+    write_summary_fixture(data),
+    "more than one unit"
+  )
+})
+
 test_that("a non-detect minimum or maximum carries its <, as text", {
   path <- write_summary_fixture()
   cells <- readxl::read_excel(path, sheet = "Statistics", col_types = "list")
@@ -711,9 +804,11 @@ test_that("a non-detect minimum or maximum carries its <, as text", {
     list(0.002, "<0.001", "<0.001", 1),
     ignore_attr = TRUE
   )
+  # the maximum is the highest detect - MW01 Copper's 0.003, not its <0.01 -
+  # and a non-detect only where nothing was detected
   expect_equal(
     cells$Maximum,
-    list("<0.01", 0.005, "<0.001", 4),
+    list(0.003, 0.005, "<0.001", 4),
     ignore_attr = TRUE
   )
 
@@ -884,10 +979,15 @@ test_that("several guideline sets are written side by side, in the order named",
     criteria_col = c(criteria_99, criteria_95)
   ))
 
-  expect_equal(utils::tail(names(stats), 4), c(
-    "NEMP 99% Guideline", "NEMP 99% Exceedances",
-    "NEMP 95% Guideline", "NEMP 95% Exceedances"
-  ))
+  expect_equal(
+    utils::tail(names(stats), 4),
+    c(
+      "NEMP 99% Guideline",
+      "NEMP 99% Exceedances",
+      "NEMP 95% Guideline",
+      "NEMP 95% Exceedances"
+    )
+  )
   expect_equal(stats[["NEMP 99% Guideline"]], rep(0.0025, 4))
   expect_equal(stats[["NEMP 95% Guideline"]], rep(0.004, 4))
 })
@@ -930,10 +1030,15 @@ test_that("sets with no recorded name are told apart by their columns", {
     criteria_col = c(criteria_95, criteria_99)
   ))
 
-  expect_equal(utils::tail(names(stats), 4), c(
-    "criteria_95 Guideline", "criteria_95 Exceedances",
-    "criteria_99 Guideline", "criteria_99 Exceedances"
-  ))
+  expect_equal(
+    utils::tail(names(stats), 4),
+    c(
+      "criteria_95 Guideline",
+      "criteria_95 Exceedances",
+      "criteria_99 Guideline",
+      "criteria_99 Exceedances"
+    )
+  )
 })
 
 test_that("two sets joined under one name keep distinct headings", {
@@ -947,10 +1052,15 @@ test_that("two sets joined under one name keep distinct headings", {
     criteria_col = c(criteria_a, criteria_b)
   ))
 
-  expect_equal(utils::tail(names(stats), 4), c(
-    "NEMP (criteria_a) Guideline", "NEMP (criteria_a) Exceedances",
-    "NEMP (criteria_b) Guideline", "NEMP (criteria_b) Exceedances"
-  ))
+  expect_equal(
+    utils::tail(names(stats), 4),
+    c(
+      "NEMP (criteria_a) Guideline",
+      "NEMP (criteria_a) Exceedances",
+      "NEMP (criteria_b) Guideline",
+      "NEMP (criteria_b) Exceedances"
+    )
+  )
 })
 
 test_that("a lone named set is headed with its name", {
@@ -1020,4 +1130,38 @@ test_that("a helper picking only a set's companion columns is an error", {
     ),
     "not a guideline value column"
   )
+})
+
+test_that("include_summary substitutes non-detects as the trend test did", {
+  data <- dplyr::tibble(
+    location_code = "MW01",
+    chem_name = "Zinc",
+    date = as.POSIXct("2024-01-15", tz = "UTC") + (0:7) * 8.64e6,
+    concentration = c(4, 0.5, 3, 0.5, 2, 6, 7, 8),
+    prefix = c(NA, "<", NA, "<", NA, NA, NA, NA),
+    detect_flag = c("Y", "N", "Y", "N", "Y", "Y", "Y", "Y"),
+    output_unit = "mg/L"
+  )
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(mka_to_excel(
+    mann_kendall_test(data, lor_multiplier = 0.5),
+    save_path = path,
+    include_stats = TRUE,
+    include_summary = TRUE
+  ))
+  stats <- read_stats_sheet(path)
+
+  substituted <- c(4, 0.25, 3, 0.25, 2, 6, 7, 8)
+  expect_equal(stats[["Mean (ND at 0.5x LOR)"]], mean(substituted))
+  expect_equal(stats[["Mean (ND at 0.5x LOR)"]], stats[["Mean (as tested)"]])
+  expect_equal(
+    stats[["Standard Deviation (ND at 0.5x LOR)"]],
+    stats[["Standard Deviation (as tested)"]]
+  )
+  expect_equal(
+    stats[["95th Percentile (ND at 0.5x LOR)"]],
+    unname(quantile(substituted, 0.95))
+  )
+  # the reported minimum is still the lab's <0.5
+  expect_equal(stats$Minimum, "<0.5")
 })
