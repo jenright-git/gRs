@@ -319,6 +319,7 @@ results_table <- function(
 #' @param merge_cells,include_zone,zone_label,location_label as for
 #'   [results_table()]
 #' @param zone_name the zone column's name, as a string
+#' @param caller the function the user called, for the error messages
 #' @returns a list:
 #'   * `ids`: one row per table row - the zone, the location and the
 #'     `id_cols` - as their own types, sorted by group and then by these;
@@ -365,7 +366,8 @@ results_crosstab <- function(
   include_zone = FALSE,
   zone_name = "monitoring_zone",
   zone_label = "Monitoring Zone",
-  location_label = "Monitoring Well"
+  location_label = "Monitoring Well",
+  caller = "results_table"
 ) {
   check_flag(highlight_lor, "highlight_lor")
   check_flag(include_zone, "include_zone")
@@ -398,12 +400,7 @@ results_crosstab <- function(
       "on by join_action_levels()."
     )
   }
-  if (!any(c("detect_flag", "prefix") %in% names(data))) {
-    stop(
-      "`data` has neither a `detect_flag` nor a `prefix` column, so a ",
-      "detected result cannot be told from a non-detect."
-    )
-  }
+  check_detect_flag(data, caller)
   if (nrow(data) == 0) {
     stop("`data` holds no results to tabulate.")
   }
@@ -471,11 +468,7 @@ results_crosstab <- function(
 
   conc <- suppressWarnings(as.numeric(data$concentration))
   # As join_action_levels() decides it: only a "Y" is a detect.
-  nd <- if ("detect_flag" %in% names(data)) {
-    !(as.character(data$detect_flag) %in% "Y")
-  } else {
-    as.character(data$prefix) %in% "<"
-  }
+  nd <- !is_detect(data$detect_flag)
 
   # --- columns: one per analyte and unit, by chemical group then name
   analyte <- data.frame(

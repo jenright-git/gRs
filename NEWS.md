@@ -14,6 +14,28 @@
   `summary_stats_to_excel()`, `mka_to_excel(include_summary = TRUE)` and
   `create_gt()` report the new maximum.
 
+* Whether a result was detected is decided from `detect_flag` throughout the
+  package: only a `"Y"` is a detect. `data_processor()` is the one place a
+  flag is made from `prefix`, for the ESDAT exports that carry none. Before,
+  `mann_kendall_test()` (its `lor_multiplier`, `nd_threshold` and
+  `min_detects`), `mk_analysis()`, `half_lor()`, `select_max_concentration()`
+  and `summary_stats()`'s `lor_multiplier` read `prefix == "<"` instead. The
+  two agree in every table `data_processor()` returns, so results are
+  unchanged there; a table where they disagree now follows the flag. Each of
+  these functions now stops where `data` has no `detect_flag` column, as do
+  `results_table()`, which fell back to `prefix`, and `join_action_levels()`,
+  which counted every result in a table without one as detected. A result
+  with a missing flag is a non-detect throughout: `summary_stats()` now counts
+  it in `n_non_detects`, where before it was in neither count, so
+  `n_detects` and `n_non_detects` always add up to `n_samples`.
+
+* `data_processor()` writes the `prefix` of an EQuIS result as `"<"` for a
+  non-detect and `NA` for a detect, as ESDAT does, rather than `"="` for a
+  detect. A result with no detect flag gets `"<"`, where before it got `NA`.
+
+* `half_lor()` leaves `prefix` as it was, as its documentation said, rather
+  than filling a missing prefix with `"="`.
+
 ## New features
 
 * New `results_table()` and `results_table_to_excel()` lay results out as a
@@ -134,6 +156,17 @@
   set. The sheet is unchanged.
 
 ## Bug fixes
+
+* `analyte_summary()` and `historical_range()` write the `<` beside a
+  minimum, maximum or current result from `detect_flag`, rather than passing
+  `prefix` through. EQuIS data no longer shows a range such as
+  `=0.002 - =0.01` in `create_gt()`. A detect whose prefix is `">"` keeps it.
+
+* `data_processor()` makes `detect_flag` from an ESDAT prefix as `"N"` only
+  where the prefix is `"<"`. Before, any prefix at all made a non-detect, so
+  a result above the lab's range (`>2000`) was counted as not detected. It is
+  now a detect everywhere, and `analyte_summary()` and `historical_range()`
+  show it as `>2000`.
 
 * `summary_stats()` groups by `output_unit` and `criteria_set` where present,
   as `analyte_summary()` and `historical_range()` already did. An analyte

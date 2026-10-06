@@ -15,7 +15,8 @@
 #'   was detected there is no detection to report, so the highest result is
 #'   used instead and its `<` is carried through in `max_prefix` rather than
 #'   the row coming out blank. The **minimum** is the lowest result of the
-#'   round, detected or not.
+#'   round, detected or not. A detect above the top of the lab's range keeps
+#'   its `>` (`>2000`).
 #' * An **exceedance** is whatever [join_action_levels()] decided it was. That
 #'   function settles once - through its `lor_as_exceedance` argument - whether
 #'   a non-detect whose limit of reporting sits above the guideline counts, and
@@ -177,8 +178,7 @@ analyte_summary <- function(
     current$.exceedance <- if (cmp[["exceedance"]] %in% names(current)) {
       as.logical(current[[cmp[["exceedance"]]]])
     } else {
-      !is.na(current$detect_flag) &
-        current$detect_flag == "Y" &
+      is_detect(current$detect_flag) &
         !is.na(current$.criteria) &
         suppressWarnings(as.numeric(current$concentration)) > current$.criteria
     }
@@ -210,13 +210,10 @@ analyte_summary <- function(
 #' @noRd
 analyte_row <- function(df, key, include_criteria) {
   conc <- suppressWarnings(as.numeric(df$concentration))
-  detect <- !is.na(df$detect_flag) & df$detect_flag == "Y"
+  detect <- is_detect(df$detect_flag)
   usable <- !is.na(conc)
-  prefix <- if ("prefix" %in% names(df)) {
-    as.character(df$prefix)
-  } else {
-    rep(NA_character_, nrow(df))
-  }
+  # The "<" is read from the flag; only a ">" is taken from `prefix`.
+  prefix <- display_prefix(df$detect_flag, df[["prefix"]])
 
   # The maximum is the highest detection. Where nothing was detected there is
   # no detection to report, so the highest result stands in and carries its

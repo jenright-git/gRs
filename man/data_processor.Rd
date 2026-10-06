@@ -78,6 +78,14 @@ families. ESDAT-only fields that have no EQuIS equivalent (for example
 
 Water level reports are returned with the full EQuIS field set present, so
 ESDAT and EQuIS gauging data can be combined with \code{\link[dplyr:bind_rows]{dplyr::bind_rows()}}.
+
+Every chemistry table comes back with both \code{detect_flag} and \code{prefix}, and
+the rest of the package decides which results were detected from
+\code{detect_flag} alone: only a \code{"Y"} is a detect. EQuIS exports carry the flag,
+and their \code{prefix} is made from it - \code{"<"} for a non-detect and \code{NA} for a
+detect, as ESDAT writes it. ESDAT exports carry only the prefix, and the
+flag is made from that: \code{"N"} where the prefix is \code{"<"}, \code{"Y"} otherwise, so
+a result above the lab's range (\verb{>2000}) counts as detected.
 \subsection{Data frames from esdatr and AEQuIS}{
 
 \code{myfile_path} may instead be a data frame holding the same data, such as an

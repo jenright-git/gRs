@@ -57,6 +57,35 @@ test_that("a new minimum can be set by a non-detect", {
   expect_equal(out$current_prefix, "<")
 })
 
+test_that("the < shown is read from detect_flag, not passed through", {
+  # EQuIS's "=" before a detect is not shown; the flag decides the "<"
+  out <- historical_range(
+    history_fixture(
+      prefix = c("=", "=", "=", NA),
+      detect_flag = c("Y", "Y", "Y", "N"),
+      concentration = c(2, 5, 3, 0.1)
+    ),
+    quiet = TRUE
+  )
+
+  expect_true(is.na(out$hist_min_prefix))
+  expect_true(is.na(out$hist_max_prefix))
+  expect_equal(out$current_prefix, "<")
+})
+
+test_that("a current result above the lab's range keeps its >", {
+  out <- historical_range(
+    history_fixture(
+      prefix = c(NA, NA, NA, ">"),
+      concentration = c(2, 5, 3, 2000)
+    ),
+    quiet = TRUE
+  )
+
+  expect_equal(out$current_prefix, ">")
+  expect_equal(out$hist_max_prefix, NA_character_)
+})
+
 test_that("a non-detect can never set a new maximum", {
   # the current LOR is above every historical detection
   out <- historical_range(

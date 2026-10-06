@@ -78,6 +78,24 @@ test_that("lor_multiplier reads detect_flag where there is no prefix", {
   expect_equal(out$mean[[1]], (1.5 + 2.5) / 3)
 })
 
+test_that("lor_multiplier reads detect_flag where prefix disagrees", {
+  # MW01's prefixes mark the 2.5 as the non-detect; its flags mark the 0.5
+  data <- chem_fixture(prefix = c(NA, "<", NA, NA, NA, "<"))
+
+  out <- summary_stats(data, lor_multiplier = 0)
+  expect_equal(out$mean[[1]], (1.5 + 2.5) / 3)
+  expect_equal(out$n_non_detects, c(1, 1))
+})
+
+test_that("a grouped table is summarised as an ungrouped one is", {
+  data <- chem_fixture()
+
+  expect_equal(
+    summary_stats(dplyr::group_by(data, location_code), lor_multiplier = 0.5),
+    summary_stats(data, lor_multiplier = 0.5)
+  )
+})
+
 test_that("lor_multiplier must be a single number, 0 or more", {
   expect_snapshot(
     summary_stats(chem_fixture(), lor_multiplier = -1),

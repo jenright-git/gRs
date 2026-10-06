@@ -71,6 +71,37 @@ test_that("the minimum is the lowest result, detected or not", {
   expect_equal(out$min_prefix, c("<", "<"))
 })
 
+test_that("the < shown is read from detect_flag, not passed through", {
+  # an EQuIS export writes "=" before every detect; the flag says which is
+  # which, and only a non-detect is shown with anything in front of it
+  out <- analyte_summary(
+    two_analytes(
+      prefix = rep(c("=", "=", "<", "=", "=", "<"), 2),
+      concentration = rep(c(0.1, 2.5, 0.5, 4, 8, 0.5), 2)
+    ),
+    quiet = TRUE
+  )
+
+  expect_equal(out$min_conc, c(0.1, 0.1))
+  expect_true(all(is.na(out$min_prefix)))
+  expect_true(all(is.na(out$max_prefix)))
+})
+
+test_that("a maximum above the lab's range keeps its >", {
+  # ESDAT writes ">2000" for a count above the top of the lab's range
+  out <- analyte_summary(
+    two_analytes(
+      prefix = rep(c(">", NA, "<", NA, NA, "<"), 2),
+      concentration = rep(c(2000, 2.5, 0.5, 4, 8, 0.5), 2)
+    ),
+    quiet = TRUE
+  )
+
+  expect_equal(out$max_conc, c(2000, 2000))
+  expect_equal(out$max_prefix, c(">", ">"))
+  expect_equal(out$min_prefix, c("<", "<"))
+})
+
 test_that("exceeding locations are counted, de-duplicated and sorted", {
   out <- analyte_summary(compared_fixture(), quiet = TRUE)
   copper <- out[out$chem_name == "Copper", ]

@@ -420,6 +420,22 @@ test_that("a misnamed guideline set is an error", {
   expect_error(crosstab(sets = "criteria_50"), "criteria_50")
 })
 
+test_that("a missing detect_flag names the function that was called", {
+  data <- two_sets_fixture()
+  data$detect_flag <- NULL
+
+  expect_error(
+    results_table(data, criteria_col = c(criteria_95, criteria_99)),
+    "before calling results_table().",
+    fixed = TRUE
+  )
+  expect_error(
+    write_results(data),
+    "before calling results_table_to_excel().",
+    fixed = TRUE
+  )
+})
+
 
 # ---------------------------------------------------------------------------
 # Excel

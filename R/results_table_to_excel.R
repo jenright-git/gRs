@@ -160,7 +160,8 @@ results_table_to_excel <- function(
     include_zone = include_zone,
     zone_name = rlang::quo_name(rlang::enquo(zone_col)),
     zone_label = zone_label,
-    location_label = location_label
+    location_label = location_label,
+    caller = "results_table_to_excel"
   )
 
   wb <- openxlsx::createWorkbook()

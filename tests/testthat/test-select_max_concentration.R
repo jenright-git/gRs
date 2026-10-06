@@ -4,7 +4,8 @@ dup_fixture <- function(...) {
     date = as.Date("2024-01-15"),
     chem_name = "Benzene",
     concentration = c(5.2, 6.1, 1.0, 3.0, 2.0),
-    prefix = c("=", "=", "=", "<", "="),
+    prefix = c(NA, NA, NA, "<", NA),
+    detect_flag = c("Y", "Y", "Y", "N", "Y"),
     sample_type = c("Normal", "Field_D", "Normal", "Field_D", "Normal")
   )
   args <- list(...)
@@ -23,13 +24,29 @@ test_that("a detect beats a non-detect reported higher", {
   out <- select_max_concentration(dup_fixture())
 
   expect_equal(out$concentration[out$location_code == "MW02"], 1.0)
-  expect_equal(out$prefix[out$location_code == "MW02"], "=")
+  expect_equal(out$detect_flag[out$location_code == "MW02"], "Y")
 })
 
 test_that("an all-non-detect group keeps the highest LOR", {
-  out <- select_max_concentration(dup_fixture(prefix = rep("<", 5)))
+  out <- select_max_concentration(
+    dup_fixture(prefix = rep("<", 5), detect_flag = rep("N", 5))
+  )
 
   expect_equal(out$concentration[out$location_code == "MW02"], 3.0)
+})
+
+test_that("detects are read from detect_flag, not prefix", {
+  # MW02's 3.0 has no "<", but its flag says it was not detected
+  out <- select_max_concentration(dup_fixture(prefix = NA_character_))
+
+  expect_equal(out$concentration[out$location_code == "MW02"], 1.0)
+})
+
+test_that("a table with no detect_flag is an error", {
+  data <- dup_fixture()
+  data$detect_flag <- NULL
+
+  expect_error(select_max_concentration(data), "has no `detect_flag` column")
 })
 
 test_that("a single result per group is returned as it stands", {

@@ -168,7 +168,9 @@ test_that("EQuIS chemistry read with AEQuIS is read as chemistry", {
   )
   # EQuIS files a dissolved result as "D", ESDAT as "F".
   expect_equal(out$chem_name, c("Copper", "Dissolved Copper"))
-  expect_equal(out$prefix, c("=", "<"))
+  # the prefix is made from the flag as ESdat writes it: nothing on a detect
+  expect_equal(out$prefix, c(NA, "<"))
+  expect_equal(out$detect_flag, c("Y", "N"))
 })
 
 test_that("a data frame matching no report family warns and returns NULL", {
@@ -225,6 +227,24 @@ test_that("detect_flag is derived from prefix and back again", {
   out <- process_chemistry(raw)
 
   expect_equal(out$detect_flag, c("Y", "N"))
+})
+
+test_that("only a < prefix makes a non-detect", {
+  # ">2000" is above the lab's range, so it was detected
+  raw <- dplyr::tibble(
+    sample_date = as.POSIXct("2024-01-15", tz = "UTC"),
+    site = "SITE",
+    sys_loc_code = "MW01",
+    chemical_name = "E. coli",
+    result = c(2000, 10, 5, 1),
+    result_unit = "MPN/100mL",
+    qualifier = c(">", "=", NA, "<")
+  )
+  out <- suppressWarnings(process_chemistry(raw))
+
+  expect_equal(out$detect_flag, c("Y", "Y", "Y", "N"))
+  # the prefix itself is left as the export wrote it
+  expect_equal(out$prefix, c(">", "=", NA, "<"))
 })
 
 test_that("coercion tolerates the shapes the exports arrive in", {

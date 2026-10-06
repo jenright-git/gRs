@@ -120,7 +120,7 @@ exceedance_summary <- function(
   current <- data[picked$is_current, , drop = FALSE]
   crit <- suppressWarnings(as.numeric(current[[value_name]]))
   conc <- suppressWarnings(as.numeric(current$concentration))
-  detected <- !is.na(current$detect_flag) & current$detect_flag == "Y"
+  detected <- is_detect(current$detect_flag)
 
   # join_action_levels()'s verdict, read as it stands. The fallbacks only
   # apply to a criteria column added by hand, which carries no verdict.

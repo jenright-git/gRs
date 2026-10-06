@@ -35,6 +35,14 @@
 #' Water level reports are returned with the full EQuIS field set present, so
 #' ESDAT and EQuIS gauging data can be combined with [dplyr::bind_rows()].
 #'
+#' Every chemistry table comes back with both `detect_flag` and `prefix`, and
+#' the rest of the package decides which results were detected from
+#' `detect_flag` alone: only a `"Y"` is a detect. EQuIS exports carry the flag,
+#' and their `prefix` is made from it - `"<"` for a non-detect and `NA` for a
+#' detect, as ESDAT writes it. ESDAT exports carry only the prefix, and the
+#' flag is made from that: `"N"` where the prefix is `"<"`, `"Y"` otherwise, so
+#' a result above the lab's range (`>2000`) counts as detected.
+#'
 #' ## Data frames from esdatr and AEQuIS
 #'
 #' `myfile_path` may instead be a data frame holding the same data, such as an
@@ -443,14 +451,18 @@ process_chemistry <- function(raw_sw_data, result_type = "primary") {
     sw_data$fraction <- NA_character_
   }
 
+  # EQuIS carries a detect flag and no prefix; ESDAT a prefix and no flag.
+  # Each is made from the other the same way, so a table reads alike from
+  # either source: "<" and "N" for a non-detect, NA and "Y" for a detect.
+  # Everything downstream decides detects from detect_flag alone.
   if (!"prefix" %in% names(sw_data) && "detect_flag" %in% names(sw_data)) {
     sw_data <- sw_data %>%
-      dplyr::mutate(prefix = ifelse(detect_flag == "Y", "=", "<"))
+      dplyr::mutate(prefix = display_prefix(detect_flag))
   }
 
   if (!"detect_flag" %in% names(sw_data) && "prefix" %in% names(sw_data)) {
     sw_data <- sw_data %>%
-      dplyr::mutate(detect_flag = ifelse(is.na(prefix), "Y", "N"))
+      dplyr::mutate(detect_flag = detect_flag_from_prefix(prefix))
   }
 
   missing <- setdiff(REQUIRED_COLUMNS, names(sw_data))

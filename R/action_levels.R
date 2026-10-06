@@ -321,7 +321,10 @@ join_action_levels <- function(
     stop("`action_levels` is empty. Read one with action_level_processor().")
   }
 
-  missing <- setdiff(c("chem_name", "concentration"), names(chem_data))
+  missing <- setdiff(
+    c("chem_name", "concentration", "detect_flag"),
+    names(chem_data)
+  )
   if (length(missing) > 0) {
     stop(
       "`chem_data` is missing required columns: ",
@@ -471,11 +474,7 @@ join_action_levels <- function(
 
   crit <- out[[value_name]]
   conc <- suppressWarnings(as.numeric(chem_data$concentration))
-  detected <- if ("detect_flag" %in% names(chem_data)) {
-    !is.na(chem_data$detect_flag) & chem_data$detect_flag == "Y"
-  } else {
-    rep(TRUE, nrow(chem_data))
-  }
+  detected <- is_detect(chem_data$detect_flag)
 
   # Whether an LOR above the guideline counts as an exceedance is settled
   # here, once, rather than by each function that later reads `exceedance`.

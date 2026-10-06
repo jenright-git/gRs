@@ -72,7 +72,8 @@ Two conventions are worth stating, because they decide what the table says:
 was detected there is no detection to report, so the highest result is
 used instead and its \code{<} is carried through in \code{max_prefix} rather than
 the row coming out blank. The \strong{minimum} is the lowest result of the
-round, detected or not.
+round, detected or not. A detect above the top of the lab's range keeps
+its \code{>} (\verb{>2000}).
 \item An \strong{exceedance} is whatever \code{\link[=join_action_levels]{join_action_levels()}} decided it was. That
 function settles once - through its \code{lor_as_exceedance} argument - whether
 a non-detect whose limit of reporting sits above the guideline counts, and

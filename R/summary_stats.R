@@ -220,8 +220,8 @@ summary_stats <- function(
     dplyr::group_by(dplyr::across(dplyr::all_of(groups))) %>%
     dplyr::summarise(
       n_samples = n(),
-      n_detects = sum(detect_flag == "Y", na.rm = TRUE),
-      n_non_detects = sum(detect_flag == "N", na.rm = TRUE),
+      n_detects = sum(is_detect(detect_flag)),
+      n_non_detects = sum(!is_detect(detect_flag)),
       pct_detects = round(n_detects / n_samples * 100, 1),
       pct_non_detects = round(n_non_detects / n_samples * 100, 1),
       min = safe_min(concentration),
@@ -285,19 +285,15 @@ percentile_exprs <- function(col = "concentration") {
 
 #' Concentrations with non-detects at a multiple of their LOR
 #'
-#' [half_lor()] reads the non-detects from `prefix`. A table without one is
-#' read from `detect_flag` instead, as summary_stats() counts them.
+#' The substitution [half_lor()] makes, read from `detect_flag` as every
+#' count in summary_stats() is.
 #'
 #' @param data the results being summarised
 #' @param lor_multiplier what to multiply a non-detect's LOR by
 #' @returns a numeric vector, one value per row of `data`
 #' @noRd
 substituted_concentration <- function(data, lor_multiplier) {
-  if ("prefix" %in% names(data)) {
-    return(half_lor(data, lor_multiplier)$concentration)
-  }
-  nd <- data$detect_flag %in% "N"
-  ifelse(nd, data$concentration * lor_multiplier, data$concentration)
+  half_lor(data, lor_multiplier)$concentration
 }
 
 #' min()/max() over a group that may hold nothing but missing values
@@ -327,7 +323,7 @@ safe_max <- function(x) {
 #' @returns a single number, `NA` where no concentration is readable
 #' @noRd
 max_detected <- function(x, detect_flag) {
-  detected <- !is.na(x) & detect_flag %in% "Y"
+  detected <- !is.na(x) & is_detect(detect_flag)
   if (any(detected)) max(x[detected]) else safe_max(x)
 }
 
@@ -335,8 +331,8 @@ max_detected <- function(x, detect_flag) {
 #'
 #' The minimum is one where any non-detect sits at the lowest value, since
 #' "<0.001" is below a detect of 0.001. The maximum is the highest detected
-#' result, so it is one only where nothing was detected - and then only where
-#' every result at the highest value is a non-detect rather than unflagged.
+#' result, so it is one only where nothing was detected. Only a `"Y"` is a
+#' detect, so a result with no flag counts as a non-detect here too.
 #'
 #' @param concentration,detect_flag one group's results
 #' @returns two logicals, for the minimum then the maximum
@@ -344,15 +340,12 @@ max_detected <- function(x, detect_flag) {
 nd_extremes <- function(concentration, detect_flag) {
   keep <- !is.na(concentration)
   conc <- concentration[keep]
-  nd <- detect_flag[keep] %in% "N"
+  nd <- !is_detect(detect_flag[keep])
 
   if (length(conc) == 0) {
     return(c(FALSE, FALSE))
   }
-  c(
-    any(nd[conc == min(conc)]),
-    !any(detect_flag[keep] %in% "Y") && all(nd[conc == max(conc)])
-  )
+  c(any(nd[conc == min(conc)]), all(nd))
 }
 
 #' Write a summary table, creating its directory if need be
@@ -396,7 +389,7 @@ criteria_summary <- function(data, groups, set) {
   rows$.exceedance <- if (cmp[["exceedance"]] %in% names(data)) {
     as.logical(data[[cmp[["exceedance"]]]])
   } else {
-    data$detect_flag == "Y" & data$concentration > rows$.guideline
+    is_detect(data$detect_flag) & data$concentration > rows$.guideline
   }
 
   # Grouped by unit and set, a group should hold one criteria value, but a

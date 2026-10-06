@@ -10,14 +10,13 @@ select_max_concentration(
   date_col = date,
   chem_name_col = chem_name,
   concentration_col = concentration,
-  prefix_col = prefix,
   sample_type_col = sample_type,
   duplicate_types = c("Field_D", "Interlab_D")
 )
 }
 \arguments{
 \item{data}{A tibble with columns for location, date, analyte, concentration,
-prefix, and sample type. Typically the output of \code{\link[=data_processor]{data_processor()}}.}
+\code{detect_flag}, and sample type. Typically the output of \code{\link[=data_processor]{data_processor()}}.}
 
 \item{location_col}{Name of the column containing location identifiers.
 Can be provided with or without quotes. Default is location_code}
@@ -30,9 +29,6 @@ Can be provided with or without quotes. Default is chem_name}
 
 \item{concentration_col}{Name of the column containing concentration values.
 Can be provided with or without quotes. Default is concentration}
-
-\item{prefix_col}{Name of the column containing detect qualifiers
-(\code{"<"} = non-detect). Can be provided with or without quotes. Default is prefix}
 
 \item{sample_type_col}{Name of the column containing sample type values.
 Can be provided with or without quotes. Default is sample_type}
@@ -49,7 +45,8 @@ Reduces each location/date/analyte group to a single representative row.
 Where the group holds a field duplicate (\code{Field_D}) or an interlaboratory
 duplicate (\code{Interlab_D}), detected results are preferred over non-detects,
 and the highest of them is kept; if every result is a non-detect, the row
-with the highest LOR is returned.
+with the highest LOR is returned. A detect is a result whose \code{detect_flag}
+is \code{"Y"}, as \code{\link[=data_processor]{data_processor()}} writes it.
 }
 \details{
 A group holding a single result is returned as it stands. A group holding
@@ -63,10 +60,10 @@ Intended for use after \code{\link[=data_processor]{data_processor()}} and befor
 \examples{
 # A primary sample and its field duplicate, plus an unduplicated location
 samples <- dplyr::tribble(
-  ~location_code, ~date, ~chem_name, ~concentration, ~prefix, ~sample_type,
-  "MW01", as.Date("2024-01-15"), "Benzene", 5.2, "=", "Normal",
-  "MW01", as.Date("2024-01-15"), "Benzene", 6.1, "=", "Field_D",
-  "MW02", as.Date("2024-01-15"), "Benzene", 1.0, "<", "Normal"
+  ~location_code, ~date, ~chem_name, ~concentration, ~detect_flag, ~sample_type,
+  "MW01", as.Date("2024-01-15"), "Benzene", 5.2, "Y", "Normal",
+  "MW01", as.Date("2024-01-15"), "Benzene", 6.1, "Y", "Field_D",
+  "MW02", as.Date("2024-01-15"), "Benzene", 1.0, "N", "Normal"
 )
 
 # The Field_D row wins for MW01; MW02 passes through

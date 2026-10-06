@@ -199,7 +199,7 @@ min_max_locations <- function(
 #' @noRd
 extreme_rows <- function(df, n_max, n_min, with_ties) {
   conc <- suppressWarnings(as.numeric(df$concentration))
-  detected <- !is.na(df$detect_flag) & df$detect_flag == "Y"
+  detected <- is_detect(df$detect_flag)
   usable <- which(!is.na(conc))
   tie_break <- as.character(df$location_code)
 

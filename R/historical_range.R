@@ -224,8 +224,7 @@ historical_range <- function(
     work$.exceedance <- if (cmp[["exceedance"]] %in% names(work)) {
       as.logical(work[[cmp[["exceedance"]]]])
     } else {
-      !is.na(work$detect_flag) &
-        work$detect_flag == "Y" &
+      is_detect(work$detect_flag) &
         !is.na(work$.criteria) &
         suppressWarnings(as.numeric(work$concentration)) > work$.criteria
     }
@@ -301,15 +300,12 @@ historical_range <- function(
 #' @noRd
 historical_row <- function(df, key, spike_factor, include_criteria) {
   conc <- suppressWarnings(as.numeric(df$concentration))
-  detect <- !is.na(df$detect_flag) & df$detect_flag == "Y"
+  detect <- is_detect(df$detect_flag)
   usable <- !is.na(conc)
   cur <- df$.current
   hist <- !cur
-  prefix <- if ("prefix" %in% names(df)) {
-    as.character(df$prefix)
-  } else {
-    rep(NA_character_, nrow(df))
-  }
+  # The "<" is read from the flag; only a ">" is taken from `prefix`.
+  prefix <- display_prefix(df$detect_flag, df[["prefix"]])
 
   # Indexed back into the full vectors, so the prefix always belongs to the
   # value reported beside it.
