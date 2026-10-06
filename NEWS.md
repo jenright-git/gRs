@@ -59,6 +59,12 @@
   substituted at zero has no LOR left to read, so the three are `NA`, with a
   warning.
 
+* `mka_to_excel()` marks a trend whose LOR changed with an asterisk on the
+  summary sheet (`"Decreasing *"`), keeping its colour, and explains the
+  asterisk on the legend sheet, or under the table where there is no legend.
+  `mark_lor_changes = FALSE` turns this off. The Statistics sheet adds "LOR
+  Changed", "Lowest ND LOR" and "Highest ND LOR" columns.
+
 * New `results_table()` and `results_table_to_excel()` lay results out as a
   report table, as a `gt` table or a formatted workbook. Each sample gets a
   row, named by its location and the `id_cols` (by default the sample date,

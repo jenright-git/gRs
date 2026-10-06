@@ -27,7 +27,8 @@ mka_to_excel(
   location_font = header_font,
   include_stats = FALSE,
   include_summary = FALSE,
-  criteria_col = criteria
+  criteria_col = criteria,
+  mark_lor_changes = TRUE
 )
 }
 \arguments{
@@ -137,10 +138,18 @@ writes unless given another \code{value_col}, used where it is there; any
 other set joined alongside is named in a message rather than dropped
 unremarked. \code{NULL} leaves the guidelines out. Naming any without
 \code{include_summary = TRUE} warns, as they would otherwise be ignored.}
+
+\item{mark_lor_changes}{mark a trend whose non-detects were reported at more
+than one LOR - \code{lor_changed} in \code{\link[=mann_kendall_test]{mann_kendall_test()}}'s output - with an
+asterisk on the summary sheet, e.g. \code{"Decreasing *"}. The cell keeps its
+trend's colour, and a note explaining the asterisk goes on the legend
+sheet, or under the table where there is no legend. Default \code{TRUE}. Does
+nothing where \code{data} has no \code{lor_changed} column.}
 }
 \value{
 The wide tibble that was written, invisibly - locations down,
-analytes across, trends in the cells.
+analytes across, trends in the cells, with any asterisk
+\code{mark_lor_changes} added.
 }
 \description{
 Pivots the output of \code{\link[=mann_kendall_test]{mann_kendall_test()}} to one row per location and one
@@ -157,6 +166,11 @@ separate series. Where an analyte comes in more than one unit, each unit
 gets a column of its own, headed with the unit - \code{"Zinc (mg/L)"} and
 \code{"Zinc (ug/L)"} - on the summary and statistics sheets alike. An analyte
 reported in one unit keeps its plain name.
+
+A trend whose non-detects were reported at more than one LOR is marked
+with an asterisk - \code{"Decreasing *"} - since the change in LOR, rather than
+the site, may be what the test picked up; see \code{mark_lor_changes} and
+\code{\link[=mann_kendall_test]{mann_kendall_test()}}'s Changes in LOR.
 
 Location/analyte combinations that \code{\link[=mann_kendall_test]{mann_kendall_test()}} could not test,
 because they had too few samples or too few detects, are absent from its
@@ -180,7 +194,9 @@ trend, one row per location and analyte: the trend, coloured and styled as
 it is on the summary sheet, then the number of samples tested, the S
 statistic, Kendall's tau, the p-value, and the mean, standard deviation
 and coefficient of variation of the concentrations tested - after any
-\code{lor_multiplier} substitution \code{\link[=mann_kendall_test]{mann_kendall_test()}} made. The values are
+\code{lor_multiplier} substitution \code{\link[=mann_kendall_test]{mann_kendall_test()}} made - and whether the
+series' non-detects were reported at more than one LOR, with the lowest and
+highest of those LORs. The values are
 written unrounded; number formats set only what is displayed. Where every
 value tested is the same - most often a series of non-detects all at one
 LOR - S and its variance are both zero, so the test cannot give Kendall's

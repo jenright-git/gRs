@@ -14,6 +14,11 @@
 #' `"Zinc (ug/L)"` - on the summary and statistics sheets alike. An analyte
 #' reported in one unit keeps its plain name.
 #'
+#' A trend whose non-detects were reported at more than one LOR is marked
+#' with an asterisk - `"Decreasing *"` - since the change in LOR, rather than
+#' the site, may be what the test picked up; see `mark_lor_changes` and
+#' [mann_kendall_test()]'s Changes in LOR.
+#'
 #' Location/analyte combinations that [mann_kendall_test()] could not test,
 #' because they had too few samples or too few detects, are absent from its
 #' output and so come through the pivot as `NA`. They are written as
@@ -36,7 +41,9 @@
 #' it is on the summary sheet, then the number of samples tested, the S
 #' statistic, Kendall's tau, the p-value, and the mean, standard deviation
 #' and coefficient of variation of the concentrations tested - after any
-#' `lor_multiplier` substitution [mann_kendall_test()] made. The values are
+#' `lor_multiplier` substitution [mann_kendall_test()] made - and whether the
+#' series' non-detects were reported at more than one LOR, with the lowest and
+#' highest of those LORs. The values are
 #' written unrounded; number formats set only what is displayed. Where every
 #' value tested is the same - most often a series of non-detects all at one
 #' LOR - S and its variance are both zero, so the test cannot give Kendall's
@@ -149,9 +156,16 @@
 #'   other set joined alongside is named in a message rather than dropped
 #'   unremarked. `NULL` leaves the guidelines out. Naming any without
 #'   `include_summary = TRUE` warns, as they would otherwise be ignored.
+#' @param mark_lor_changes mark a trend whose non-detects were reported at more
+#'   than one LOR - `lor_changed` in [mann_kendall_test()]'s output - with an
+#'   asterisk on the summary sheet, e.g. `"Decreasing *"`. The cell keeps its
+#'   trend's colour, and a note explaining the asterisk goes on the legend
+#'   sheet, or under the table where there is no legend. Default `TRUE`. Does
+#'   nothing where `data` has no `lor_changed` column.
 #'
 #' @returns The wide tibble that was written, invisibly - locations down,
-#'   analytes across, trends in the cells.
+#'   analytes across, trends in the cells, with any asterisk
+#'   `mark_lor_changes` added.
 #' @export
 #'
 #' @seealso [mann_kendall_heatmap()] for the same table as a plot.
@@ -258,7 +272,8 @@ mka_to_excel <- function(
   location_font = header_font,
   include_stats = FALSE,
   include_summary = FALSE,
-  criteria_col = criteria
+  criteria_col = criteria,
+  mark_lor_changes = TRUE
 ) {
   # Named outright, the guideline columns have to be there. Left at its
   # default, `criteria` is picked up only where join_action_levels() put one.
@@ -306,6 +321,13 @@ mka_to_excel <- function(
       is.na(include_summary)
   ) {
     stop("`include_summary` must be TRUE or FALSE.")
+  }
+  if (
+    !is.logical(mark_lor_changes) ||
+      length(mark_lor_changes) != 1 ||
+      is.na(mark_lor_changes)
+  ) {
+    stop("`mark_lor_changes` must be TRUE or FALSE.")
   }
   if (include_summary && !include_stats) {
     stop(
@@ -385,6 +407,16 @@ mka_to_excel <- function(
     )
   }
 
+  # Marked after the statistics are taken, so the Statistics sheet shows the
+  # trend plainly beside its own LOR columns.
+  marked <- FALSE
+  if (mark_lor_changes && "lor_changed" %in% names(data)) {
+    trends <- as.character(long[[trend_name]])
+    flag <- data$lor_changed %in% TRUE & !is.na(trends)
+    long[[trend_name]] <- ifelse(flag, paste0(trends, LOR_MARK), trends)
+    marked <- any(flag)
+  }
+
   wide <- long %>%
     tidyr::pivot_wider(names_from = !!chem_col, values_from = !!trd_col)
 
@@ -422,7 +454,10 @@ mka_to_excel <- function(
     "font_colours"
   )
 
+  # Coloured by the trend under any marker, so "Decreasing *" is filled as
+  # "Decreasing" is.
   mat <- as.matrix(wide[, -seq_len(n_id), drop = FALSE])
+  mat <- unmark_lor(mat)
   unstyled <- setdiff(unique(as.vector(mat)), names(fills))
   if (length(unstyled) > 0) {
     warning(glue::glue(
@@ -533,7 +568,18 @@ mka_to_excel <- function(
   }
 
   if (legend) {
-    add_legend_sheet(wb, fills, fonts, na_label, header_fill, header_font)
+    add_legend_sheet(
+      wb,
+      fills,
+      fonts,
+      na_label,
+      header_fill,
+      header_font,
+      lor_note = marked
+    )
+  } else if (marked) {
+    # With no legend to explain it, the marker is explained under the table.
+    write_note(wb, sheet_name, LOR_NOTE, row = n_row + 3, cols = 1:n_col)
   }
 
   save_workbook(wb, save_path, overwrite)
@@ -595,8 +641,8 @@ LEGEND_SHEET <- "Legend"
 STATS_NA <- "-"
 
 # The columns the statistics sheet writes after the trend, in order, with the
-# heading each is written under. All but n_samples come from
-# mann_kendall_test(); n_samples is counted from its nested data.
+# heading each is written under. All come from mann_kendall_test(); a result
+# from before it returned n_samples has it counted from the nested data.
 STATS_LABELS <- c(
   "n_samples" = "Samples",
   "S_statistic" = "S Statistic",
@@ -604,12 +650,15 @@ STATS_LABELS <- c(
   "p_value" = "p-value",
   "sample_mean" = "Mean",
   "SD" = "Standard Deviation",
-  "COV" = "Coefficient of Variation"
+  "COV" = "Coefficient of Variation",
+  "lor_changed" = "LOR Changed",
+  "lor_min" = "Lowest ND LOR",
+  "lor_max" = "Highest ND LOR"
 )
 
 # Excel number formats for those columns. The mean and standard deviation are
 # in whatever units the concentrations were, and left in General so a trace
-# metal at 0.0001 mg/L does not display as zero.
+# metal at 0.0001 mg/L does not display as zero; so are the LORs.
 STATS_FORMATS <- c(
   "n_samples" = "0",
   "S_statistic" = "0",
@@ -617,7 +666,20 @@ STATS_FORMATS <- c(
   "p_value" = "0.0000",
   "sample_mean" = "GENERAL",
   "SD" = "GENERAL",
-  "COV" = "0.00"
+  "COV" = "0.00",
+  "lor_changed" = "GENERAL",
+  "lor_min" = "GENERAL",
+  "lor_max" = "GENERAL"
+)
+
+# Added to a trend whose non-detects were reported at more than one LOR, and
+# the note that explains it.
+LOR_MARK <- " *"
+LOR_NOTE <- paste(
+  "* Non-detects in this series were reported at more than one LOR, so the",
+  "trend may reflect the change in LOR rather than the site. See the",
+  "Statistics sheet, or the lor_min and lor_max columns of",
+  "mann_kendall_test()."
 )
 
 #' Save a workbook, creating its directory if need be
@@ -945,6 +1007,8 @@ trend_cell_style <- function(lvl, fills, fonts, na_label) {
 #' @param na_label the not-calculated level
 #' @param header_fill background colour for the header row
 #' @param header_font text colour for the header row
+#' @param lor_note write `LOR_NOTE` under the table, for a summary sheet with
+#'   trends marked by `mark_lor_changes`
 #' @returns `wb`, invisibly, modified in place
 #' @noRd
 add_legend_sheet <- function(
@@ -953,7 +1017,8 @@ add_legend_sheet <- function(
   fonts,
   na_label,
   header_fill,
-  header_font
+  header_font,
+  lor_note = FALSE
 ) {
   lvls <- names(fills)
   meanings <- rename_na_level(TREND_MEANING_DEFAULT, na_label)
@@ -998,6 +1063,52 @@ add_legend_sheet <- function(
   }
   openxlsx::setColWidths(wb, LEGEND_SHEET, cols = 1:3, widths = c(22, 62, 16))
 
+  if (lor_note) {
+    write_note(wb, LEGEND_SHEET, LOR_NOTE, row = nrow(legend) + 3, cols = 1:3)
+  }
+
+  invisible(wb)
+}
+
+#' Take the LOR marker off the trends it was added to
+#'
+#' @param x trend text, possibly ending in `LOR_MARK`
+#' @returns `x`, the same shape, with the marker removed
+#' @noRd
+unmark_lor <- function(x) {
+  marked <- !is.na(x) & endsWith(x, LOR_MARK)
+  x[marked] <- substr(x[marked], 1, nchar(x[marked]) - nchar(LOR_MARK))
+  x
+}
+
+#' Write a note across several columns below a table
+#'
+#' @param wb the workbook to write to
+#' @param sheet the sheet to write on
+#' @param text the note
+#' @param row the row to write it on
+#' @param cols the columns to merge it across
+#' @returns `wb`, invisibly, modified in place
+#' @noRd
+write_note <- function(wb, sheet, text, row, cols) {
+  openxlsx::writeData(wb, sheet, text, startRow = row, startCol = cols[[1]])
+  if (length(cols) > 1) {
+    openxlsx::mergeCells(wb, sheet, cols = cols, rows = row)
+  }
+  openxlsx::addStyle(
+    wb,
+    sheet,
+    openxlsx::createStyle(
+      fontSize = 10,
+      textDecoration = "italic",
+      wrapText = TRUE,
+      valign = "top"
+    ),
+    rows = row,
+    cols = cols,
+    gridExpand = TRUE
+  )
+  openxlsx::setRowHeights(wb, sheet, rows = row, heights = 45)
   invisible(wb)
 }
 
@@ -1053,6 +1164,9 @@ stats_table <- function(
   # add_stats_sheet() writes as STATS_NA.
   for (col in from_data) {
     stats[[col]] <- finite_or_na(unname(data[[col]]))
+  }
+  if ("lor_changed" %in% names(stats)) {
+    stats$lor_changed <- ifelse(stats$lor_changed, "Yes", "No")
   }
 
   stats <- stats[, c(

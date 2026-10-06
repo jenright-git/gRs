@@ -1165,3 +1165,133 @@ test_that("include_summary substitutes non-detects as the trend test did", {
   # the reported minimum is still the lab's <0.5
   expect_equal(stats$Minimum, "<0.5")
 })
+
+# MW01 / Zinc's non-detects were reported at two LORs; MW02's at one.
+mka_lor_fixture <- function() {
+  data <- mka_fixture()
+  data$lor_changed <- c(FALSE, FALSE, TRUE, FALSE)
+  data$lor_min <- c(0.01, NA, 0.001, NA)
+  data$lor_max <- c(0.01, NA, 0.01, NA)
+  data
+}
+
+test_that("a trend whose LOR changed is marked, and keeps its colour", {
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  out <- mka_to_excel(mka_lor_fixture(), save_path = path, legend = FALSE)
+
+  expect_equal(out$Zinc, c("Decreasing *", "Increasing"))
+  expect_equal(out$Copper, c("No Significant Trend", "Stable"))
+
+  # MW01 / Zinc: the first data row, third column, filled as Decreasing
+  expect_equal(
+    unname(cells_filled(path, "FF63BE7B")),
+    matrix(c(2, 3), ncol = 2)
+  )
+})
+
+test_that("mark_lor_changes = FALSE writes the trends plainly", {
+  out <- mka_to_excel(
+    mka_lor_fixture(),
+    save_path = withr::local_tempfile(fileext = ".xlsx"),
+    mark_lor_changes = FALSE
+  )
+
+  expect_equal(out$Zinc, c("Decreasing", "Increasing"))
+})
+
+test_that("the marker is explained on the legend, only where it is used", {
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  mka_to_excel(mka_lor_fixture(), save_path = path)
+  legend <- openxlsx::read.xlsx(path, sheet = "Legend", colNames = FALSE)
+  expect_true(any(grepl("more than one LOR", legend[[1]], fixed = TRUE)))
+
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  mka_to_excel(mka_fixture(), save_path = path)
+  legend <- openxlsx::read.xlsx(path, sheet = "Legend", colNames = FALSE)
+  expect_false(any(grepl("more than one LOR", legend[[1]], fixed = TRUE)))
+})
+
+test_that("without a legend the marker is explained under the table", {
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  mka_to_excel(mka_lor_fixture(), save_path = path, legend = FALSE)
+  summary <- openxlsx::read.xlsx(
+    path,
+    sheet = "Trend Summary",
+    colNames = FALSE,
+    skipEmptyRows = FALSE
+  )
+
+  # two wells, a blank row, then the note
+  expect_match(summary[[1]][[5]], "more than one LOR", fixed = TRUE)
+})
+
+test_that("the statistics sheet carries the LORs, the trend unmarked", {
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  mka_to_excel(mka_lor_fixture(), save_path = path, include_stats = TRUE)
+  stats <- read_stats_sheet(path)
+
+  expect_equal(
+    names(stats),
+    c(
+      "Monitoring Well",
+      "Analyte",
+      "Trend",
+      "p-value",
+      "LOR Changed",
+      "Lowest ND LOR",
+      "Highest ND LOR"
+    )
+  )
+  zinc <- stats[stats$Analyte == "Zinc", ]
+  expect_equal(zinc$Trend, c("Decreasing", "Increasing"))
+  expect_equal(zinc[["LOR Changed"]], c("Yes", "No"))
+  expect_equal(zinc[["Lowest ND LOR"]], c("0.001", "0.01"))
+  expect_equal(zinc[["Highest ND LOR"]], c("0.01", "0.01"))
+  # a series with no non-detects has no LOR to show
+  expect_equal(stats[stats$Analyte == "Copper", "Lowest ND LOR"], c("-", "-"))
+})
+
+test_that("an LOR that could not be read back is neither marked nor shown", {
+  # as mann_kendall_test() returns a series substituted at zero beforehand
+  data <- mka_lor_fixture()
+  data$lor_changed[[3]] <- NA
+  data$lor_min[[3]] <- NA
+  data$lor_max[[3]] <- NA
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  out <- mka_to_excel(data, save_path = path, include_stats = TRUE)
+
+  expect_equal(out$Zinc, c("Decreasing", "Increasing"))
+  stats <- read_stats_sheet(path)
+  expect_equal(stats[stats$Analyte == "Zinc", "LOR Changed"], c("-", "No"))
+})
+
+test_that("mann_kendall_test() output is marked end to end", {
+  # the lab dropped its LOR from 0.01 to 0.001 partway through
+  data <- dplyr::tibble(
+    location_code = "MW01",
+    chem_name = "Zinc",
+    date = as.POSIXct("2024-01-15", tz = "UTC") + (0:7) * 8.64e6,
+    concentration = c(0.01, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001, 0.001),
+    prefix = "<",
+    detect_flag = "N",
+    output_unit = "mg/L"
+  )
+  trends <- mann_kendall_test(data)
+  out <- mka_to_excel(
+    trends,
+    save_path = withr::local_tempfile(fileext = ".xlsx")
+  )
+
+  expect_equal(out$Zinc, paste0(trends$trend, " *"))
+})
+
+test_that("mark_lor_changes must be a single TRUE or FALSE", {
+  expect_error(
+    mka_to_excel(
+      mka_lor_fixture(),
+      save_path = withr::local_tempfile(fileext = ".xlsx"),
+      mark_lor_changes = NA
+    ),
+    "`mark_lor_changes` must be TRUE or FALSE"
+  )
+})
