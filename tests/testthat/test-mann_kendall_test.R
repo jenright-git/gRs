@@ -1,11 +1,23 @@
-trend_fixture <- function(conc = 1:8, prefix = NA_character_) {
+# One series, with detect_flag made from prefix as data_processor() makes it
+# for an ESdat export, unless a flag is given.
+trend_fixture <- function(
+  conc = 1:8,
+  prefix = NA_character_,
+  detect_flag = NULL
+) {
+  prefix <- rep_len(prefix, length(conc))
   dplyr::tibble(
     location_code = "MW01",
     chem_name = "Copper",
     date = as.POSIXct("2024-01-15", tz = "UTC") +
       (seq_along(conc) - 1) * 8.64e6,
     concentration = as.numeric(conc),
-    prefix = rep_len(prefix, length(conc))
+    prefix = prefix,
+    detect_flag = if (is.null(detect_flag)) {
+      detect_flag_from_prefix(prefix)
+    } else {
+      rep_len(detect_flag, length(conc))
+    }
   )
 }
 
@@ -46,8 +58,66 @@ test_that("lor_multiplier is applied before the test", {
 test_that("series shorter than four samples are dropped", {
   expect_error(
     mann_kendall_test(trend_fixture(1:3)),
-    "No data with more than 3 samples"
+    "No series with at least 4 samples"
   )
+})
+
+test_that("min_samples sets the shortest series tested", {
+  data <- dplyr::bind_rows(
+    trend_fixture(1:5),
+    dplyr::mutate(trend_fixture(1:8), chem_name = "Zinc")
+  )
+
+  expect_equal(mann_kendall_test(data, min_samples = 6)$chem_name, "Zinc")
+  expect_equal(nrow(mann_kendall_test(data, min_samples = 5)), 2)
+  expect_error(
+    mann_kendall_test(data, min_samples = 9),
+    "No series with at least 9 samples"
+  )
+  # three is the fewest trend::mk.test() will take
+  expect_equal(nrow(mann_kendall_test(trend_fixture(1:3), min_samples = 3)), 1)
+})
+
+test_that("min_samples must be a whole number of 3 or more", {
+  for (bad in list(2, 3.5, "4", c(4, 5), NA_real_)) {
+    expect_error(
+      mann_kendall_test(trend_fixture(), min_samples = bad),
+      "`min_samples` must be a single whole number of 3 or more"
+    )
+  }
+})
+
+test_that("missing concentrations are not counted towards min_samples", {
+  data <- trend_fixture(c(1:4, NA, NA))
+
+  expect_error(
+    mann_kendall_test(data, min_samples = 5),
+    "No series with at least 5 samples"
+  )
+  expect_equal(mann_kendall_test(data)$n_samples, 4L)
+})
+
+test_that("each trend carries the number of results it was tested on", {
+  data <- dplyr::bind_rows(
+    trend_fixture(1:5),
+    dplyr::mutate(trend_fixture(1:8), chem_name = "Zinc")
+  )
+  out <- mann_kendall_test(data)
+
+  expect_equal(out$n_samples, c(5L, 8L))
+  expect_equal(out$n_samples, vapply(out$data, nrow, integer(1)))
+  expect_equal(
+    names(out)[match("trend", names(out)) + 0:4],
+    c("trend", "n_samples", "lor_changed", "lor_min", "lor_max")
+  )
+})
+
+test_that("mk_analysis() needs at least three results", {
+  expect_error(
+    mk_analysis(trend_fixture(c(1, 2, NA))),
+    "needs at least 3 results with a concentration"
+  )
+  expect_no_error(mk_analysis(trend_fixture(1:3)))
 })
 
 test_that("nd_threshold excludes mostly-non-detect combinations", {
@@ -231,11 +301,113 @@ test_that("the heatmaps give each unit of an analyte its own row", {
   }
 })
 
-test_that("an NA prefix counts as a detect", {
-  data <- trend_fixture(1:8, c(rep("<", 4), rep(NA, 4)))
-  out <- suppressMessages(mann_kendall_test(data, min_detects = 4))
+test_that("only a Y detect_flag counts as a detect", {
+  # one N, and a missing flag, which is not a detect either
+  data <- trend_fixture(1:8, detect_flag = c("N", NA, rep("Y", 6)))
 
-  expect_equal(nrow(out), 1)
+  expect_equal(
+    nrow(suppressMessages(mann_kendall_test(data, min_detects = 6))),
+    1
+  )
+  expect_error(
+    suppressMessages(mann_kendall_test(data, min_detects = 7)),
+    "No data remaining after applying min_detects"
+  )
+})
+
+test_that("detects are read from detect_flag, not prefix", {
+  # every prefix says detected; the flags say otherwise
+  data <- trend_fixture(rep(4, 8), prefix = NA, detect_flag = "N")
+
+  expect_equal(mann_kendall_test(data, lor_multiplier = 0.5)$sample_mean, 2)
+  expect_error(
+    suppressMessages(mann_kendall_test(data, nd_threshold = 0.5)),
+    "No data remaining after applying nd_threshold"
+  )
+  expect_error(
+    suppressMessages(mann_kendall_test(data, min_detects = 1)),
+    "No data remaining after applying min_detects"
+  )
+
+  # and the other way round: a "<" flagged as detected is not substituted
+  data <- trend_fixture(rep(4, 8), prefix = "<", detect_flag = "Y")
+  expect_equal(mann_kendall_test(data, lor_multiplier = 0.5)$sample_mean, 4)
+  expect_equal(mk_analysis(data, lor_multiplier = 0.5)$sample_mean, 4)
+})
+
+test_that("a table with no detect_flag is an error", {
+  data <- trend_fixture()
+  data$detect_flag <- NULL
+
+  expect_error(mann_kendall_test(data), "has no `detect_flag` column")
+  expect_error(mk_analysis(data), "has no `detect_flag` column")
+  # mk_analysis() reads the flag only to substitute
+  expect_no_error(mk_analysis(data, lor_multiplier = NULL))
+})
+
+test_that("non-detects at more than one LOR are flagged", {
+  # the lab dropped its LOR from 0.01 to 0.001 after four rounds
+  data <- trend_fixture(rep(c(0.01, 0.001), each = 4), prefix = "<")
+  out <- mann_kendall_test(data, lor_multiplier = 0.5)
+
+  expect_true(out$lor_changed)
+  # as reported, before the multiplier
+  expect_equal(out$lor_min, 0.001)
+  expect_equal(out$lor_max, 0.01)
+})
+
+test_that("non-detects at a single LOR are not flagged", {
+  data <- trend_fixture(
+    c(0.01, 0.01, 0.05, 0.08, 0.01, 0.2),
+    prefix = c("<", "<", NA, NA, "<", NA)
+  )
+  out <- mann_kendall_test(data)
+
+  expect_false(out$lor_changed)
+  expect_equal(c(out$lor_min, out$lor_max), c(0.01, 0.01))
+})
+
+test_that("an LOR read back with floating-point noise is still one LOR", {
+  data <- trend_fixture(
+    c(0.001, 0.0010000000000000002, 0.001, 0.001, 0.5),
+    prefix = c("<", "<", "<", "<", NA)
+  )
+
+  expect_false(mann_kendall_test(data)$lor_changed)
+})
+
+test_that("a series with no non-detects has no LOR to flag", {
+  out <- mann_kendall_test(trend_fixture())
+
+  expect_false(out$lor_changed)
+  expect_true(is.na(out$lor_min))
+  expect_true(is.na(out$lor_max))
+})
+
+test_that("LORs are read back from a table half_lor() substituted", {
+  data <- trend_fixture(rep(c(0.01, 0.001), each = 4), prefix = "<")
+  out <- mann_kendall_test(half_lor(data, lor_multiplier = 0.5))
+
+  expect_equal(out$lor_changed, TRUE)
+  expect_equal(c(out$lor_min, out$lor_max), c(0.001, 0.01))
+})
+
+test_that("zero substitution beforehand leaves no LOR to flag", {
+  data <- trend_fixture(rep(c(0.01, 0.001), each = 4), prefix = "<")
+  expect_snapshot(out <- mann_kendall_test(half_lor(data, lor_multiplier = 0)))
+
+  expect_equal(out$lor_changed, NA)
+  expect_equal(c(out$lor_min, out$lor_max), c(NA_real_, NA_real_))
+})
+
+test_that("only non-detects are read for the LOR", {
+  # detects at many values, non-detects all at 0.5
+  data <- trend_fixture(
+    c(0.5, 0.5, 1, 2, 3, 0.5, 4),
+    prefix = c("<", "<", NA, NA, NA, "<", NA)
+  )
+
+  expect_false(mann_kendall_test(data)$lor_changed)
 })
 
 test_that("the lor_multiplier used is recorded on the result", {

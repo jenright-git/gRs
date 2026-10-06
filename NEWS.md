@@ -29,6 +29,13 @@
   it in `n_non_detects`, where before it was in neither count, so
   `n_detects` and `n_non_detects` always add up to `n_samples`.
 
+* The `prefix_col` argument is removed from `mann_kendall_test()`,
+  `mk_analysis()`, `half_lor()` and `select_max_concentration()`, which read
+  `detect_flag` instead. The arguments after it move up a place, and
+  `mann_kendall_test()`'s new `min_samples` takes the place of
+  `location_col`, so name these arguments rather than passing them by
+  position.
+
 * `data_processor()` writes the `prefix` of an EQuIS result as `"<"` for a
   non-detect and `NA` for a detect, as ESDAT does, rather than `"="` for a
   detect. A result with no detect flag gets `"<"`, where before it got `NA`.
@@ -37,6 +44,20 @@
   than filling a missing prefix with `"="`.
 
 ## New features
+
+* `mann_kendall_test()` gains `min_samples`, the fewest results a series
+  needs to be tested. It defaults to 4, as before, and cannot be less than 3,
+  the fewest `trend::mk.test()` will test. `mk_analysis()` says so in its own
+  words when handed fewer than 3.
+
+* `mann_kendall_test()` returns `n_samples`, the number of results each trend
+  was tested on, and flags a series whose non-detects were reported at more
+  than one LOR - `lor_changed`, with the lowest and highest in `lor_min` and
+  `lor_max` - since a falling LOR can read as a decreasing trend that comes
+  from the lab rather than the site. The trend itself is not changed. A table
+  already run through `half_lor()` is read back to the LORs it replaced; one
+  substituted at zero has no LOR left to read, so the three are `NA`, with a
+  warning.
 
 * New `results_table()` and `results_table_to_excel()` lay results out as a
   report table, as a `gt` table or a formatted workbook. Each sample gets a

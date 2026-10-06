@@ -8,22 +8,23 @@ mk_analysis(
   data,
   lor_multiplier = 1,
   concentration_col = "concentration",
-  date_col = "date",
-  prefix_col = "prefix"
+  date_col = "date"
 )
 }
 \arguments{
-\item{data}{filtered tibble with column of "concentration"}
+\item{data}{filtered tibble with column of "concentration", and the
+\code{detect_flag} column \code{\link[=data_processor]{data_processor()}} writes wherever \code{lor_multiplier}
+is used. It needs at least 3 results with a concentration, the fewest
+\code{\link[trend:mk.test]{trend::mk.test()}} will test.}
 
 \item{lor_multiplier}{Numeric value to multiply LOR concentrations by. Default is 1 (no change).
 Common values: 0 (zero substitution), 0.5 (half LOR), 1 (full LOR value).
+Non-detects are the results whose \code{detect_flag} is not \code{"Y"}.
 Set to NULL to use concentrations as-is without adjustment.}
 
 \item{concentration_col}{Name of the column containing concentration values (as character string)}
 
 \item{date_col}{Name of the column containing sample dates (as character string)}
-
-\item{prefix_col}{Name of the column containing prefix indicators (as character string)}
 }
 \value{
 tibble with result and stats

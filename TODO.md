@@ -1,17 +1,19 @@
-# h gRs to-do
+# gRs to-do
 
 Ideas for future work, kept for the record. Most came from a review of the reporting functions on 2026-10-03, looking for what an environmental scientist assessing contamination would want beyond the monitoring summaries already in the package. Nothing here is committed to; tick items off or delete them as they are done or dropped.
 
 ## Fixes to existing functions
 
-- [ ] **`summary_stats()` grouping** (in progress). Groups by `location_code` and `chem_name` only, where `analyte_summary()`, `historical_range()` and `min_max_locations()` also group by `output_unit` and `criteria_set`. After `criteria_long()` with two sets, LOC_01 ammonia in `gRs_data` (11 results) reported `n_samples = 22`, pooled the exceedances of both sets, and took the lower set's value as "the" criterion with a warning blaming units.
-- [ ] **`summary_stats()` non-detect handling.** Mean, SD and percentiles treat non-detects at the full LOR with no option. Consider an `lor_multiplier` argument, or Kaplan-Meier statistics, and say in the output which was used.
-- [ ] **`mann_kendall_test()` detect definition.** `nd_threshold` and `min_detects` decide detects from `prefix == "<"`; everything else uses `detect_flag`.
-- [ ] **`mann_kendall_test()` minimum sample count.** Hard-coded at 4. With 4 results the smallest achievable two-sided p is about 0.09, so those series can never be "Increasing" or "Decreasing". Make it an argument, and/or report `n` beside every trend.
-- [ ] **`mann_kendall_test()` pools units** (in progress). Now nests by `output_unit` too, so each unit is its own trend; `mka_to_excel()` and the heatmaps name the analyte with its unit where it has more than one.
+- [x] **`summary_stats()` grouping** (done 2026-10-04). Groups by `location_code` and `chem_name` only, where `analyte_summary()`, `historical_range()` and `min_max_locations()` also group by `output_unit` and `criteria_set`. After `criteria_long()` with two sets, LOC_01 ammonia in `gRs_data` (11 results) reported `n_samples = 22`, pooled the exceedances of both sets, and took the lower set's value as "the" criterion with a warning blaming units.
+- [x] **`summary_stats()` non-detect handling** (done 2026-10-04, as `lor_multiplier`, named in the `summary_stats_to_excel()` headings; Kaplan-Meier is left to `ucl_summary()`). Mean, SD and percentiles treat non-detects at the full LOR with no option. Consider an `lor_multiplier` argument, or Kaplan-Meier statistics, and say in the output which was used.
+- [x] **`mann_kendall_test()` detect definition** (done 2026-10-04, along with the rest of the package: `detect_flag` decides detects everywhere, and `data_processor()` is the only place it is made from `prefix`). `nd_threshold` and `min_detects` decide detects from `prefix == "<"`; everything else uses `detect_flag`.
+- [x] **`mann_kendall_test()` minimum sample count** (done 2026-10-04, as `min_samples`, at least 3, with `n_samples` returned beside every trend). Hard-coded at 4. With 4 results the smallest achievable two-sided p is about 0.09, so those series can never be "Increasing" or "Decreasing". Make it an argument, and/or report `n` beside every trend.
+- [x] **`mann_kendall_test()` pools units** (done 2026-10-04). Now nests by `output_unit` too, so each unit is its own trend; `mka_to_excel()` and the heatmaps name the analyte with its unit where it has more than one.
 - [ ] **Unit conversion step, e.g. `harmonise_units()`** (low priority). ESdat and EQuIS convert units before export and API pulls, so this only matters for results pulled straight from EQuIS `DT_RESULT`. Splitting by unit is correct but a lab switch from mg/L to ug/L cuts one series into two short ones. Convert each analyte to one unit (its most common, or one named per analyte) before analysis, using the `unit_conversion_factor()` table `join_action_levels()` already uses. Leave units in different dimensions (mg/kg solid vs ug/L leachate) apart, since those are different measurements.
 - [ ] **`timeseries_plot()` mixed units.** Plots every result on one axis whatever its `output_unit`, and takes the axis label from `y_unit` rather than the data. Facet or colour by unit, or warn, where an analyte has more than one.
-- [ ] **Trends caused by LOR changes.** A falling LOR over the record, with non-detects substituted, gives a "Decreasing" trend that comes from the lab rather than the site. Flag series where the LOR changed.
+- [x] **Trends caused by LOR changes** (done 2026-10-04, flag only: `lor_changed`, `lor_min` and `lor_max`, marked with an asterisk by `mka_to_excel()`). A falling LOR over the record, with non-detects substituted, gives a "Decreasing" trend that comes from the lab rather than the site. Flag series where the LOR changed.
+- [ ] **Re-test trends at a common LOR.** The flag says which trends to check, not which ones depend on the LOR. Re-run the test with every result below the highest non-detect LOR censored at it (Helsel), report that trend beside the original, and mark the trends that do not survive. A single diluted sample with a high LOR censors most of a series, so report the LOR range with it.
+- [ ] **LOR marker on the heatmaps.** `mann_kendall_heatmap()` and `mann_kendall_heatmap_bw()` show no sign of `lor_changed`, as `mka_to_excel()` does.
 
 ## QA/QC
 

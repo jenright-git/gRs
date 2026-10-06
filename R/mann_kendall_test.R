@@ -6,9 +6,30 @@
 #' is tested as two series rather than one series of numbers that cannot be
 #' compared. The locations this happens at are named in a message; convert
 #' the results to a single unit beforehand to test them as one series. Each
-#' series still needs four samples of its own, so a split series can drop out
-#' where the whole would have been tested. Results with no unit recorded are
-#' a series of their own too, named as `"no unit"`.
+#' series still needs `min_samples` samples of its own, so a split series can
+#' drop out where the whole would have been tested. Results with no unit
+#' recorded are a series of their own too, named as `"no unit"`.
+#'
+#' Non-detects are the results whose `detect_flag` is anything but `"Y"`, as
+#' [data_processor()] writes it. They are what `lor_multiplier` substitutes
+#' and what `nd_threshold` and `min_detects` count.
+#'
+#' ## Changes in LOR
+#'
+#' A non-detect enters the test at its LOR, so a lab lowering its LOR partway
+#' through the record makes a run of non-detects step down, and the test can
+#' call that a decreasing trend. Each series records the LORs its non-detects
+#' were reported at - `lor_min` and `lor_max`, as reported, before any
+#' `lor_multiplier` - and `lor_changed` is `TRUE` where there was more than
+#' one. The trend is not changed; the flag says which trends to check before
+#' reporting them. [mka_to_excel()] marks those trends with an asterisk.
+#' Substituting at `lor_multiplier = 0` takes the step out of the non-detects
+#' themselves, but the flag still reports that the LOR changed.
+#'
+#' A table already run through [half_lor()] is read back to the LORs it
+#' replaced, using the `lor_multiplier_applied` column it adds. One
+#' substituted at zero cannot be: its series' non-detects have no LOR left to
+#' compare, so all three columns are `NA` for them, with a warning.
 #'
 #' @param data tibble processed with the data_processor function
 #' @param traditional perform the standard analysis and not analyse for "Probably" or "Stable" trends
@@ -16,13 +37,18 @@
 #'   Common values: 0 (zero substitution), 0.5 (half LOR), 1 (full LOR value).
 #'   Set to NULL to use concentrations as-is without adjustment.
 #' @param nd_threshold Optional numeric (0–1). Location-analyte combinations where the proportion of
-#'   non-detects (prefix == "<") exceeds this value are excluded before analysis. Excluded
-#'   combinations are reported to the console. Default is NULL (no filtering).
+#'   non-detects (`detect_flag` other than `"Y"`) exceeds this value are excluded before analysis.
+#'   Excluded combinations are reported to the console. Default is NULL (no filtering).
 #'   Cannot be used together with \code{min_detects}.
 #' @param min_detects Optional positive integer. Location-analyte combinations with fewer detected
-#'   results than this value are excluded before analysis. A detect is any sample where prefix is
-#'   not "<" (including NA). Excluded combinations are reported to the console.
+#'   results than this value are excluded before analysis. A detect is a result whose
+#'   `detect_flag` is `"Y"`. Excluded combinations are reported to the console.
 #'   Default is NULL (no filtering). Cannot be used together with \code{nd_threshold}.
+#' @param min_samples the fewest results a series needs to be tested, counted
+#'   after any missing concentrations are dropped. Default 4. It cannot be
+#'   less than 3, the fewest [trend::mk.test()] will test. Shorter series are
+#'   left out of the result, and [mka_to_excel()] writes them as not
+#'   calculated.
 #' @param location_col Name of the column containing location codes.
 #'   Can be provided with or without quotes. Default is location_code
 #' @param chem_name_col Name of the column containing chemical/analyte names.
@@ -31,11 +57,13 @@
 #'   Can be provided with or without quotes. Default is concentration
 #' @param date_col Name of the column containing sample dates.
 #'   Can be provided with or without quotes. Default is date
-#' @param prefix_col Name of the column containing prefix indicators (e.g., "<", "=").
-#'   Can be provided with or without quotes. Default is prefix
 #'
 #' @return A nested tibble of trends as well as the original nested data, one
 #'   row per location, analyte and - where `data` carries it - `output_unit`.
+#'   After the trend come `n_samples`, the number of results tested, and
+#'   `lor_changed`, `lor_min` and `lor_max`, the LORs the series' non-detects
+#'   were reported at (`lor_min` and `lor_max` are `NA` where it has none;
+#'   see Changes in LOR).
 #'   The nested data is as reported; `lor_multiplier` is kept in the
 #'   `"lor_multiplier"` attribute, so [mka_to_excel()] can summarise the
 #'   series with the same substitution the test made.
@@ -54,6 +82,11 @@
 #'
 #' # Drop combinations that are mostly non-detects
 #' mann_kendall_test(gRs_data, nd_threshold = 0.75)
+#'
+#' # Only series with at least eight results, with each trend's sample count
+#' # and whether its non-detects were reported at more than one LOR
+#' trends <- mann_kendall_test(gRs_data, min_samples = 8)
+#' dplyr::select(trends, location_code, chem_name, trend, n_samples, lor_changed)
 #'
 #' # Custom column names, with or without quotes
 #' \dontrun{
@@ -75,43 +108,67 @@ mann_kendall_test <- function(
   lor_multiplier = 1,
   nd_threshold = NULL,
   min_detects = NULL,
+  min_samples = 4,
   location_col = location_code,
   chem_name_col = chem_name,
   concentration_col = concentration,
-  date_col = date,
-  prefix_col = prefix
+  date_col = date
 ) {
   # Quote the column name arguments
   location_col <- rlang::enquo(location_col)
   chem_name_col <- rlang::enquo(chem_name_col)
   conc_col <- rlang::enquo(concentration_col)
   date_col <- rlang::enquo(date_col)
-  prefix_col <- rlang::enquo(prefix_col)
 
   # Convert to strings for passing to mk_analysis
   conc_name <- rlang::quo_name(conc_col)
   date_name <- rlang::quo_name(date_col)
-  prefix_name <- rlang::quo_name(prefix_col)
 
   loc_name <- rlang::quo_name(location_col)
   ana_name <- rlang::quo_name(chem_name_col)
 
+  check_detect_flag(data, "mann_kendall_test")
+  if (
+    !is.numeric(min_samples) ||
+      length(min_samples) != 1 ||
+      is.na(min_samples) ||
+      min_samples != round(min_samples) ||
+      min_samples < 3
+  ) {
+    stop(
+      "`min_samples` must be a single whole number of 3 or more; ",
+      "trend::mk.test() cannot test fewer than 3 results."
+    )
+  }
+
   data <- tidyr::drop_na(data, !!conc_col)
   report_mixed_units(data, loc_name, ana_name)
+  if (any(data[["lor_multiplier_applied"]] %in% 0)) {
+    warning(
+      "`data` has had its non-detects substituted at zero by half_lor(), so ",
+      "the LORs they were reported at are lost and `lor_changed`, `lor_min` ",
+      "and `lor_max` are NA for the series that hold them. Pass the results ",
+      "as reported and set `lor_multiplier = 0` here instead."
+    )
+  }
 
   # Nested by unit as well, so a series never mixes numbers in mg/L with
-  # numbers in ug/L.
+  # numbers in ug/L. Counted after the missing concentrations are dropped,
+  # so n_samples is the number of results each test is run on.
   df <- data %>%
     tidyr::nest(
       .by = c(!!location_col, !!chem_name_col, dplyr::any_of("output_unit"))
     ) %>%
-    dplyr::mutate(n_samples = purrr::map(data, nrow)) %>%
-    tidyr::unnest(n_samples) %>%
-    dplyr::filter(n_samples > 3) %>% # filter out entries with less than 4 data points
-    dplyr::select(-n_samples)
+    dplyr::mutate(n_samples = purrr::map_int(data, nrow)) %>%
+    dplyr::filter(n_samples >= min_samples)
 
-  # Make sure there is at least one set of results to be analysed
-  base::stopifnot("No data with more than 3 samples" = nrow(df) > 0)
+  if (nrow(df) == 0) {
+    stop(
+      "No series with at least ",
+      min_samples,
+      " samples to test. Lower `min_samples` to test shorter series."
+    )
+  }
 
   if (!is.null(nd_threshold) && !is.null(min_detects)) {
     stop(
@@ -142,8 +199,7 @@ mann_kendall_test <- function(
     df <- df %>%
       dplyr::mutate(
         nd_pct = purrr::map_dbl(data, function(d) {
-          nd <- !is.na(d[[prefix_name]]) & d[[prefix_name]] == "<"
-          mean(nd)
+          mean(!is_detect(d$detect_flag))
         })
       )
 
@@ -190,9 +246,8 @@ mann_kendall_test <- function(
 
     df <- df %>%
       dplyr::mutate(
-        n_samples = purrr::map_int(data, nrow),
         n_detects = purrr::map_int(data, function(d) {
-          sum(is.na(d[[prefix_name]]) | d[[prefix_name]] != "<")
+          sum(is_detect(d$detect_flag))
         })
       )
 
@@ -218,7 +273,7 @@ mann_kendall_test <- function(
 
     df <- df %>%
       dplyr::filter(n_detects >= min_detects) %>%
-      dplyr::select(-n_samples, -n_detects)
+      dplyr::select(-n_detects)
 
     if (nrow(df) == 0) {
       stop(sprintf(
@@ -238,12 +293,12 @@ mann_kendall_test <- function(
           .x,
           lor_multiplier = lor_multiplier,
           concentration_col = conc_name,
-          date_col = date_name,
-          prefix_col = prefix_name
+          date_col = date_name
         )
-      )
+      ),
+      lors = purrr::map(data, ~ lor_history(.x, conc_name))
     ) %>%
-    tidyr::unnest(results)
+    tidyr::unnest(c(results, lors))
 
   if (traditional) {
     nested_df <- df %>%
@@ -277,6 +332,16 @@ mann_kendall_test <- function(
       ) # if all <LOR results then p_value comes back as NA..
   }
 
+  # The sample count and LORs read beside the trend they qualify.
+  nested_df <- dplyr::relocate(
+    nested_df,
+    n_samples,
+    lor_changed,
+    lor_min,
+    lor_max,
+    .after = trend
+  )
+
   # mk_analysis() makes no substitution for NULL, which is the full LOR.
   attr(nested_df, "lor_multiplier") <- if (is.null(lor_multiplier)) {
     1
@@ -285,6 +350,67 @@ mann_kendall_test <- function(
   }
 
   return(nested_df)
+}
+
+
+#' The LORs a series' non-detects were reported at
+#'
+#' A non-detect is reported at its LOR, so its concentration is the LOR, in
+#' the series' own unit. Only the non-detects are read: they are what a
+#' change in LOR moves, and a detect's LOR does not enter the test.
+#'
+#' @param d one nested series, as reported
+#' @param conc_name name of the concentration column
+#' @returns a one-row tibble of `lor_changed`, `lor_min` and `lor_max`
+#' @noRd
+lor_history <- function(d, conc_name) {
+  conc <- d[[conc_name]]
+  lors <- reported_lor(d, conc_name)[!is_detect(d$detect_flag) & !is.na(conc)]
+  if (length(lors) == 0) {
+    return(tidyr::tibble(
+      lor_changed = FALSE,
+      lor_min = NA_real_,
+      lor_max = NA_real_
+    ))
+  }
+  # Substituted at zero beforehand, the LOR is gone, and with it any way to
+  # say whether it changed.
+  if (anyNA(lors)) {
+    return(tidyr::tibble(
+      lor_changed = NA,
+      lor_min = NA_real_,
+      lor_max = NA_real_
+    ))
+  }
+  # Rounded to six significant figures, so 0.001 read back from Excel as
+  # 0.0010000000000000002 is not a second LOR.
+  tidyr::tibble(
+    lor_changed = length(unique(signif(lors, 6))) > 1,
+    lor_min = min(lors),
+    lor_max = max(lors)
+  )
+}
+
+
+#' Each result's concentration as the lab reported it
+#'
+#' [half_lor()] records the multiplier it substituted each non-detect with in
+#' `lor_multiplier_applied`, so a table it has been run over can be read back
+#' to the LOR it replaced. A multiplier of zero leaves nothing to read back.
+#'
+#' @param d one nested series
+#' @param conc_name name of the concentration column
+#' @returns a numeric vector, one per row of `d`: the concentration divided by
+#'   any multiplier half_lor() applied, `NA` where that multiplier was zero
+#' @noRd
+reported_lor <- function(d, conc_name) {
+  conc <- d[[conc_name]]
+  applied <- d[["lor_multiplier_applied"]]
+  if (is.null(applied)) {
+    return(conc)
+  }
+  applied[is.na(applied)] <- 1
+  ifelse(applied == 0, NA_real_, conc / applied)
 }
 
 
@@ -365,13 +491,16 @@ NO_UNIT <- "no unit"
 
 #' Mann_Kendall Test returning test result and stats
 #'
-#' @param data filtered tibble with column of "concentration"
+#' @param data filtered tibble with column of "concentration", and the
+#'   `detect_flag` column [data_processor()] writes wherever `lor_multiplier`
+#'   is used. It needs at least 3 results with a concentration, the fewest
+#'   [trend::mk.test()] will test.
 #' @param lor_multiplier Numeric value to multiply LOR concentrations by. Default is 1 (no change).
 #'   Common values: 0 (zero substitution), 0.5 (half LOR), 1 (full LOR value).
+#'   Non-detects are the results whose `detect_flag` is not `"Y"`.
 #'   Set to NULL to use concentrations as-is without adjustment.
 #' @param concentration_col Name of the column containing concentration values (as character string)
 #' @param date_col Name of the column containing sample dates (as character string)
-#' @param prefix_col Name of the column containing prefix indicators (as character string)
 #'
 #' @return tibble with result and stats
 #' @export
@@ -397,35 +526,39 @@ mk_analysis <- function(
   data,
   lor_multiplier = 1,
   concentration_col = "concentration",
-  date_col = "date",
-  prefix_col = "prefix"
+  date_col = "date"
 ) {
   # Convert strings to symbols for tidy evaluation
   date_sym <- rlang::sym(date_col)
   conc_sym <- rlang::sym(concentration_col)
-  prefix_sym <- rlang::sym(prefix_col)
 
-  data <- data %>% dplyr::arrange(!!date_sym)
+  data <- data %>%
+    dplyr::arrange(!!date_sym) %>%
+    tidyr::drop_na(!!conc_sym)
+
+  # trend::mk.test() stops on fewer than 3 values with a message that names
+  # its own argument, not the series it was handed.
+  if (nrow(data) < 3) {
+    stop(
+      "mk_analysis() needs at least 3 results with a concentration, the ",
+      "fewest trend::mk.test() will test; this series has ",
+      nrow(data),
+      "."
+    )
+  }
+
+  conc_values <- data[[concentration_col]]
 
   # Apply LOR multiplier if specified
   if (!is.null(lor_multiplier)) {
-    data <- data %>%
-      dplyr::mutate(
-        !!prefix_sym := tidyr::replace_na(as.character(!!prefix_sym), "="),
-        !!conc_sym := ifelse(
-          !!prefix_sym == "<",
-          !!conc_sym * lor_multiplier,
-          !!conc_sym
-        ),
-        !!prefix_sym := "="
-      )
+    check_detect_flag(data, "mk_analysis")
+    conc_values <- ifelse(
+      is_detect(data$detect_flag),
+      conc_values,
+      conc_values * lor_multiplier
+    )
   }
 
-  # Drop NA and perform Mann-Kendall test
-  data <- data %>% tidyr::drop_na(!!conc_sym)
-
-  # Extract concentration values for mk.test
-  conc_values <- data[[concentration_col]]
   result <- trend::mk.test(conc_values)
 
   mk_result <- tidyr::tibble(

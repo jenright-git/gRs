@@ -10,11 +10,11 @@ mann_kendall_test(
   lor_multiplier = 1,
   nd_threshold = NULL,
   min_detects = NULL,
+  min_samples = 4,
   location_col = location_code,
   chem_name_col = chem_name,
   concentration_col = concentration,
-  date_col = date,
-  prefix_col = prefix
+  date_col = date
 )
 }
 \arguments{
@@ -27,14 +27,20 @@ Common values: 0 (zero substitution), 0.5 (half LOR), 1 (full LOR value).
 Set to NULL to use concentrations as-is without adjustment.}
 
 \item{nd_threshold}{Optional numeric (0–1). Location-analyte combinations where the proportion of
-non-detects (prefix == "<") exceeds this value are excluded before analysis. Excluded
-combinations are reported to the console. Default is NULL (no filtering).
+non-detects (\code{detect_flag} other than \code{"Y"}) exceeds this value are excluded before analysis.
+Excluded combinations are reported to the console. Default is NULL (no filtering).
 Cannot be used together with \code{min_detects}.}
 
 \item{min_detects}{Optional positive integer. Location-analyte combinations with fewer detected
-results than this value are excluded before analysis. A detect is any sample where prefix is
-not "<" (including NA). Excluded combinations are reported to the console.
+results than this value are excluded before analysis. A detect is a result whose
+\code{detect_flag} is \code{"Y"}. Excluded combinations are reported to the console.
 Default is NULL (no filtering). Cannot be used together with \code{nd_threshold}.}
+
+\item{min_samples}{the fewest results a series needs to be tested, counted
+after any missing concentrations are dropped. Default 4. It cannot be
+less than 3, the fewest \code{\link[trend:mk.test]{trend::mk.test()}} will test. Shorter series are
+left out of the result, and \code{\link[=mka_to_excel]{mka_to_excel()}} writes them as not
+calculated.}
 
 \item{location_col}{Name of the column containing location codes.
 Can be provided with or without quotes. Default is location_code}
@@ -47,13 +53,14 @@ Can be provided with or without quotes. Default is concentration}
 
 \item{date_col}{Name of the column containing sample dates.
 Can be provided with or without quotes. Default is date}
-
-\item{prefix_col}{Name of the column containing prefix indicators (e.g., "<", "=").
-Can be provided with or without quotes. Default is prefix}
 }
 \value{
 A nested tibble of trends as well as the original nested data, one
 row per location, analyte and - where \code{data} carries it - \code{output_unit}.
+After the trend come \code{n_samples}, the number of results tested, and
+\code{lor_changed}, \code{lor_min} and \code{lor_max}, the LORs the series' non-detects
+were reported at (\code{lor_min} and \code{lor_max} are \code{NA} where it has none;
+see Changes in LOR).
 The nested data is as reported; \code{lor_multiplier} is kept in the
 \code{"lor_multiplier"} attribute, so \code{\link[=mka_to_excel]{mka_to_excel()}} can summarise the
 series with the same substitution the test made.
@@ -65,9 +72,31 @@ for the same amount, so a location whose analyte was reported in two units
 is tested as two series rather than one series of numbers that cannot be
 compared. The locations this happens at are named in a message; convert
 the results to a single unit beforehand to test them as one series. Each
-series still needs four samples of its own, so a split series can drop out
-where the whole would have been tested. Results with no unit recorded are
-a series of their own too, named as \code{"no unit"}.
+series still needs \code{min_samples} samples of its own, so a split series can
+drop out where the whole would have been tested. Results with no unit
+recorded are a series of their own too, named as \code{"no unit"}.
+}
+\details{
+Non-detects are the results whose \code{detect_flag} is anything but \code{"Y"}, as
+\code{\link[=data_processor]{data_processor()}} writes it. They are what \code{lor_multiplier} substitutes
+and what \code{nd_threshold} and \code{min_detects} count.
+\subsection{Changes in LOR}{
+
+A non-detect enters the test at its LOR, so a lab lowering its LOR partway
+through the record makes a run of non-detects step down, and the test can
+call that a decreasing trend. Each series records the LORs its non-detects
+were reported at - \code{lor_min} and \code{lor_max}, as reported, before any
+\code{lor_multiplier} - and \code{lor_changed} is \code{TRUE} where there was more than
+one. The trend is not changed; the flag says which trends to check before
+reporting them. \code{\link[=mka_to_excel]{mka_to_excel()}} marks those trends with an asterisk.
+Substituting at \code{lor_multiplier = 0} takes the step out of the non-detects
+themselves, but the flag still reports that the LOR changed.
+
+A table already run through \code{\link[=half_lor]{half_lor()}} is read back to the LORs it
+replaced, using the \code{lor_multiplier_applied} column it adds. One
+substituted at zero cannot be: its series' non-detects have no LOR left to
+compare, so all three columns are \code{NA} for them, with a warning.
+}
 }
 \examples{
 # Six trend categories, LOR results left as reported
@@ -82,6 +111,11 @@ mann_kendall_test(gRs_data, lor_multiplier = 0.5)
 
 # Drop combinations that are mostly non-detects
 mann_kendall_test(gRs_data, nd_threshold = 0.75)
+
+# Only series with at least eight results, with each trend's sample count
+# and whether its non-detects were reported at more than one LOR
+trends <- mann_kendall_test(gRs_data, min_samples = 8)
+dplyr::select(trends, location_code, chem_name, trend, n_samples, lor_changed)
 
 # Custom column names, with or without quotes
 \dontrun{
