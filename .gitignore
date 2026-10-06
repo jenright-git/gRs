@@ -58,3 +58,12 @@ test_select_max_concentration.R
 example_reports/
 # knitted README preview
 README.html
+
+# xlsx and PDF outputs, but not test fixtures or files shipped with the
+# package
+*.xlsx
+*.pdf
+!tests/**/*.xlsx
+!tests/**/*.pdf
+!inst/**/*.xlsx
+!inst/**/*.pdf
