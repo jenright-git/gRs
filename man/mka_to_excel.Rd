@@ -20,7 +20,7 @@ mka_to_excel(
   chem_name_col = chem_name,
   trend_col = trend,
   include_zone = FALSE,
-  merge_zones = TRUE,
+  merge_cells = FALSE,
   zone_label = "Monitoring Zone",
   zone_col = monitoring_zone,
   location_fill = "#9BBEAF",
@@ -85,10 +85,14 @@ Can be provided with or without quotes. Default is trend}
 the location names, and sort the rows by zone. Default \code{FALSE}, which
 lays the sheet out as before.}
 
-\item{merge_zones}{merge each zone's repeated cells into a single block, so
-the zone is named once against its wells. Default \code{TRUE}. Set \code{FALSE} to
-leave a value in every row, which is what Excel's sort, filter and pivot
-tools want. Ignored unless \code{include_zone = TRUE}.}
+\item{merge_cells}{merge a value repeated down a side column into one
+block, as \code{\link[=results_table_to_excel]{results_table_to_excel()}} and \code{\link[=summary_stats_to_excel]{summary_stats_to_excel()}} do:
+the zone, so it is named once against its wells, and on the Statistics
+sheet each well, named once against its analytes. Each column's blocks
+sit within those of the column to its left - a well never merges across
+two zones. Default \code{FALSE}, a value in every row, which is what Excel's
+sort, filter and pivot tools want: Excel will not sort a range whose
+merged blocks differ in size.}
 
 \item{zone_label}{heading for the zone column. Default
 \code{"Monitoring Zone"}.}
@@ -180,10 +184,10 @@ calculated" rather than as an oversight.
 
 With \code{include_zone = TRUE} the monitoring zone is written as a further
 column to the left of the location names, the rows are sorted by zone and
-then location so each zone's wells sit together, and the repeated zone
-cells of a block are merged into one, and the location names are set a
-shade back from the zone beside them, in \code{location_fill}, so the grouping
-reads at a glance. \code{\link[=mann_kendall_test]{mann_kendall_test()}} nests by
+then location so each zone's wells sit together, and the location names
+are set a shade back from the zone beside them, in \code{location_fill}, so the
+grouping reads at a glance; \code{merge_cells = TRUE} merges the repeated zone
+cells of a block into one. \code{\link[=mann_kendall_test]{mann_kendall_test()}} nests by
 location and analyte, so the zone is not a column of its output; where
 \code{data} has no zone column of its own it is recovered from that nested
 \code{data} column, and a location falling in more than one zone is an error
@@ -264,8 +268,8 @@ mka_to_excel(trends, trend_colours = c(Increasing = "#E06666"))
 # No legend sheet, blank cells instead of "NC"
 mka_to_excel(trends, legend = FALSE, na_label = "")
 
-# Zones down the side, but a value in every row so the sheet still filters
-mka_to_excel(trends, include_zone = TRUE, merge_zones = FALSE)
+# Zones down the side, each named once against its wells
+mka_to_excel(trends, include_zone = TRUE, merge_cells = TRUE)
 
 # Darker text on the well names, for printing
 mka_to_excel(trends, include_zone = TRUE, location_font = "#14401F")

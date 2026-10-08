@@ -27,11 +27,14 @@
 #' measured in few samples. Every option works in either layout.
 #'
 #' `statistics` adds summary rows - the number of results and of detects,
-#' the minimum and maximum, and the exceedances of each guideline set - over
-#' the results the table shows, and with `statistics_by_group` for each
-#' `group_by` group as well. The maximum is the highest detected result, as
-#' [summary_stats()] reports it; only where nothing was detected is it the
-#' highest LOR, written with its `<`.
+#' the minimum and maximum, the mean, median and standard deviation, and the
+#' exceedances of each guideline set - over the results the table shows, and
+#' with `statistics_by_group` for each `group_by` group as well. Name the ones
+#' wanted, e.g. `statistics = c("n", "max", "mean")`, or take them all with
+#' `TRUE`. The maximum is the highest detected result, as [summary_stats()]
+#' reports it; only where nothing was detected is it the highest LOR, written
+#' with its `<`. The mean, median and standard deviation take non-detects at
+#' their LOR times `lor_multiplier`, as [summary_stats()] takes them.
 #'
 #' Notes below the table give the key to the formatting, the guideline
 #' sets' full names - shorten them in the table with `criteria_labels` - and
@@ -121,18 +124,26 @@
 #'   table, its legend and its statistics, while the notes keep each set's
 #'   full name. Named by the set's column or its full name, e.g.
 #'   `c(criteria_99 = "ANZG 99%")`; sets not named keep their full names.
-#' @param statistics summary rows at the foot of the table: `TRUE` for the
-#'   number of results, the number of detects, the minimum, the maximum and
-#'   the exceedances of each guideline set, or a selection of `"n"`,
-#'   `"n_detects"`, `"min"`, `"max"`, `"mean"`, `"median"` and
-#'   `"exceedances"`. The mean and median are of the results as reported,
-#'   non-detects at their LOR, to 4 significant figures. An analyte with no
+#' @param statistics summary rows at the foot of the table, as a character
+#'   vector of the ones wanted: `"n"`, the number of results; `"n_detects"`;
+#'   `"min"`; `"max"`; `"mean"`; `"median"`; `"std_dev"`, the standard
+#'   deviation; and `"exceedances"`, a row per guideline set. They are written
+#'   in that order, whatever order they are named in. `TRUE` gives every one.
+#'   The mean, median and standard deviation are given to 4 significant
+#'   figures, with non-detects at their LOR times `lor_multiplier`; a single
+#'   result has no standard deviation, and reads `-`. An analyte with no
 #'   guideline in a set reads `-` for that set's exceedances. In
 #'   `analytes_down` they are columns at the right. Default `FALSE`.
 #' @param statistics_by_group add a block of `statistics` at the foot of each
 #'   `group_by` group as well as the whole table's. It needs both
 #'   `statistics` and `group_by`, and says so where either is missing.
 #'   Default `FALSE`.
+#' @param lor_multiplier what to multiply a non-detect's LOR by for the mean,
+#'   median and standard deviation, as [summary_stats()] and [half_lor()]
+#'   take it: 1 (default) for the full LOR, 0.5 for half, 0 for zero. Where it
+#'   is not 1, their labels say so - "Mean (ND at 0.5x LOR)". The counts,
+#'   minimum, maximum and exceedances are always of the results as reported,
+#'   as is every result in the body of the table.
 #' @param layout `"samples_down"` (default), one row per sample and one
 #'   column per analyte; or `"analytes_down"`, one row per analyte, grouped by
 #'   chemical group, and one column per sample.
@@ -216,6 +227,13 @@
 #'     title = "Table 3: Surface Water Analytical Results"
 #'   )
 #'
+#' # A chosen few statistics, non-detects at half their LOR
+#' compared %>%
+#'   results_table(
+#'     statistics = c("n", "max", "mean", "median", "std_dev"),
+#'     lor_multiplier = 0.5
+#'   )
+#'
 #' # On its side: analytes down, samples across
 #' compared %>% results_table(layout = "analytes_down")
 #'
@@ -242,6 +260,7 @@ results_table <- function(
   criteria_labels = NULL,
   statistics = FALSE,
   statistics_by_group = FALSE,
+  lor_multiplier = 1,
   merge_cells = TRUE,
   layout = "samples_down",
   include_zone = FALSE,
@@ -280,6 +299,7 @@ results_table <- function(
     criteria_labels = criteria_labels,
     statistics = statistics,
     statistics_by_group = statistics_by_group,
+    lor_multiplier = lor_multiplier,
     merge_cells = merge_cells,
     include_zone = include_zone,
     zone_name = rlang::quo_name(rlang::enquo(zone_col)),
@@ -316,6 +336,7 @@ results_table <- function(
 #'   [results_table()]
 #' @param criteria_colours,criteria_labels,statistics,statistics_by_group as
 #'   for [results_table()]
+#' @param lor_multiplier as for [results_table()]
 #' @param merge_cells,include_zone,zone_label,location_label as for
 #'   [results_table()]
 #' @param zone_name the zone column's name, as a string
@@ -346,7 +367,8 @@ results_table <- function(
 #'   * `axis`: what runs along the sample direction, in order, from
 #'     `sample_axis()`;
 #'   * `filtered`: what `analytes` left out, for the notes; `shared`: the
-#'     number of cells whose results differed; `highlight_lor`.
+#'     number of cells whose results differed; `highlight_lor`; and
+#'     `lor_multiplier`, for the notes.
 #' @noRd
 results_crosstab <- function(
   data,
@@ -362,6 +384,7 @@ results_crosstab <- function(
   criteria_labels = NULL,
   statistics = FALSE,
   statistics_by_group = FALSE,
+  lor_multiplier = 1,
   merge_cells = TRUE,
   include_zone = FALSE,
   zone_name = "monitoring_zone",
@@ -373,6 +396,7 @@ results_crosstab <- function(
   check_flag(include_zone, "include_zone")
   check_flag(merge_cells, "merge_cells")
   check_flag(statistics_by_group, "statistics_by_group")
+  check_lor_multiplier(lor_multiplier)
   check_choice(analytes, ANALYTE_FILTERS, "analytes")
   # `analytes` names the table of analyte columns below.
   analyte_filter <- analytes
@@ -437,6 +461,17 @@ results_crosstab <- function(
       "`statistics_by_group = TRUE` does nothing without ",
       paste(lacking, collapse = " and "),
       "; no statistics were added for each group."
+    )
+  }
+  # A multiplier changes only the mean, median and standard deviation.
+  if (
+    !is.null(lor_basis(lor_multiplier)) &&
+      !any(SUBSTITUTED_STATISTICS %in% statistics)
+  ) {
+    message(
+      "`lor_multiplier` does nothing without \"mean\", \"median\" or ",
+      "\"std_dev\" in `statistics`; the statistics shown are of the results ",
+      "as reported."
     )
   }
 
@@ -685,6 +720,7 @@ results_crosstab <- function(
     guideline_value = guideline_value,
     guideline_text = guideline_text,
     highlight_lor = highlight_lor,
+    lor_multiplier = lor_multiplier,
     filtered = filtered,
     shared = shared
   )
@@ -1343,18 +1379,30 @@ analytes_to_show <- function(filter, conc, nd, fill, guideline_text) {
 }
 
 
-# The statistics a table can carry, in the order they are written, and the
-# set `statistics = TRUE` gives.
-STATISTICS <- c("n", "n_detects", "min", "max", "mean", "median", "exceedances")
-STATISTICS_DEFAULT <- c("n", "n_detects", "min", "max", "exceedances")
+# The statistics a table can carry, in the order they are written; every one
+# of them is what `statistics = TRUE` gives.
+STATISTICS <- c(
+  "n",
+  "n_detects",
+  "min",
+  "max",
+  "mean",
+  "median",
+  "std_dev",
+  "exceedances"
+)
 STATISTIC_LABELS <- c(
   n = "Results (n)",
   n_detects = "Detects (n)",
   min = "Minimum",
   max = "Maximum",
   mean = "Mean",
-  median = "Median"
+  median = "Median",
+  std_dev = "Standard Deviation"
 )
+# The statistics `lor_multiplier` changes; the rest are of the results as
+# reported, as they are in summary_stats().
+SUBSTITUTED_STATISTICS <- c("mean", "median", "std_dev")
 
 
 #' Settle which statistics to show
@@ -1367,7 +1415,7 @@ resolve_statistics <- function(statistics) {
     return(character(0))
   }
   if (isTRUE(statistics)) {
-    return(STATISTICS_DEFAULT)
+    return(STATISTICS)
   }
   if (!is.character(statistics)) {
     stop(
@@ -1402,16 +1450,18 @@ resolve_statistics <- function(statistics) {
 #' @param by_group also work them out for each `group_by` group
 #' @returns a list: `text` and `value`, matrices with a row per statistic
 #'   and a column per analyte - the statistic as shown, and as a number
-#'   where it is one (`NA` for a `<` value or nothing to report); `label`;
-#'   `set`, the guideline set an exceedance row counts (`NA` otherwise);
-#'   `scope`, the group a row describes (`NA` for the whole table); and
-#'   `first`, whether a row starts its block
+#'   where it is one (`NA` for a `<` value or nothing to report); `stat`, the
+#'   statistic a row gives, from `STATISTICS`; `label`; `set`, the guideline
+#'   set an exceedance row counts (`NA` otherwise); `scope`, the group a row
+#'   describes (`NA` for the whole table); and `first`, whether a row starts
+#'   its block
 #' @noRd
 results_statistics <- function(xtab, which, by_group) {
   n_col <- ncol(xtab$conc)
   empty <- list(
     text = matrix("", 0, n_col),
     value = matrix(NA_real_, 0, n_col),
+    stat = character(0),
     label = character(0),
     set = integer(0),
     scope = character(0),
@@ -1441,6 +1491,7 @@ results_statistics <- function(xtab, which, by_group) {
   list(
     text = do.call(rbind, c(list(empty$text), lapply(blocks, `[[`, "text"))),
     value = do.call(rbind, c(list(empty$value), lapply(blocks, `[[`, "value"))),
+    stat = unlist(lapply(blocks, `[[`, "stat")),
     label = unlist(lapply(blocks, `[[`, "label")),
     set = unlist(lapply(blocks, `[[`, "set")),
     scope = unlist(lapply(blocks, `[[`, "scope")),
@@ -1454,15 +1505,19 @@ results_statistics <- function(xtab, which, by_group) {
 #' @param xtab a crosstab
 #' @param which the statistics
 #' @param rows the rows of the crosstab the block describes
-#' @returns a list of `text`, `value`, `label` and `set`, as
+#' @returns a list of `text`, `value`, `stat`, `label` and `set`, as
 #'   `results_statistics()` returns them
 #' @noRd
 statistic_block <- function(xtab, which, rows) {
   n_col <- ncol(xtab$conc)
   text <- list()
   value <- list()
+  stat_of <- character(0)
   label <- character(0)
   set <- integer(0)
+  # A label says where non-detects were not taken at their LOR, as the
+  # summary_stats_to_excel() headings do.
+  basis <- lor_basis(xtab$lor_multiplier)
 
   for (stat in which) {
     if (identical(stat, "exceedances")) {
@@ -1486,23 +1541,38 @@ statistic_block <- function(xtab, which, rows) {
           format(counts, trim = TRUE)
         )
         value[[length(value) + 1]] <- counts
+        stat_of <- c(stat_of, stat)
         label <- c(label, paste0("Exceedances: ", xtab$set_labels[[j]]))
         set <- c(set, j)
       }
       next
     }
     cells <- lapply(seq_len(n_col), function(cc) {
-      one_statistic(stat, xtab$conc[rows, cc], xtab$nd[rows, cc])
+      one_statistic(
+        stat,
+        xtab$conc[rows, cc],
+        xtab$nd[rows, cc],
+        xtab$lor_multiplier
+      )
     })
     text[[length(text) + 1]] <- vapply(cells, `[[`, "", "text")
     value[[length(value) + 1]] <- vapply(cells, `[[`, 0, "value")
-    label <- c(label, STATISTIC_LABELS[[stat]])
+    stat_of <- c(stat_of, stat)
+    label <- c(
+      label,
+      if (stat %in% SUBSTITUTED_STATISTICS && !is.null(basis)) {
+        paste(STATISTIC_LABELS[[stat]], basis)
+      } else {
+        STATISTIC_LABELS[[stat]]
+      }
+    )
     set <- c(set, NA_integer_)
   }
 
   list(
     text = matrix(unlist(text), ncol = n_col, byrow = TRUE),
     value = matrix(unlist(value), ncol = n_col, byrow = TRUE),
+    stat = stat_of,
     label = label,
     set = set
   )
@@ -1511,15 +1581,20 @@ statistic_block <- function(xtab, which, rows) {
 
 #' One statistic of one analyte's results
 #'
-#' The minimum and maximum follow [summary_stats()]: the maximum is the
-#' highest detect, and only where nothing was detected the highest LOR, with
-#' its `<`; the minimum carries a `<` where a non-detect is the lowest.
+#' The statistics follow [summary_stats()]. The maximum is the highest
+#' detect, and only where nothing was detected the highest LOR, with its `<`;
+#' the minimum carries a `<` where a non-detect is the lowest. The mean,
+#' median and standard deviation take non-detects at their LOR times
+#' `lor_multiplier`, and the counts, minimum and maximum the results as
+#' reported.
 #'
 #' @param stat the statistic
 #' @param conc,nd the results and whether each is a non-detect
+#' @param lor_multiplier what to multiply a non-detect's LOR by for the mean,
+#'   median and standard deviation
 #' @returns list(text, value): as shown, and as a number where it is one
 #' @noRd
-one_statistic <- function(stat, conc, nd) {
+one_statistic <- function(stat, conc, nd, lor_multiplier = 1) {
   keep <- !is.na(conc)
   x <- conc[keep]
   flag <- ifelse(nd[keep], "N", "Y")
@@ -1540,18 +1615,24 @@ one_statistic <- function(stat, conc, nd) {
       list(text = format_reported(v), value = v)
     }
   }
+  # The substitution half_lor() makes. A single result has no standard
+  # deviation, and reads as nothing to report.
+  substituted <- ifelse(flag == "Y", x, x * lor_multiplier)
+  calculated <- function(v) {
+    v <- signif(v, 4)
+    if (is.na(v)) {
+      list(text = STATS_NA, value = NA_real_)
+    } else {
+      list(text = format_reported(v), value = v)
+    }
+  }
   switch(
     stat,
     min = extreme(safe_min(x), nd_extremes(x, flag)[[1]]),
     max = extreme(max_detected(x, flag), nd_extremes(x, flag)[[2]]),
-    mean = {
-      v <- signif(mean(x), 4)
-      list(text = format_reported(v), value = v)
-    },
-    median = {
-      v <- signif(stats::median(x), 4)
-      list(text = format_reported(v), value = v)
-    }
+    mean = calculated(mean(substituted)),
+    median = calculated(stats::median(substituted)),
+    std_dev = calculated(stats::sd(substituted))
   )
 }
 
@@ -1632,19 +1713,20 @@ results_notes <- function(xtab, notes) {
     ))
   }
 
-  shown <- xtab$stats$label
+  shown <- xtab$stats$stat
   if (length(shown) > 0) {
-    if ("Minimum" %in% shown || "Maximum" %in% shown) {
+    if (any(c("min", "max") %in% shown)) {
       out[[length(out) + 1]] <- line(paste(
         "Minimum: the lowest result, with < where a non-detect is the lowest.",
         "Maximum: the highest detected result; where nothing was detected,",
         "the highest LOR, with <."
       ))
     }
-    if ("Mean" %in% shown || "Median" %in% shown) {
-      out[[length(out) + 1]] <- line(paste(
-        "Mean and median: of the results as reported, with non-detects at",
-        "their LOR, to 4 significant figures."
+    calculated <- intersect(SUBSTITUTED_STATISTICS, shown)
+    if (length(calculated) > 0) {
+      out[[length(out) + 1]] <- line(statistics_basis_note(
+        calculated,
+        xtab$lor_multiplier
       ))
     }
     if (any(!is.na(xtab$stats$set))) {
@@ -1687,6 +1769,43 @@ results_notes <- function(xtab, notes) {
     }
   }
   do.call(rbind, out)
+}
+
+
+#' The note on how the mean, median and standard deviation were worked out
+#'
+#' @param calculated the ones shown, from `SUBSTITUTED_STATISTICS`
+#' @param lor_multiplier what a non-detect's LOR was multiplied by
+#' @returns a single line of text, e.g. "Mean and median: of the results as
+#'   reported, with non-detects at their LOR, to 4 significant figures."
+#' @noRd
+statistics_basis_note <- function(calculated, lor_multiplier) {
+  names <- tolower(unname(STATISTIC_LABELS[calculated]))
+  if (length(names) > 1) {
+    names <- c(
+      paste(names[-length(names)], collapse = ", "),
+      names[[length(names)]]
+    )
+  }
+  heading <- paste(names, collapse = " and ")
+  heading <- paste0(toupper(substr(heading, 1, 1)), substring(heading, 2))
+
+  paste0(
+    heading,
+    ": of the results ",
+    if (is.null(lor_basis(lor_multiplier))) {
+      "as reported, with non-detects at their LOR"
+    } else {
+      paste0("with non-detects at ", format(lor_multiplier), "x their LOR")
+    },
+    ", to 4 significant figures",
+    if ("std_dev" %in% calculated) {
+      "; - for the standard deviation of a single result"
+    } else {
+      ""
+    },
+    "."
+  )
 }
 
 

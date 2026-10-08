@@ -78,6 +78,11 @@
 #'     include_zone = TRUE
 #'   )
 #'
+#' # Every statistic below the table, non-detects at half their LOR in the
+#' # mean, median and standard deviation
+#' compared %>%
+#'   results_table_to_excel(statistics = TRUE, lor_multiplier = 0.5)
+#'
 #' # A banner per monitoring round, printed on A4 portrait, one page wide
 #' compared %>%
 #'   results_table_to_excel(
@@ -109,6 +114,7 @@ results_table_to_excel <- function(
   criteria_labels = NULL,
   statistics = FALSE,
   statistics_by_group = FALSE,
+  lor_multiplier = 1,
   merge_cells = TRUE,
   layout = "samples_down",
   include_zone = FALSE,
@@ -156,6 +162,7 @@ results_table_to_excel <- function(
     criteria_labels = criteria_labels,
     statistics = statistics,
     statistics_by_group = statistics_by_group,
+    lor_multiplier = lor_multiplier,
     merge_cells = merge_cells,
     include_zone = include_zone,
     zone_name = rlang::quo_name(rlang::enquo(zone_col)),

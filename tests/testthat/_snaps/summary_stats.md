@@ -3,7 +3,7 @@
     Code
       summary_stats(chem_fixture(), lor_multiplier = -1)
     Condition
-      Error in `summary_stats()`:
+      Error:
       ! `lor_multiplier` must be a single number, 0 or more.
 
 # group_vars names the columns `data` lacks

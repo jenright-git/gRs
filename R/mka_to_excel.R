@@ -27,10 +27,10 @@
 #'
 #' With `include_zone = TRUE` the monitoring zone is written as a further
 #' column to the left of the location names, the rows are sorted by zone and
-#' then location so each zone's wells sit together, and the repeated zone
-#' cells of a block are merged into one, and the location names are set a
-#' shade back from the zone beside them, in `location_fill`, so the grouping
-#' reads at a glance. [mann_kendall_test()] nests by
+#' then location so each zone's wells sit together, and the location names
+#' are set a shade back from the zone beside them, in `location_fill`, so the
+#' grouping reads at a glance; `merge_cells = TRUE` merges the repeated zone
+#' cells of a block into one. [mann_kendall_test()] nests by
 #' location and analyte, so the zone is not a column of its output; where
 #' `data` has no zone column of its own it is recovered from that nested
 #' `data` column, and a location falling in more than one zone is an error
@@ -110,10 +110,14 @@
 #' @param include_zone write the monitoring zone as the first column, ahead of
 #'   the location names, and sort the rows by zone. Default `FALSE`, which
 #'   lays the sheet out as before.
-#' @param merge_zones merge each zone's repeated cells into a single block, so
-#'   the zone is named once against its wells. Default `TRUE`. Set `FALSE` to
-#'   leave a value in every row, which is what Excel's sort, filter and pivot
-#'   tools want. Ignored unless `include_zone = TRUE`.
+#' @param merge_cells merge a value repeated down a side column into one
+#'   block, as [results_table_to_excel()] and [summary_stats_to_excel()] do:
+#'   the zone, so it is named once against its wells, and on the Statistics
+#'   sheet each well, named once against its analytes. Each column's blocks
+#'   sit within those of the column to its left - a well never merges across
+#'   two zones. Default `FALSE`, a value in every row, which is what Excel's
+#'   sort, filter and pivot tools want: Excel will not sort a range whose
+#'   merged blocks differ in size.
 #' @param zone_label heading for the zone column. Default
 #'   `"Monitoring Zone"`.
 #' @param zone_col Name of the column containing monitoring zones. Can be
@@ -209,8 +213,8 @@
 #' # No legend sheet, blank cells instead of "NC"
 #' mka_to_excel(trends, legend = FALSE, na_label = "")
 #'
-#' # Zones down the side, but a value in every row so the sheet still filters
-#' mka_to_excel(trends, include_zone = TRUE, merge_zones = FALSE)
+#' # Zones down the side, each named once against its wells
+#' mka_to_excel(trends, include_zone = TRUE, merge_cells = TRUE)
 #'
 #' # Darker text on the well names, for printing
 #' mka_to_excel(trends, include_zone = TRUE, location_font = "#14401F")
@@ -265,7 +269,7 @@ mka_to_excel <- function(
   chem_name_col = chem_name,
   trend_col = trend,
   include_zone = FALSE,
-  merge_zones = TRUE,
+  merge_cells = FALSE,
   zone_label = "Monitoring Zone",
   zone_col = monitoring_zone,
   location_fill = "#9BBEAF",
@@ -275,6 +279,8 @@ mka_to_excel <- function(
   criteria_col = criteria,
   mark_lor_changes = TRUE
 ) {
+  check_flag(merge_cells, "merge_cells")
+
   # Named outright, the guideline columns have to be there. Left at its
   # default, `criteria` is picked up only where join_action_levels() put one.
   criteria_named <- !missing(criteria_col)
@@ -504,7 +510,8 @@ mka_to_excel <- function(
         gridExpand = TRUE
       )
 
-      if (merge_zones) {
+      # A well has a row of its own here, so the zone is all there is to merge.
+      if (merge_cells) {
         merge_column_runs(wb, sheet_name, wide[[1]])
       }
     }
@@ -561,7 +568,9 @@ mka_to_excel <- function(
       header_fill = header_fill,
       header_font = header_font,
       include_zone = include_zone,
-      merge_zones = merge_zones,
+      # The zone and the well, each well over its analytes. An analyte is
+      # unique within a well, so there is nothing to merge in its column.
+      merge_cols = if (merge_cells) n_id else 0L,
       location_fill = location_fill,
       location_font = location_font
     )
@@ -831,17 +840,29 @@ merge_column_runs <- function(wb, sheet, x, first_row = 2L, col = 1L) {
   starts <- ends - runs$lengths + 1L
   # Steps over the header rows above the column.
   offset <- first_row - 1L
-
-  for (i in seq_along(runs$lengths)) {
-    if (runs$lengths[i] > 1) {
-      openxlsx::mergeCells(
-        wb,
-        sheet,
-        cols = col,
-        rows = (starts[i] + offset):(ends[i] + offset)
-      )
-    }
+  long <- runs$lengths > 1
+  if (!any(long)) {
+    return(invisible(wb))
   }
+
+  # Added in one go, as openxlsx::mergeCells() would add them one at a time.
+  # It checks each new merge against every merge already on the sheet, which
+  # turns quadratic over the thousands of nested blocks a grouped summary
+  # writes; the runs of one column cannot overlap, so there is nothing for it
+  # to find. This writes the same <mergeCell> entries mergeCells() does, into
+  # the Workbook fields it writes them to - wb$validateSheet() and
+  # wb$worksheets[[i]]$mergeCells, openxlsx internals unchanged through 4.x,
+  # hence DESCRIPTION's openxlsx (>= 4.2.5). The tests check the exact refs
+  # written, so a release that moves them fails there, not in a user's sheet.
+  letter <- openxlsx::int2col(col)
+  refs <- paste0(
+    letter, starts[long] + offset, ":", letter, ends[long] + offset
+  )
+  i <- wb$validateSheet(sheet)
+  wb$worksheets[[i]]$mergeCells <- c(
+    wb$worksheets[[i]]$mergeCells,
+    sprintf("<mergeCell ref=\"%s\"/>", refs)
+  )
 
   invisible(wb)
 }
@@ -1508,6 +1529,23 @@ format_reported <- function(x) {
   trimws(formatC(x, digits = 10, format = "fg"))
 }
 
+#' The non-detect substitution a statistic was calculated with, for its label
+#'
+#' Shared by the [summary_stats_to_excel()] headings and the [results_table()]
+#' statistics, so the two say it in the same words.
+#'
+#' @param lor_multiplier what a non-detect's LOR was multiplied by, `NULL`
+#'   where that is not known
+#' @returns `"(ND at 0.5x LOR)"`, say, or `NULL` at the full LOR or where the
+#'   multiplier is not known
+#' @noRd
+lor_basis <- function(lor_multiplier) {
+  if (is.null(lor_multiplier) || isTRUE(all.equal(lor_multiplier, 1))) {
+    return(NULL)
+  }
+  paste0("(ND at ", format(lor_multiplier), "x LOR)")
+}
+
 #' Headings and number formats for the summary_stats() columns
 #'
 #' A function rather than constants beside STATS_LABELS, since the percentiles
@@ -1526,11 +1564,10 @@ summary_column_spec <- function(lor_multiplier = 1) {
   pct <- paste0("p", PERCENTILES)
   general <- c("min", "mean", "max", "std_dev", pct)
 
-  substituted <- !is.null(lor_multiplier) && !identical(lor_multiplier, 1)
-  basis <- if (substituted) {
-    paste0("(ND at ", format(lor_multiplier), "x LOR)")
-  } else {
-    "(as reported)"
+  basis <- lor_basis(lor_multiplier)
+  substituted <- !is.null(basis)
+  if (!substituted) {
+    basis <- "(as reported)"
   }
   # Every percentile summary_stats() reports takes "th".
   percentiles <- paste0(PERCENTILES, "th Percentile")
@@ -1579,7 +1616,9 @@ summary_column_spec <- function(lor_multiplier = 1) {
 #' @param header_fill,header_font colours for the header row and the first
 #'   identifier column
 #' @param include_zone whether the first column is the zone
-#' @param merge_zones merge each zone's repeated cells
+#' @param merge_cols how many of the side columns, from the left, to merge a
+#'   repeated value down into one block - each column's blocks within those of
+#'   the column to its left. 0 merges none.
 #' @param location_fill,location_font colours for the well names beside a zone
 #' @param text_labels headings for the text columns between the identifiers
 #'   and the trend - the analyte, and anything else to be read as a label
@@ -1600,7 +1639,7 @@ add_stats_sheet <- function(
   header_fill,
   header_font,
   include_zone,
-  merge_zones,
+  merge_cols,
   location_fill,
   location_font,
   text_labels = "Analyte",
@@ -1670,10 +1709,17 @@ add_stats_sheet <- function(
         cols = 2,
         gridExpand = TRUE
       )
+    }
 
-      if (merge_zones) {
-        merge_column_runs(wb, sheet, stats[[1]])
-      }
+    # Nested, as results_table_to_excel() merges its side columns: an analyte
+    # shared by two wells is not merged across them. Compared as written, where
+    # a missing value reads STATS_NA, so a blank cell never swallows a "-".
+    shown <- lapply(stats[seq_len(merge_cols)], function(x) {
+      replace(format_id_values(x), is.na(x), STATS_NA)
+    })
+    keys <- merge_keys(as.data.frame(shown), group = NULL)
+    for (j in seq_len(merge_cols)) {
+      merge_column_runs(wb, sheet, keys[[j]], col = j)
     }
 
     openxlsx::addStyle(
