@@ -275,7 +275,7 @@ test_that("a location with no zone recorded is left blank", {
   expect_equal(out[["Monitoring Zone"]], c("", "Upper"))
 })
 
-test_that("repeated zone cells are merged, unless merge_zones is FALSE", {
+test_that("repeated zone cells are merged, unless merge_cells is FALSE", {
   zones <- c("Lower", "Lower", "Lower", "Lower")
 
   path <- withr::local_tempfile(fileext = ".xlsx")
@@ -295,9 +295,48 @@ test_that("repeated zone cells are merged, unless merge_zones is FALSE", {
     mka_nested_fixture(zones),
     save_path = path,
     include_zone = TRUE,
-    merge_zones = FALSE
+    merge_cells = FALSE
   )
   expect_length(openxlsx::loadWorkbook(path)$worksheets[[1]]$mergeCells, 0)
+})
+
+test_that("merge_zones still works, with a deprecation warning", {
+  zones <- c("Lower", "Lower", "Lower", "Lower")
+  merges <- function(...) {
+    path <- withr::local_tempfile(fileext = ".xlsx")
+    mka_to_excel(
+      mka_nested_fixture(zones),
+      save_path = path,
+      include_zone = TRUE,
+      ...
+    )
+    openxlsx::loadWorkbook(path)$worksheets[[1]]$mergeCells
+  }
+
+  expect_warning(
+    unmerged <- merges(merge_zones = FALSE),
+    "`merge_zones` is deprecated; use `merge_cells` instead.",
+    fixed = TRUE
+  )
+  expect_length(unmerged, 0)
+  expect_warning(merged <- merges(merge_zones = TRUE), "deprecated")
+  expect_match(merged, "A2:A3", fixed = TRUE)
+
+  expect_error(
+    merges(merge_zones = FALSE, merge_cells = FALSE),
+    "Use `merge_cells` alone"
+  )
+})
+
+test_that("merge_cells must be TRUE or FALSE", {
+  expect_error(
+    mka_to_excel(
+      mka_nested_fixture(),
+      save_path = withr::local_tempfile(fileext = ".xlsx"),
+      merge_cells = NA
+    ),
+    "`merge_cells` must be TRUE or FALSE."
+  )
 })
 
 test_that("the trend cells shift right to make room for the zone", {
@@ -578,10 +617,14 @@ test_that("the statistics sheet carries the zone, merged unless told not to", {
   )
   expect_equal(stats[["Monitoring Well"]], c("MW02", "MW02", "MW01", "MW01"))
 
+  # each zone, and each well over its analytes within it
   wb <- openxlsx::loadWorkbook(path)
   expect_equal(
     wb$worksheets[[2]]$mergeCells,
-    c('<mergeCell ref="A2:A3"/>', '<mergeCell ref="A4:A5"/>')
+    c(
+      '<mergeCell ref="A2:A3"/>', '<mergeCell ref="A4:A5"/>',
+      '<mergeCell ref="B2:B3"/>', '<mergeCell ref="B4:B5"/>'
+    )
   )
 
   # the well names take the sage, as they do beside the zone on the summary
@@ -594,16 +637,20 @@ test_that("the statistics sheet carries the zone, merged unless told not to", {
     save_path = path,
     include_stats = TRUE,
     include_zone = TRUE,
-    merge_zones = FALSE
+    merge_cells = FALSE
   )
   expect_length(openxlsx::loadWorkbook(path)$worksheets[[2]]$mergeCells, 0)
 
-  # without a zone, the wells are not merged, on either sheet
+  # without a zone, the summary has a row per well and nothing to merge; the
+  # statistics merge each well over its analytes
   path <- withr::local_tempfile(fileext = ".xlsx")
   mka_to_excel(mka_stats_fixture(), save_path = path, include_stats = TRUE)
   wb <- openxlsx::loadWorkbook(path)
   expect_length(wb$worksheets[[1]]$mergeCells, 0)
-  expect_length(wb$worksheets[[2]]$mergeCells, 0)
+  expect_equal(
+    wb$worksheets[[2]]$mergeCells,
+    c('<mergeCell ref="A2:A3"/>', '<mergeCell ref="A4:A5"/>')
+  )
 })
 
 test_that("include_stats must be a single TRUE or FALSE", {

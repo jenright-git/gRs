@@ -92,8 +92,9 @@
     page. `fit_to_width` scales it to one page wide.
   * `statistics` adds summary rows: results, detects, minimum, maximum (the
     highest detect, as `summary_stats()` reports it), mean, median, standard
-    deviation and exceedances per guideline set. `TRUE` gives them all; a
-    vector such as `c("n", "max", "mean")` gives those named.
+    deviation and exceedances per guideline set. `statistics = TRUE` gives
+    all eight rows; a vector such as `c("n", "max", "mean")` gives those
+    named.
     `statistics_by_group` repeats them for each `group_by` group.
   * `lor_multiplier` takes non-detects at a multiple of their LOR in the
     mean, median and standard deviation, as `summary_stats()` does, and
@@ -263,9 +264,11 @@
   `mann_kendall_test()` nests by location and analyte, the zone is not a column
   of its output; it is read back out of the nested `data` column, so no join is
   needed first. A well that falls in two zones is an error rather than a
-  silently duplicated row. `merge_zones = FALSE` leaves a value in every row for
-  sorting and filtering, `zone_label` sets the heading, and `zone_col` names the
-  column where it is not `monitoring_zone`.
+  silently duplicated row. `merge_cells = FALSE` leaves a value in every row
+  for sorting and filtering, `zone_label` sets the heading, and `zone_col`
+  names the column where it is not `monitoring_zone`. `merge_cells` is named
+  as in `results_table_to_excel()` and `summary_stats_to_excel()`; its
+  earlier name, `merge_zones`, still works, with a deprecation warning.
 
   The well names are set a shade back from the zone beside them - `#9BBEAF`
   against the zone's deep green - so the grouping reads at a glance. The header
@@ -305,7 +308,8 @@
   guideline in a set reads `-` in both columns rather than a count of 0, and
   naming `criteria_col` without `include_summary = TRUE` warns rather than
   being silently ignored. The zone and well columns follow
-  `include_zone`, `merge_zones` and `location_fill` as the summary does.
+  `include_zone`, `merge_cells` and `location_fill` as the summary does, and
+  with `merge_cells` each well is merged over its analytes, within its zone.
 
 * `mka_to_excel(na_label = "")` no longer fails with "subscript out of
   bounds"; the blank cells are styled and explained in the legend as `"NC"`

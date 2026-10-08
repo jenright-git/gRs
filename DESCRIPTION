@@ -23,7 +23,7 @@ Imports:
     lubridate,
     magrittr,
     openair,
-    openxlsx,
+    openxlsx (>= 4.2.5),
     purrr,
     readxl,
     rlang,
