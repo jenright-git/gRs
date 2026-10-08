@@ -17,6 +17,7 @@ results_table_to_excel(
   criteria_labels = NULL,
   statistics = FALSE,
   statistics_by_group = FALSE,
+  lor_multiplier = 1,
   merge_cells = TRUE,
   layout = "samples_down",
   include_zone = FALSE,
@@ -111,12 +112,14 @@ table, its legend and its statistics, while the notes keep each set's
 full name. Named by the set's column or its full name, e.g.
 \code{c(criteria_99 = "ANZG 99\%")}; sets not named keep their full names.}
 
-\item{statistics}{summary rows at the foot of the table: \code{TRUE} for the
-number of results, the number of detects, the minimum, the maximum and
-the exceedances of each guideline set, or a selection of \code{"n"},
-\code{"n_detects"}, \code{"min"}, \code{"max"}, \code{"mean"}, \code{"median"} and
-\code{"exceedances"}. The mean and median are of the results as reported,
-non-detects at their LOR, to 4 significant figures. An analyte with no
+\item{statistics}{summary rows at the foot of the table, as a character
+vector of the ones wanted: \code{"n"}, the number of results; \code{"n_detects"};
+\code{"min"}; \code{"max"}; \code{"mean"}; \code{"median"}; \code{"std_dev"}, the standard
+deviation; and \code{"exceedances"}, a row per guideline set. They are written
+in that order, whatever order they are named in. \code{TRUE} gives every one.
+The mean, median and standard deviation are given to 4 significant
+figures, with non-detects at their LOR times \code{lor_multiplier}; a single
+result has no standard deviation, and reads \code{-}. An analyte with no
 guideline in a set reads \code{-} for that set's exceedances. In
 \code{analytes_down} they are columns at the right. Default \code{FALSE}.}
 
@@ -124,6 +127,13 @@ guideline in a set reads \code{-} for that set's exceedances. In
 \code{group_by} group as well as the whole table's. It needs both
 \code{statistics} and \code{group_by}, and says so where either is missing.
 Default \code{FALSE}.}
+
+\item{lor_multiplier}{what to multiply a non-detect's LOR by for the mean,
+median and standard deviation, as \code{\link[=summary_stats]{summary_stats()}} and \code{\link[=half_lor]{half_lor()}}
+take it: 1 (default) for the full LOR, 0.5 for half, 0 for zero. Where it
+is not 1, their labels say so - "Mean (ND at 0.5x LOR)". The counts,
+minimum, maximum and exceedances are always of the results as reported,
+as is every result in the body of the table.}
 
 \item{merge_cells}{merge a value repeated down a side column into one
 block, so a well is named once against all its samples. Each column's
@@ -244,6 +254,11 @@ compared \%>\%
     id_cols = c("date", "field_id", "lab_report_number"),
     include_zone = TRUE
   )
+
+# Every statistic below the table, non-detects at half their LOR in the
+# mean, median and standard deviation
+compared \%>\%
+  results_table_to_excel(statistics = TRUE, lor_multiplier = 0.5)
 
 # A banner per monitoring round, printed on A4 portrait, one page wide
 compared \%>\%

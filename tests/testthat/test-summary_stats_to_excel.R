@@ -1,5 +1,19 @@
+# Merged cells read back with their value on every row, as written.
 read_summary_sheet <- function(path) {
-  openxlsx::read.xlsx(path, sheet = "Summary Statistics", sep.names = " ")
+  openxlsx::read.xlsx(
+    path,
+    sheet = "Summary Statistics",
+    sep.names = " ",
+    fillMergedCells = TRUE
+  )
+}
+
+merged_ranges <- function(path) {
+  sub(
+    '.*ref="([^"]+)".*',
+    "\\1",
+    openxlsx::loadWorkbook(path)$worksheets[[1]]$mergeCells
+  )
 }
 
 write_summary_stats <- function(data = summary_stats(chem_fixture()), ...) {
@@ -196,7 +210,7 @@ test_that("include_zone puts the zone first and sorts by it", {
   stats <- read_summary_sheet(write_summary_stats(
     summary_stats(data, group_vars = "monitoring_zone"),
     include_zone = TRUE,
-    merge_zones = FALSE
+    merge_cells = FALSE
   ))
 
   expect_equal(
@@ -232,6 +246,51 @@ test_that("a further grouping column is written beside the analyte", {
   )
   expect_equal(stats$Fraction, c("D", "T", "D", "T"))
   expect_equal(stats$Samples, c(1, 2, 2, 1))
+})
+
+test_that("repeated identifiers merge, each within the column to its left", {
+  data <- chem_fixture(fraction = rep(c("T", "D"), 3))
+  path <- write_summary_stats(summary_stats(data, group_vars = "fraction"))
+
+  # MW01 Copper D, MW01 Copper T, MW02 Copper D, MW02 Copper T: each well
+  # merges over its two rows, and the analyte and unit within each well -
+  # never across the two wells, though both measured Copper in mg/L
+  expect_setequal(
+    merged_ranges(path),
+    c("A2:A3", "A4:A5", "B2:B3", "B4:B5", "C2:C3", "C4:C5")
+  )
+})
+
+test_that("a zone merges over its wells, and each well within its zone", {
+  data <- chem_fixture(
+    monitoring_zone = "Zone A",
+    fraction = rep(c("T", "D"), 3)
+  )
+  path <- write_summary_stats(
+    summary_stats(data, group_vars = c("monitoring_zone", "fraction")),
+    include_zone = TRUE
+  )
+
+  expect_true(
+    all(c("A2:A5", "B2:B3", "B4:B5", "C2:C3", "C4:C5") %in% merged_ranges(path))
+  )
+})
+
+test_that("merge_cells = FALSE leaves a value on every row", {
+  data <- chem_fixture(fraction = rep(c("T", "D"), 3))
+  path <- write_summary_stats(
+    summary_stats(data, group_vars = "fraction"),
+    merge_cells = FALSE
+  )
+
+  expect_length(merged_ranges(path), 0)
+})
+
+test_that("merge_cells must be TRUE or FALSE", {
+  expect_error(
+    write_summary_stats(merge_cells = NA),
+    "`merge_cells` must be TRUE or FALSE."
+  )
 })
 
 test_that("results are turned away, with the summary_stats() call to make", {

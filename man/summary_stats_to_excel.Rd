@@ -8,7 +8,7 @@ summary_stats_to_excel(
   data,
   save_path = paste0("Summary Statistics_", format(Sys.Date(), "\%Y\%m\%d"), ".xlsx"),
   include_zone = FALSE,
-  merge_zones = TRUE,
+  merge_cells = TRUE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
@@ -35,10 +35,13 @@ directory is created if it does not exist. Defaults to
 the location names, and sort the rows by zone. Needs the zone in \code{data},
 from \code{summary_stats(group_vars = "monitoring_zone")}. Default \code{FALSE}.}
 
-\item{merge_zones}{merge each zone's repeated cells into a single block, so
-the zone is named once against its wells. Default \code{TRUE}. Set \code{FALSE} to
-leave a value in every row, which is what Excel's sort, filter and pivot
-tools want. Ignored unless \code{include_zone = TRUE}.}
+\item{merge_cells}{merge a value repeated down an identifier column - the
+zone, well, analyte, unit and any further grouping column - into one
+block, so a well is named once against all its analytes. Each column's
+blocks sit within those of the column to its left - an analyte measured
+at two wells is not merged across them. Default \code{TRUE}. Set \code{FALSE} to
+write the value on every row, which is what Excel's sort and filter tools
+want.}
 
 \item{zone_col}{Name of the column containing monitoring zones. Can be
 provided with or without quotes. Default is monitoring_zone. Locations
@@ -107,7 +110,10 @@ with its column name instead.
 The headings and location names are set in white on a deep green, the
 first row and the identifier and analyte columns are frozen, and the
 header row carries filters. Any further grouping column, from the
-\code{group_vars} of \code{\link[=summary_stats]{summary_stats()}}, is written beside the analyte.
+\code{group_vars} of \code{\link[=summary_stats]{summary_stats()}}, is written beside the analyte. A value
+repeated down these identifier columns - the zone, well, analyte, unit and
+any grouping column - is merged into one block (\code{merge_cells}), as
+\code{\link[=results_table_to_excel]{results_table_to_excel()}} merges its side columns.
 }
 \examples{
 gRs_data \%>\%
@@ -120,6 +126,14 @@ gRs_data \%>\%
   summary_stats_to_excel(
     save_path = tempfile(fileext = ".xlsx"),
     include_zone = TRUE
+  )
+
+# A value in every row, so the sheet sorts and filters
+gRs_data \%>\%
+  summary_stats() \%>\%
+  summary_stats_to_excel(
+    save_path = tempfile(fileext = ".xlsx"),
+    merge_cells = FALSE
   )
 
 \dontrun{

@@ -91,9 +91,14 @@
     `orientation`), with the header rows and side columns repeated on every
     page. `fit_to_width` scales it to one page wide.
   * `statistics` adds summary rows: results, detects, minimum, maximum (the
-    highest detect, as `summary_stats()` reports it) and exceedances per
-    guideline set, plus optional mean and median. `statistics_by_group`
-    repeats them for each `group_by` group.
+    highest detect, as `summary_stats()` reports it), mean, median, standard
+    deviation and exceedances per guideline set. `TRUE` gives them all; a
+    vector such as `c("n", "max", "mean")` gives those named.
+    `statistics_by_group` repeats them for each `group_by` group.
+  * `lor_multiplier` takes non-detects at a multiple of their LOR in the
+    mean, median and standard deviation, as `summary_stats()` does, and
+    their labels say so: "Mean (ND at 0.5x LOR)". The counts, minimum,
+    maximum and exceedances stay as reported.
   * `analytes` shows only the analytes `"detected"`, `"with_guideline"` or
     `"exceeding"`, and leaves out samples left with nothing to show.
   * `criteria_labels` gives the guideline sets short names in the table;
@@ -169,7 +174,9 @@
   analyte and unit, not only the series `mann_kendall_test()` could test.
   It shares that sheet's styling and `<` on non-detect extremes, groups by
   zone where the summary was grouped by one, and adds a sample count and a
-  unit column.
+  unit column. A value repeated down the zone, well, analyte, unit or
+  grouping columns merges into one block (`merge_cells`), nested as in
+  `results_table_to_excel()`.
 
 * `mka_to_excel(include_summary = TRUE)` substitutes non-detects in the
   summary statistics with the same `lor_multiplier` the trend test used,

@@ -561,7 +561,7 @@ mka_to_excel <- function(
       header_fill = header_fill,
       header_font = header_font,
       include_zone = include_zone,
-      merge_zones = merge_zones,
+      merge_cols = if (include_zone && merge_zones) 1L else 0L,
       location_fill = location_fill,
       location_font = location_font
     )
@@ -1508,6 +1508,23 @@ format_reported <- function(x) {
   trimws(formatC(x, digits = 10, format = "fg"))
 }
 
+#' The non-detect substitution a statistic was calculated with, for its label
+#'
+#' Shared by the [summary_stats_to_excel()] headings and the [results_table()]
+#' statistics, so the two say it in the same words.
+#'
+#' @param lor_multiplier what a non-detect's LOR was multiplied by, `NULL`
+#'   where that is not known
+#' @returns `"(ND at 0.5x LOR)"`, say, or `NULL` at the full LOR or where the
+#'   multiplier is not known
+#' @noRd
+lor_basis <- function(lor_multiplier) {
+  if (is.null(lor_multiplier) || isTRUE(all.equal(lor_multiplier, 1))) {
+    return(NULL)
+  }
+  paste0("(ND at ", format(lor_multiplier), "x LOR)")
+}
+
 #' Headings and number formats for the summary_stats() columns
 #'
 #' A function rather than constants beside STATS_LABELS, since the percentiles
@@ -1526,11 +1543,10 @@ summary_column_spec <- function(lor_multiplier = 1) {
   pct <- paste0("p", PERCENTILES)
   general <- c("min", "mean", "max", "std_dev", pct)
 
-  substituted <- !is.null(lor_multiplier) && !identical(lor_multiplier, 1)
-  basis <- if (substituted) {
-    paste0("(ND at ", format(lor_multiplier), "x LOR)")
-  } else {
-    "(as reported)"
+  basis <- lor_basis(lor_multiplier)
+  substituted <- !is.null(basis)
+  if (!substituted) {
+    basis <- "(as reported)"
   }
   # Every percentile summary_stats() reports takes "th".
   percentiles <- paste0(PERCENTILES, "th Percentile")
@@ -1579,7 +1595,9 @@ summary_column_spec <- function(lor_multiplier = 1) {
 #' @param header_fill,header_font colours for the header row and the first
 #'   identifier column
 #' @param include_zone whether the first column is the zone
-#' @param merge_zones merge each zone's repeated cells
+#' @param merge_cols how many of the side columns, from the left, to merge a
+#'   repeated value down into one block - each column's blocks within those of
+#'   the column to its left. 0 merges none.
 #' @param location_fill,location_font colours for the well names beside a zone
 #' @param text_labels headings for the text columns between the identifiers
 #'   and the trend - the analyte, and anything else to be read as a label
@@ -1600,7 +1618,7 @@ add_stats_sheet <- function(
   header_fill,
   header_font,
   include_zone,
-  merge_zones,
+  merge_cols,
   location_fill,
   location_font,
   text_labels = "Analyte",
@@ -1670,10 +1688,13 @@ add_stats_sheet <- function(
         cols = 2,
         gridExpand = TRUE
       )
+    }
 
-      if (merge_zones) {
-        merge_column_runs(wb, sheet, stats[[1]])
-      }
+    # Nested, as results_table_to_excel() merges its side columns: an analyte
+    # shared by two wells is not merged across them.
+    keys <- merge_keys(stats[seq_len(merge_cols)], group = NULL)
+    for (j in seq_len(merge_cols)) {
+      merge_column_runs(wb, sheet, keys[[j]], col = j)
     }
 
     openxlsx::addStyle(

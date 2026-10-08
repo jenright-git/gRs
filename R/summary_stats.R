@@ -124,15 +124,7 @@ summary_stats <- function(
   lor_multiplier = 1
 ) {
   crit_col <- rlang::enquo(criteria_col)
-
-  if (
-    !is.numeric(lor_multiplier) ||
-      length(lor_multiplier) != 1 ||
-      is.na(lor_multiplier) ||
-      lor_multiplier < 0
-  ) {
-    stop("`lor_multiplier` must be a single number, 0 or more.")
-  }
+  check_lor_multiplier(lor_multiplier)
 
   # chem_group, fraction and prefix are carried through where the export has
   # them. data_processor() warns rather than errors when chem_group is absent

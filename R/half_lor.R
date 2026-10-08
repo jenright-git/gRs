@@ -61,3 +61,20 @@ half_lor <- function(
       )
     )
 }
+
+#' Stop unless `lor_multiplier` is a single number, 0 or more
+#'
+#' @param lor_multiplier the `lor_multiplier` argument
+#' @returns `NULL`, invisibly
+#' @noRd
+check_lor_multiplier <- function(lor_multiplier) {
+  if (
+    !is.numeric(lor_multiplier) ||
+      length(lor_multiplier) != 1 ||
+      is.na(lor_multiplier) ||
+      lor_multiplier < 0
+  ) {
+    stop("`lor_multiplier` must be a single number, 0 or more.", call. = FALSE)
+  }
+  invisible(NULL)
+}

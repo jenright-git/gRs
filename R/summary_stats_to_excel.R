@@ -30,7 +30,10 @@
 #' The headings and location names are set in white on a deep green, the
 #' first row and the identifier and analyte columns are frozen, and the
 #' header row carries filters. Any further grouping column, from the
-#' `group_vars` of [summary_stats()], is written beside the analyte.
+#' `group_vars` of [summary_stats()], is written beside the analyte. A value
+#' repeated down these identifier columns - the zone, well, analyte, unit and
+#' any grouping column - is merged into one block (`merge_cells`), as
+#' [results_table_to_excel()] merges its side columns.
 #'
 #' @param data tibble from [summary_stats()], not the results behind it -
 #'   choose the guideline sets there, with `include_criteria` and
@@ -47,6 +50,13 @@
 #'   provided with or without quotes. Default is monitoring_zone. Locations
 #'   with no zone recorded are left blank, and a location falling in more
 #'   than one zone is an error.
+#' @param merge_cells merge a value repeated down an identifier column - the
+#'   zone, well, analyte, unit and any further grouping column - into one
+#'   block, so a well is named once against all its analytes. Each column's
+#'   blocks sit within those of the column to its left - an analyte measured
+#'   at two wells is not merged across them. Default `TRUE`. Set `FALSE` to
+#'   write the value on every row, which is what Excel's sort and filter tools
+#'   want.
 #' @param sheet_name name of the worksheet. Default `"Summary Statistics"`.
 #' @inheritParams mka_to_excel
 #'
@@ -67,6 +77,14 @@
 #'   summary_stats_to_excel(
 #'     save_path = tempfile(fileext = ".xlsx"),
 #'     include_zone = TRUE
+#'   )
+#'
+#' # A value in every row, so the sheet sorts and filters
+#' gRs_data %>%
+#'   summary_stats() %>%
+#'   summary_stats_to_excel(
+#'     save_path = tempfile(fileext = ".xlsx"),
+#'     merge_cells = FALSE
 #'   )
 #'
 #' \dontrun{
@@ -94,7 +112,7 @@ summary_stats_to_excel <- function(
     ".xlsx"
   ),
   include_zone = FALSE,
-  merge_zones = TRUE,
+  merge_cells = TRUE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
@@ -114,6 +132,7 @@ summary_stats_to_excel <- function(
   ) {
     stop("`include_zone` must be TRUE or FALSE.")
   }
+  check_flag(merge_cells, "merge_cells")
   # Stacked, each location/analyte has a row per set, and the set names that
   # would head them are no longer in the table.
   if ("criteria_set" %in% names(data)) {
@@ -223,7 +242,7 @@ summary_stats_to_excel <- function(
     header_fill = header_fill,
     header_font = header_font,
     include_zone = include_zone,
-    merge_zones = merge_zones,
+    merge_cols = if (merge_cells) length(c(lead, text)) else 0L,
     location_fill = location_fill,
     location_font = location_font,
     text_labels = column_labels(text),

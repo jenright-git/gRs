@@ -15,6 +15,7 @@ crosstab <- function(
   criteria_labels = NULL,
   statistics = FALSE,
   statistics_by_group = FALSE,
+  lor_multiplier = 1,
   merge_cells = TRUE,
   include_zone = FALSE
 ) {
@@ -37,6 +38,7 @@ crosstab <- function(
     criteria_labels = criteria_labels,
     statistics = statistics,
     statistics_by_group = statistics_by_group,
+    lor_multiplier = lor_multiplier,
     merge_cells = merge_cells,
     include_zone = include_zone,
     zone_name = "monitoring_zone",
@@ -1048,7 +1050,9 @@ test_that("the filter says what it left out, and an empty table is an error", {
 # ---------------------------------------------------------------------------
 
 test_that("statistics follow the summary_stats() rules", {
-  s <- crosstab(statistics = TRUE)$stats
+  s <- crosstab(
+    statistics = c("n", "n_detects", "min", "max", "exceedances")
+  )$stats
 
   expect_equal(
     s$label,
@@ -1087,10 +1091,119 @@ test_that("the maximum is an LOR, with its <, only where nothing was detected", 
   )
 })
 
-test_that("the mean and median are of the results as reported", {
-  s <- crosstab(statistics = c("mean", "median"))$stats
+test_that("the mean, median and standard deviation are of the results as reported", {
+  s <- crosstab(statistics = c("mean", "median", "std_dev"))$stats
   reported <- c(1.5, 2.5, 0.5, 4, 8, 0.5)
-  expect_equal(s$value[, 1], c(signif(mean(reported), 4), median(reported)))
+
+  expect_equal(s$label, c("Mean", "Median", "Standard Deviation"))
+  expect_equal(
+    s$value[, 1],
+    signif(c(mean(reported), median(reported), sd(reported)), 4)
+  )
+  expect_equal(s$text[, 1], c("2.833", "2", "2.858"))
+})
+
+test_that("TRUE gives every statistic, in the order they are written", {
+  s <- crosstab(statistics = TRUE)$stats
+
+  expect_equal(
+    s$label,
+    c(
+      "Results (n)", "Detects (n)", "Minimum", "Maximum", "Mean", "Median",
+      "Standard Deviation", "Exceedances: NEMP 95%", "Exceedances: NEMP 99%"
+    )
+  )
+  expect_equal(
+    s$stat,
+    c(
+      "n", "n_detects", "min", "max", "mean", "median", "std_dev",
+      "exceedances", "exceedances"
+    )
+  )
+  # named out of order, they are still written in that order
+  expect_equal(
+    crosstab(statistics = c("std_dev", "n", "mean"))$stats$stat,
+    c("n", "mean", "std_dev")
+  )
+})
+
+test_that("a single result has no standard deviation, and reads -", {
+  s <- crosstab(two_sets_fixture()[1, ], statistics = c("mean", "std_dev"))$stats
+
+  expect_equal(s$text[, 1], c("1.5", "-"))
+  expect_equal(s$value[, 1], c(1.5, NA))
+})
+
+test_that("lor_multiplier substitutes into the mean, median and SD only", {
+  s <- crosstab(statistics = TRUE, lor_multiplier = 0.5)$stats
+  # the two non-detects, <0.5, are taken at 0.25
+  substituted <- c(1.5, 2.5, 0.25, 4, 8, 0.25)
+
+  expect_equal(
+    s$label[5:7],
+    c(
+      "Mean (ND at 0.5x LOR)",
+      "Median (ND at 0.5x LOR)",
+      "Standard Deviation (ND at 0.5x LOR)"
+    )
+  )
+  expect_equal(
+    s$value[5:7, 1],
+    signif(c(mean(substituted), median(substituted), sd(substituted)), 4)
+  )
+  # the counts, extremes and exceedances are of the results as reported
+  expect_equal(s$label[1:4], c("Results (n)", "Detects (n)", "Minimum", "Maximum"))
+  expect_equal(s$text[c(1:4, 8:9), 1], c("6", "4", "<0.5", "8", "4", "1"))
+
+  # at zero, every non-detect counts as nothing
+  zero <- crosstab(statistics = "mean", lor_multiplier = 0)$stats
+  expect_equal(zero$value[, 1], signif(mean(c(1.5, 2.5, 0, 4, 8, 0)), 4))
+  expect_equal(zero$label, "Mean (ND at 0x LOR)")
+})
+
+test_that("lor_multiplier must be a single number, 0 or more", {
+  for (bad in list(-1, "half", c(0.5, 1), NA_real_)) {
+    expect_error(
+      crosstab(statistics = "mean", lor_multiplier = bad),
+      "`lor_multiplier` must be a single number, 0 or more."
+    )
+  }
+})
+
+test_that("lor_multiplier says so where it has nothing to act on", {
+  expect_message(
+    crosstab(statistics = c("n", "max"), lor_multiplier = 0.5),
+    "`lor_multiplier` does nothing without \"mean\", \"median\" or",
+    fixed = TRUE
+  )
+  expect_no_message(crosstab(statistics = c("n", "max")))
+  expect_no_message(crosstab(statistics = "std_dev", lor_multiplier = 0.5))
+})
+
+test_that("the notes say how the mean, median and SD were worked out", {
+  meaning <- function(...) results_notes(crosstab(...), TRUE)$meaning
+
+  expect_true(
+    paste(
+      "Mean and median: of the results as reported, with non-detects at",
+      "their LOR, to 4 significant figures."
+    ) %in% meaning(statistics = c("mean", "median"))
+  )
+  expect_true(
+    paste(
+      "Mean, median and standard deviation: of the results with non-detects",
+      "at 0.5x their LOR, to 4 significant figures; - for the standard",
+      "deviation of a single result."
+    ) %in% meaning(statistics = TRUE, lor_multiplier = 0.5)
+  )
+  expect_true(
+    paste(
+      "Standard deviation: of the results as reported, with non-detects at",
+      "their LOR, to 4 significant figures; - for the standard deviation of",
+      "a single result."
+    ) %in% meaning(statistics = "std_dev")
+  )
+  expect_false(any(grepl("significant figures", meaning(statistics = "n"))))
 })
 
 test_that("statistics_by_group adds a block per group before the table's own", {
@@ -1144,7 +1257,9 @@ test_that("an unknown statistic is an error naming it", {
 })
 
 test_that("statistic rows sit below the results, numbers kept as numbers", {
-  path <- write_results(statistics = TRUE)
+  path <- write_results(
+    statistics = c("n", "n_detects", "min", "max", "exceedances")
+  )
   sheet <- openxlsx::read.xlsx(
     path,
     colNames = FALSE,
@@ -1170,6 +1285,35 @@ test_that("statistic rows sit below the results, numbers kept as numbers", {
   expect_equal(fill_of(style_at(path, 12, 3)), "F2F2F2")
 })
 
+test_that("the workbook takes lor_multiplier through to the statistic rows", {
+  path <- write_results(
+    statistics = c("n", "mean", "std_dev"),
+    lor_multiplier = 0.5
+  )
+  sheet <- openxlsx::read.xlsx(
+    path,
+    colNames = FALSE,
+    skipEmptyRows = FALSE,
+    fillMergedCells = TRUE
+  )
+  substituted <- c(1.5, 2.5, 0.25, 4, 8, 0.25)
+
+  expect_equal(
+    sheet[12:14, 1],
+    c(
+      "Results (n)",
+      "Mean (ND at 0.5x LOR)",
+      "Standard Deviation (ND at 0.5x LOR)"
+    )
+  )
+  # written as numbers, not text
+  expect_equal(
+    openxlsx::readWorkbook(path, rows = 13:14, cols = 3, colNames = FALSE)[[1]],
+    signif(c(mean(substituted), sd(substituted)), 4)
+  )
+  expect_true(any(grepl("at 0.5x their LOR", sheet[[1]], fixed = TRUE)))
+})
+
 test_that("in gt the statistics are rows below the results", {
   skip_if_not_installed("gt")
   tbl <- suppressMessages(results_table(
@@ -1183,6 +1327,24 @@ test_that("in gt the statistics are rows below the results", {
   expect_equal(utils::tail(body$.id_1, 2), c("Results (n)", "Maximum"))
   expect_equal(utils::tail(body$.analyte_1, 2), c("6", "8"))
   expect_true("#F2F2F2" %in% gt_styles(tbl, 9, ".analyte_1"))
+
+  # lor_multiplier reaches the gt table's statistics too
+  tbl <- suppressMessages(results_table(
+    two_sets_fixture(),
+    criteria_col = c(criteria_95, criteria_99),
+    id_cols = "date",
+    statistics = "std_dev",
+    lor_multiplier = 0.5
+  ))
+  body <- tbl[["_data"]]
+  expect_equal(
+    utils::tail(body$.id_1, 1),
+    "Standard Deviation (ND at 0.5x LOR)"
+  )
+  expect_equal(
+    utils::tail(body$.analyte_1, 1),
+    format(signif(sd(c(1.5, 2.5, 0.25, 4, 8, 0.25)), 4))
+  )
 })
 
 
