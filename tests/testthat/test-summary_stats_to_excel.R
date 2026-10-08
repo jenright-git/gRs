@@ -276,6 +276,16 @@ test_that("a zone merges over its wells, and each well within its zone", {
   )
 })
 
+test_that("a blank identifier does not merge with a missing one, written as -", {
+  data <- chem_fixture(fraction = rep(c("", NA), 3))
+  path <- write_summary_stats(summary_stats(data, group_vars = "fraction"))
+  stats <- read_summary_sheet(path)
+
+  # each well's blank fraction, then its missing one, which reads -
+  expect_equal(stats$Fraction[c(2, 4)], c("-", "-"))
+  expect_false(any(startsWith(merged_ranges(path), "D")))
+})
+
 test_that("merge_cells = FALSE leaves a value on every row", {
   data <- chem_fixture(fraction = rep(c("T", "D"), 3))
   path <- write_summary_stats(

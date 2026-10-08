@@ -597,6 +597,13 @@ test_that("the statistics sheet carries the zone, merged unless told not to", {
     merge_zones = FALSE
   )
   expect_length(openxlsx::loadWorkbook(path)$worksheets[[2]]$mergeCells, 0)
+
+  # without a zone, the wells are not merged, on either sheet
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  mka_to_excel(mka_stats_fixture(), save_path = path, include_stats = TRUE)
+  wb <- openxlsx::loadWorkbook(path)
+  expect_length(wb$worksheets[[1]]$mergeCells, 0)
+  expect_length(wb$worksheets[[2]]$mergeCells, 0)
 })
 
 test_that("include_stats must be a single TRUE or FALSE", {

@@ -1159,6 +1159,15 @@ test_that("lor_multiplier substitutes into the mean, median and SD only", {
   zero <- crosstab(statistics = "mean", lor_multiplier = 0)$stats
   expect_equal(zero$value[, 1], signif(mean(c(1.5, 2.5, 0, 4, 8, 0)), 4))
   expect_equal(zero$label, "Mean (ND at 0x LOR)")
+
+  # 1.5, <0.5 and <0.5: a non-detect is the median, so it is substituted too
+  middle <- crosstab(
+    two_sets_fixture()[c(1, 3, 6), ],
+    statistics = "median",
+    lor_multiplier = 0.5
+  )$stats
+  expect_equal(middle$value[, 1], 0.25)
+  expect_equal(middle$text[, 1], "0.25")
 })
 
 test_that("lor_multiplier must be a single number, 0 or more", {

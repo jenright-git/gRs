@@ -831,17 +831,25 @@ merge_column_runs <- function(wb, sheet, x, first_row = 2L, col = 1L) {
   starts <- ends - runs$lengths + 1L
   # Steps over the header rows above the column.
   offset <- first_row - 1L
-
-  for (i in seq_along(runs$lengths)) {
-    if (runs$lengths[i] > 1) {
-      openxlsx::mergeCells(
-        wb,
-        sheet,
-        cols = col,
-        rows = (starts[i] + offset):(ends[i] + offset)
-      )
-    }
+  long <- runs$lengths > 1
+  if (!any(long)) {
+    return(invisible(wb))
   }
+
+  # Added in one go, as openxlsx::mergeCells() would add them one at a time.
+  # It checks each new merge against every merge already on the sheet, which
+  # turns quadratic over the thousands of nested blocks a grouped summary
+  # writes; the runs of one column cannot overlap, so there is nothing for it
+  # to find.
+  letter <- openxlsx::int2col(col)
+  refs <- paste0(
+    letter, starts[long] + offset, ":", letter, ends[long] + offset
+  )
+  i <- wb$validateSheet(sheet)
+  wb$worksheets[[i]]$mergeCells <- c(
+    wb$worksheets[[i]]$mergeCells,
+    sprintf("<mergeCell ref=\"%s\"/>", refs)
+  )
 
   invisible(wb)
 }
@@ -1691,8 +1699,12 @@ add_stats_sheet <- function(
     }
 
     # Nested, as results_table_to_excel() merges its side columns: an analyte
-    # shared by two wells is not merged across them.
-    keys <- merge_keys(stats[seq_len(merge_cols)], group = NULL)
+    # shared by two wells is not merged across them. Compared as written, where
+    # a missing value reads STATS_NA, so a blank cell never swallows a "-".
+    shown <- lapply(stats[seq_len(merge_cols)], function(x) {
+      replace(format_id_values(x), is.na(x), STATS_NA)
+    })
+    keys <- merge_keys(as.data.frame(shown), group = NULL)
     for (j in seq_len(merge_cols)) {
       merge_column_runs(wb, sheet, keys[[j]], col = j)
     }
