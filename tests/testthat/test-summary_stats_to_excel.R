@@ -209,8 +209,7 @@ test_that("include_zone puts the zone first and sorts by it", {
   data <- chem_fixture(monitoring_zone = rep(c("Zone B", "Zone A"), each = 3))
   stats <- read_summary_sheet(write_summary_stats(
     summary_stats(data, group_vars = "monitoring_zone"),
-    include_zone = TRUE,
-    merge_cells = FALSE
+    include_zone = TRUE
   ))
 
   expect_equal(
@@ -250,7 +249,10 @@ test_that("a further grouping column is written beside the analyte", {
 
 test_that("repeated identifiers merge, each within the column to its left", {
   data <- chem_fixture(fraction = rep(c("T", "D"), 3))
-  path <- write_summary_stats(summary_stats(data, group_vars = "fraction"))
+  path <- write_summary_stats(
+    summary_stats(data, group_vars = "fraction"),
+    merge_cells = TRUE
+  )
 
   # MW01 Copper D, MW01 Copper T, MW02 Copper D, MW02 Copper T: each well
   # merges over its two rows, and the analyte and unit within each well -
@@ -268,7 +270,8 @@ test_that("a zone merges over its wells, and each well within its zone", {
   )
   path <- write_summary_stats(
     summary_stats(data, group_vars = c("monitoring_zone", "fraction")),
-    include_zone = TRUE
+    include_zone = TRUE,
+    merge_cells = TRUE
   )
 
   expect_true(
@@ -278,7 +281,10 @@ test_that("a zone merges over its wells, and each well within its zone", {
 
 test_that("a blank identifier does not merge with a missing one, written as -", {
   data <- chem_fixture(fraction = rep(c("", NA), 3))
-  path <- write_summary_stats(summary_stats(data, group_vars = "fraction"))
+  path <- write_summary_stats(
+    summary_stats(data, group_vars = "fraction"),
+    merge_cells = TRUE
+  )
   stats <- read_summary_sheet(path)
 
   # each well's blank fraction, then its missing one, which reads -
@@ -286,12 +292,9 @@ test_that("a blank identifier does not merge with a missing one, written as -", 
   expect_false(any(startsWith(merged_ranges(path), "D")))
 })
 
-test_that("merge_cells = FALSE leaves a value on every row", {
+test_that("by default nothing merges, so the sheet sorts and filters", {
   data <- chem_fixture(fraction = rep(c("T", "D"), 3))
-  path <- write_summary_stats(
-    summary_stats(data, group_vars = "fraction"),
-    merge_cells = FALSE
-  )
+  path <- write_summary_stats(summary_stats(data, group_vars = "fraction"))
 
   expect_length(merged_ranges(path), 0)
 })

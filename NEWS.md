@@ -93,8 +93,8 @@
   * `statistics` adds summary rows: results, detects, minimum, maximum (the
     highest detect, as `summary_stats()` reports it), mean, median, standard
     deviation and exceedances per guideline set. `statistics = TRUE` gives
-    all eight rows; a vector such as `c("n", "max", "mean")` gives those
-    named.
+    all eight statistics, the exceedances a row for each set; a vector such
+    as `c("n", "max", "mean")` gives those named.
     `statistics_by_group` repeats them for each `group_by` group.
   * `lor_multiplier` takes non-detects at a multiple of their LOR in the
     mean, median and standard deviation, as `summary_stats()` does, and
@@ -175,9 +175,10 @@
   analyte and unit, not only the series `mann_kendall_test()` could test.
   It shares that sheet's styling and `<` on non-detect extremes, groups by
   zone where the summary was grouped by one, and adds a sample count and a
-  unit column. A value repeated down the zone, well, analyte, unit or
-  grouping columns merges into one block (`merge_cells`), nested as in
-  `results_table_to_excel()`.
+  unit column. `merge_cells = TRUE` merges a value repeated down the zone,
+  well, analyte, unit or grouping columns into one block, nested as in
+  `results_table_to_excel()`; by default every row keeps its value, so the
+  sheet sorts and filters.
 
 * `mka_to_excel(include_summary = TRUE)` substitutes non-detects in the
   summary statistics with the same `lor_multiplier` the trend test used,
@@ -259,16 +260,14 @@
   stays self-documenting. `legend = FALSE` omits it.
 
   `include_zone = TRUE` writes the monitoring zone as a further column ahead of
-  the well names, sorts the rows by zone and then well, and merges each zone's
-  repeated cells into one block, so a suite reads zone by zone. Because
-  `mann_kendall_test()` nests by location and analyte, the zone is not a column
-  of its output; it is read back out of the nested `data` column, so no join is
-  needed first. A well that falls in two zones is an error rather than a
-  silently duplicated row. `merge_cells = FALSE` leaves a value in every row
-  for sorting and filtering, `zone_label` sets the heading, and `zone_col`
-  names the column where it is not `monitoring_zone`. `merge_cells` is named
-  as in `results_table_to_excel()` and `summary_stats_to_excel()`; its
-  earlier name, `merge_zones`, still works, with a deprecation warning.
+  the well names and sorts the rows by zone and then well, so a suite reads
+  zone by zone. Because `mann_kendall_test()` nests by location and analyte,
+  the zone is not a column of its output; it is read back out of the nested
+  `data` column, so no join is needed first. A well that falls in two zones is
+  an error rather than a silently duplicated row. `merge_cells = TRUE` merges
+  each zone's repeated cells into one block; by default every row keeps its
+  value, for sorting and filtering. `zone_label` sets the heading, and
+  `zone_col` names the column where it is not `monitoring_zone`.
 
   The well names are set a shade back from the zone beside them - `#9BBEAF`
   against the zone's deep green - so the grouping reads at a glance. The header
@@ -309,7 +308,8 @@
   naming `criteria_col` without `include_summary = TRUE` warns rather than
   being silently ignored. The zone and well columns follow
   `include_zone`, `merge_cells` and `location_fill` as the summary does, and
-  with `merge_cells` each well is merged over its analytes, within its zone.
+  with `merge_cells = TRUE` each well is merged over its analytes, within its
+  zone.
 
 * `mka_to_excel(na_label = "")` no longer fails with "subscript out of
   bounds"; the blank cells are styled and explained in the legend as `"NC"`

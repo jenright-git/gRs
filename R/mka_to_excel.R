@@ -27,10 +27,10 @@
 #'
 #' With `include_zone = TRUE` the monitoring zone is written as a further
 #' column to the left of the location names, the rows are sorted by zone and
-#' then location so each zone's wells sit together, and the repeated zone
-#' cells of a block are merged into one (`merge_cells`), and the location
-#' names are set a shade back from the zone beside them, in `location_fill`,
-#' so the grouping reads at a glance. [mann_kendall_test()] nests by
+#' then location so each zone's wells sit together, and the location names
+#' are set a shade back from the zone beside them, in `location_fill`, so the
+#' grouping reads at a glance; `merge_cells = TRUE` merges the repeated zone
+#' cells of a block into one. [mann_kendall_test()] nests by
 #' location and analyte, so the zone is not a column of its output; where
 #' `data` has no zone column of its own it is recovered from that nested
 #' `data` column, and a location falling in more than one zone is an error
@@ -115,10 +115,9 @@
 #'   the zone, so it is named once against its wells, and on the Statistics
 #'   sheet each well, named once against its analytes. Each column's blocks
 #'   sit within those of the column to its left - a well never merges across
-#'   two zones. Default `TRUE`. Set `FALSE` to leave a value in every row,
-#'   which is what Excel's sort, filter and pivot tools want.
-#' @param merge_zones Deprecated; use `merge_cells`. Still accepted, with a
-#'   warning.
+#'   two zones. Default `FALSE`, a value in every row, which is what Excel's
+#'   sort, filter and pivot tools want: Excel will not sort a range whose
+#'   merged blocks differ in size.
 #' @param zone_label heading for the zone column. Default
 #'   `"Monitoring Zone"`.
 #' @param zone_col Name of the column containing monitoring zones. Can be
@@ -214,8 +213,8 @@
 #' # No legend sheet, blank cells instead of "NC"
 #' mka_to_excel(trends, legend = FALSE, na_label = "")
 #'
-#' # Zones down the side, but a value in every row so the sheet still filters
-#' mka_to_excel(trends, include_zone = TRUE, merge_cells = FALSE)
+#' # Zones down the side, each named once against its wells
+#' mka_to_excel(trends, include_zone = TRUE, merge_cells = TRUE)
 #'
 #' # Darker text on the well names, for printing
 #' mka_to_excel(trends, include_zone = TRUE, location_font = "#14401F")
@@ -270,7 +269,7 @@ mka_to_excel <- function(
   chem_name_col = chem_name,
   trend_col = trend,
   include_zone = FALSE,
-  merge_cells = TRUE,
+  merge_cells = FALSE,
   zone_label = "Monitoring Zone",
   zone_col = monitoring_zone,
   location_fill = "#9BBEAF",
@@ -278,25 +277,8 @@ mka_to_excel <- function(
   include_stats = FALSE,
   include_summary = FALSE,
   criteria_col = criteria,
-  mark_lor_changes = TRUE,
-  merge_zones = NULL
+  mark_lor_changes = TRUE
 ) {
-  # merge_zones merged only the zone; merge_cells, named as in
-  # results_table_to_excel() and summary_stats_to_excel(), merges the wells of
-  # the Statistics sheet too.
-  if (!is.null(merge_zones)) {
-    if (!missing(merge_cells)) {
-      stop(
-        "Use `merge_cells` alone; `merge_zones` is its deprecated name.",
-        call. = FALSE
-      )
-    }
-    warning(
-      "`merge_zones` is deprecated; use `merge_cells` instead.",
-      call. = FALSE
-    )
-    merge_cells <- merge_zones
-  }
   check_flag(merge_cells, "merge_cells")
 
   # Named outright, the guideline columns have to be there. Left at its
@@ -586,9 +568,9 @@ mka_to_excel <- function(
       header_fill = header_fill,
       header_font = header_font,
       include_zone = include_zone,
-      # The zone, the well and the analyte - unique within a well, so it never
-      # merges, but the wells merge over their analytes.
-      merge_cols = if (merge_cells) n_id + 1L else 0L,
+      # The zone and the well, each well over its analytes. An analyte is
+      # unique within a well, so there is nothing to merge in its column.
+      merge_cols = if (merge_cells) n_id else 0L,
       location_fill = location_fill,
       location_font = location_font
     )

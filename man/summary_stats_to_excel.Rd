@@ -8,7 +8,7 @@ summary_stats_to_excel(
   data,
   save_path = paste0("Summary Statistics_", format(Sys.Date(), "\%Y\%m\%d"), ".xlsx"),
   include_zone = FALSE,
-  merge_cells = TRUE,
+  merge_cells = FALSE,
   zone_col = monitoring_zone,
   zone_label = "Monitoring Zone",
   location_label = "Monitoring Well",
@@ -39,9 +39,10 @@ from \code{summary_stats(group_vars = "monitoring_zone")}. Default \code{FALSE}.
 zone, well, analyte, unit and any further grouping column - into one
 block, so a well is named once against all its analytes. Each column's
 blocks sit within those of the column to its left - an analyte measured
-at two wells is not merged across them. Default \code{TRUE}. Set \code{FALSE} to
-write the value on every row, which is what Excel's sort and filter tools
-want.}
+at two wells is not merged across them. Default \code{FALSE}, the value on
+every row, which is what Excel's sort and filter tools want: Excel will
+not sort a range whose merged blocks differ in size, as a well's do where
+the wells were not all tested for the same analytes.}
 
 \item{zone_col}{Name of the column containing monitoring zones. Can be
 provided with or without quotes. Default is monitoring_zone. Locations
@@ -110,10 +111,10 @@ with its column name instead.
 The headings and location names are set in white on a deep green, the
 first row and the identifier and analyte columns are frozen, and the
 header row carries filters. Any further grouping column, from the
-\code{group_vars} of \code{\link[=summary_stats]{summary_stats()}}, is written beside the analyte. A value
-repeated down these identifier columns - the zone, well, analyte, unit and
-any grouping column - is merged into one block (\code{merge_cells}), as
-\code{\link[=results_table_to_excel]{results_table_to_excel()}} merges its side columns.
+\code{group_vars} of \code{\link[=summary_stats]{summary_stats()}}, is written beside the analyte. With
+\code{merge_cells = TRUE} a value repeated down these identifier columns - the
+zone, well, analyte, unit and any grouping column - is merged into one
+block, as \code{\link[=results_table_to_excel]{results_table_to_excel()}} merges its side columns.
 }
 \examples{
 gRs_data \%>\%
@@ -128,12 +129,12 @@ gRs_data \%>\%
     include_zone = TRUE
   )
 
-# A value in every row, so the sheet sorts and filters
+# Each well named once against its analytes
 gRs_data \%>\%
   summary_stats() \%>\%
   summary_stats_to_excel(
     save_path = tempfile(fileext = ".xlsx"),
-    merge_cells = FALSE
+    merge_cells = TRUE
   )
 
 \dontrun{
